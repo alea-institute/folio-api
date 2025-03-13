@@ -7,7 +7,7 @@ from typing import List, Tuple
 
 # packages
 from pydantic import BaseModel
-from soli import OWLClass
+from folio import OWLClass
 
 
 class OWLClassList(BaseModel):

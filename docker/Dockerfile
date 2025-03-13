@@ -14,7 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     &&  \
     rm -rf /var/lib/apt/lists/* \
     && \
-    pipx install poetry \
+    pipx install uv \
     && \
     pipx ensurepath
 
@@ -27,17 +27,17 @@ WORKDIR /app
 RUN cd /app
 
 # copy the poetry configuration \
-COPY pyproject.toml poetry.lock ./
+COPY pyproject.toml uv.lock README.md ./
 
 # build the poetry environment
-RUN bash -l -c "poetry install --no-root"
+RUN bash -l -c "uv sync --upgrade && uv venv && uv run python"
 
 # copy the python api code
-COPY soli_api soli_api
+COPY folio_api folio_api
 
 # you could copy the config.json file, but we're using bind mounts by default instead.
 # COPY config.json config.json
 
-# run uvicorn: # uvicorn soli_api.api:app --reload
-CMD ["bash", "-l", "-c", "PYTHONPATH=. poetry run uvicorn soli_api.api:app --host 0.0.0.0 --port 8000"]
+# run uvicorn: # uvicorn folio_api.api:app --reload
+CMD ["bash", "-l", "-c", "PYTHONPATH=. uv run uvicorn folio_api.api:app --host 0.0.0.0 --port 8000"]
 EXPOSE 8000

@@ -1,21 +1,21 @@
 {
-  "soli": {
+  "folio": {
     "source": "github",
-    "repository": "alea-institute/soli",
-    "branch": "1.0.0",
-    "path": "SOLI.owl"
+    "repository": "alea-institute/folio",
+    "branch": "2.0.0",
+    "path": "FOLIO.owl"
   },
   "llm": {
     "type": "openai",
     "model": "gpt-4o"
   },
   "api": {
-    "title": "SOLI API",
-    "description": "Public API for the SOLI ontology",
+    "title": "FOLIO API",
+    "description": "Public API for the FOLIO ontology",
     "version": "0.1.0",
     "terms_of_service": "https://openlegalstandard.org/",
     "contact": {
-      "name": "SOLI",
+      "name": "FOLIO",
       "url": "https://openlegalstandard.org",
       "email": "hello@aleainstitute.ai"
     },

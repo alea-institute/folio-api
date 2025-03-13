@@ -1,5 +1,5 @@
 """
-Basic HTML template for direct rendering of SOLI class information in a
+Basic HTML template for direct rendering of FOLIO class information in a
 user-friendly format.  Don't do this at home.
 """
 
@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Dict, List, Tuple
 
 # packages
-from soli import SOLI, OWLClass
+from folio import FOLIO, OWLClass
 
 # project
 
@@ -26,7 +26,7 @@ def format_label(owl_class: OWLClass) -> str:
      - Order: preferred_label, label, alt label, IRI
 
     Args:
-        owl_class (OWLClass): SOLI OWLClass object
+        owl_class (OWLClass): FOLIO OWLClass object
 
     Returns:
         str: Formatted label
@@ -46,7 +46,7 @@ def format_description(owl_class: OWLClass) -> str:
     Format the description of the class for display in HTML.
 
     Args:
-        owl_class (OWLClass): SOLI OWLClass object
+        owl_class (OWLClass): FOLIO OWLClass object
 
     Returns:
         str: Formatted description
@@ -63,14 +63,14 @@ def format_description(owl_class: OWLClass) -> str:
 
 
 def get_node_neighbors(
-    owl_class: OWLClass, soli_graph: SOLI
+    owl_class: OWLClass, folio_graph: FOLIO
 ) -> Tuple[List[Dict], List[Dict]]:
     """
-    Get the neighbors of a class in the SOLI graph.
+    Get the neighbors of a class in the FOLIO graph.
 
     Args:
-        owl_class (OWLClass): SOLI OWLClass object
-        soli_graph (SOLI): SOLI graph object
+        owl_class (OWLClass): FOLIO OWLClass object
+        folio_graph (FOLIO): FOLIO graph object
 
     Returns:
         Tuple[List[Dict], List[Dict]]: Tuple with lists of sub-class and parent-class neighbors
@@ -89,11 +89,11 @@ def get_node_neighbors(
 
     # add sub_class_of parents
     for sub_class in owl_class.sub_class_of:
-        if soli_graph[sub_class]:
+        if folio_graph[sub_class]:
             nodes[sub_class] = {
                 "id": sub_class,
-                "label": soli_graph[sub_class].label,
-                "description": format_description(soli_graph[sub_class]),
+                "label": folio_graph[sub_class].label,
+                "description": format_description(folio_graph[sub_class]),
                 "color": "#000000",
                 "relationship": "sub_class_of",
             }
@@ -103,11 +103,11 @@ def get_node_neighbors(
 
     # add parent_class_of children
     for parent_class in owl_class.parent_class_of:
-        if soli_graph[parent_class]:
+        if folio_graph[parent_class]:
             nodes[parent_class] = {
                 "id": parent_class,
-                "label": soli_graph[parent_class].label,
-                "description": format_description(soli_graph[parent_class]),
+                "label": folio_graph[parent_class].label,
+                "description": format_description(folio_graph[parent_class]),
                 "color": "#000000",
                 "relationship": "parent_class_of",
             }
@@ -121,11 +121,11 @@ def get_node_neighbors(
 
     # add see_also
     for see_also in owl_class.see_also:
-        if soli_graph[see_also]:
+        if folio_graph[see_also]:
             nodes[see_also] = {
                 "id": see_also,
-                "label": soli_graph[see_also].label,
-                "description": format_description(soli_graph[see_also]),
+                "label": folio_graph[see_also].label,
+                "description": format_description(folio_graph[see_also]),
                 "color": "#000000",
                 "relationship": "see_also",
             }
@@ -135,11 +135,11 @@ def get_node_neighbors(
 
     # add is_defined_by
     if owl_class.is_defined_by:
-        if soli_graph[owl_class.is_defined_by]:
+        if folio_graph[owl_class.is_defined_by]:
             nodes[owl_class.is_defined_by] = {
                 "id": owl_class.is_defined_by,
-                "label": soli_graph[owl_class.is_defined_by].label,
-                "description": format_description(soli_graph[owl_class.is_defined_by]),
+                "label": folio_graph[owl_class.is_defined_by].label,
+                "description": format_description(folio_graph[owl_class.is_defined_by]),
                 "color": "#000000",
                 "relationship": "is_defined_by",
             }
@@ -154,7 +154,7 @@ def get_node_neighbors(
     return list(nodes.values()), edges
 
 
-def render_tailwind_html(owl_class: OWLClass, soli_graph: SOLI) -> str:
+def render_tailwind_html(owl_class: OWLClass, folio_graph: FOLIO) -> str:
     """
     Render a complete HTML document with the class information
     in a user-friendly format using Tailwind CSS.
@@ -162,14 +162,14 @@ def render_tailwind_html(owl_class: OWLClass, soli_graph: SOLI) -> str:
     This is an abomination. Don't do this at home.
 
     Args:
-        owl_class (OWLClass): SOLI OWLClass object
-        soli_graph (SOLI): SOLI graph object
+        owl_class (OWLClass): FOLIO OWLClass object
+        folio_graph (FOLIO): FOLIO graph object
 
     Returns:
         str: HTML document as a string
     """
     # get graph data
-    nodes, edges = get_node_neighbors(owl_class, soli_graph)
+    nodes, edges = get_node_neighbors(owl_class, folio_graph)
     node_js = f"var nodes = {json.dumps(nodes)};"
     edge_js = f"var edges = {json.dumps(edges)};"
 
@@ -184,19 +184,19 @@ def render_tailwind_html(owl_class: OWLClass, soli_graph: SOLI) -> str:
         <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js" integrity="sha512-v2CJ7UaYy4JwqLDIrZUI/4hqeoQieOmAZNXBeQyjo21dadnwR+8ZaIJVT8EE2iyI61OV8e6M8PP2/4hpQINQ/g==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/typeahead.js/0.11.1/typeahead.bundle.min.js" integrity="sha512-qOBWNAMfkz+vXXgbh0Wz7qYSLZp6c14R0bZeVX2TdQxWpuKr6yHjBIM69fcF8Ve4GUX6B6AKRQJqiiAmwvmUmQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js" integrity="sha512-vc58qvvBdrDR4etbxMdlTt4GBQk1qjvyORR2nrsPsFPyrs+/u5c3+1Ct6upOgdZoIl7eq6k3a1UPDSNAQi/32A==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-        <title>{format_label(owl_class)} - SOLI Ontology</title>
+        <title>{format_label(owl_class)} - FOLIO Ontology</title>
         <meta name="description" content="{format_description(owl_class)}">
-        <meta name="author" content="SOLI - The Standard for Open Legal Information">
+        <meta name="author" content="FOLIO - The Federated Open Legal Information Ontology">
         <meta name="keywords" content="legal, ontology, standard, open, information, {format_label(owl_class)}">
         <meta name="robots" content="index, follow">
-        <meta property="og:title" content="{format_label(owl_class)} - SOLI Ontology">
+        <meta property="og:title" content="{format_label(owl_class)} - FOLIO Ontology">
         <meta property="og:description" content="{format_description(owl_class)}">
         <meta property="og:type" content="website">
-        <meta property="og:url" content="https://soli.openlegalstandard.org/{owl_class.iri}">
-        <meta property="og:image" content="https://soli.openlegalstandard.org/images/soli_logo.png">
-        <meta property="og:image:alt" content="SOLI Logo">
+        <meta property="og:url" content="https://folio.openlegalstandard.org/{owl_class.iri}">
+        <meta property="og:image" content="https://folio.openlegalstandard.org/images/folio_logo.png">
+        <meta property="og:image:alt" content="FOLIO Logo">
         <meta property="og:image:width" content="400">
-        <meta property="og:site_name" content="SOLI - The Standard for Open Legal Information">
+        <meta property="og:site_name" content="FOLIO - The Federated Open Legal Information Ontology">
         <style type="text/css">
             @import url('https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,100..900;1,100..900&display=swap');
             :root {{
@@ -255,7 +255,7 @@ def render_tailwind_html(owl_class: OWLClass, soli_graph: SOLI) -> str:
             </div>
             <div class="container mx-auto px-4 mt-4">
                 <div class="relative">
-                    <input id="search-input" type="text" placeholder="Search for SOLI classes..." class="w-full p-2 rounded-lg border border-[--color-secondary] focus:outline-none focus:border-[--color-primary] focus:ring-2 focus:ring-[--color-primary] focus:ring-opacity-50">
+                    <input id="search-input" type="text" placeholder="Search for FOLIO classes..." class="w-full p-2 rounded-lg border border-[--color-secondary] focus:outline-none focus:border-[--color-primary] focus:ring-2 focus:ring-[--color-primary] focus:ring-opacity-50">
                     <div id="search-results" class="absolute top-12 left-0 w-full bg-white dark:bg-[--color-bg-page] shadow-lg rounded-lg overflow-hidden mt-2 border border-[--color-secondary] border-opacity-20"></div>
                 </div>
             </div>
@@ -339,13 +339,13 @@ def render_tailwind_html(owl_class: OWLClass, soli_graph: SOLI) -> str:
                 <div>
                 <dt class="font-medium text-[--color-text-muted]">Sub Class Of</dt>
                 <dd class="mt-1"><ul>
-                {"\n".join(f"""<li><a class="underline underline-offset-4 hover:text-primary" href="{sub_class}/html">{soli_graph[sub_class].label}</a></li>""" for sub_class in owl_class.sub_class_of if soli_graph[sub_class]) or "<li>N/A</li>"}
+                {"\n".join(f"""<li><a class="underline underline-offset-4 hover:text-primary" href="{sub_class}/html">{folio_graph[sub_class].label}</a></li>""" for sub_class in owl_class.sub_class_of if folio_graph[sub_class]) or "<li>N/A</li>"}
                 </ul></dd>
                 </div>
                 <div>
                 <dt class="font-medium text-[--color-text-muted]">Parent Class Of</dt>
                 <dd class="mt-1"><ul>
-                {"\n".join(f"""<li><a class="underline underline-offset-4 hover:text-primary" href="{parent_class}/html">{soli_graph[parent_class].label}</a></li>""" for parent_class in owl_class.parent_class_of if soli_graph[parent_class]) or "<li>N/A</li>"}
+                {"\n".join(f"""<li><a class="underline underline-offset-4 hover:text-primary" href="{parent_class}/html">{folio_graph[parent_class].label}</a></li>""" for parent_class in owl_class.parent_class_of if folio_graph[parent_class]) or "<li>N/A</li>"}
                 </ul></dd>
                 </div>
                 <div>
@@ -423,11 +423,11 @@ def render_tailwind_html(owl_class: OWLClass, soli_graph: SOLI) -> str:
         </main>
         <footer class="bg-[--color-primary] text-white py-8 mt-8">
             <div class="container mx-auto px-4 text-center">
-                <a href="https://openlegalstandard.org/" target="_blank"><img src="https://openlegalstandard.org/_astro/soli-2x1-accent.B8_1Hd3M_NsFb5.webp" alt="SOLI Logo" class="w-16 mx-auto mt-4"></a>
-                <p>The SOLI ontology is licensed under the CC-BY 4.0 license.</p>
-                <p>Any SOLI software is licensed under the MIT license.</p>
+                <a href="https://openlegalstandard.org/" target="_blank"><img src="https://openlegalstandard.org/_astro/soli-2x1-accent.B8_1Hd3M_NsFb5.webp" alt="FOLIO Logo" class="w-16 mx-auto mt-4"></a>
+                <p>The FOLIO ontology is licensed under the CC-BY 4.0 license.</p>
+                <p>Any FOLIO software is licensed under the MIT license.</p>
                 <div class="mt-1">
-                    <p>View the source code for this API <a href="https://github.com/alea-institute/soli-api" class="text-[--color-secondary] hover:text-white transition-colors duration-200">on GitHub</a>.</p>
+                    <p>View the source code for this API <a href="https://github.com/alea-institute/folio-api" class="text-[--color-secondary] hover:text-white transition-colors duration-200">on GitHub</a>.</p>
                 </div>
                 <p class="mt-1 text-small">Copyright &copy; 2024. <a href="https://aleainstitute.ai/" target="_blank">The Institute for the Advancement of Legal and Ethical AI</a>.</p>
             </div>

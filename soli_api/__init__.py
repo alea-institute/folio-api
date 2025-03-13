@@ -1,3 +1,0 @@
-"""
-SOLI API package.
-"""

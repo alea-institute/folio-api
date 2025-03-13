@@ -10,15 +10,15 @@ from typing import Any, Dict
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from soli import SOLI
+from folio import FOLIO
 from alea_llm_client import OpenAIModel, AnthropicModel, VLLMModel
 
 # project imports
-import soli_api.routes.info
-import soli_api.routes.root
-import soli_api.routes.search
-import soli_api.routes.taxonomy
-from soli_api.api_config import load_config
+import folio_api.routes.info
+import folio_api.routes.root
+import folio_api.routes.search
+import folio_api.routes.taxonomy
+from folio_api.api_config import load_config
 
 
 @asynccontextmanager
@@ -31,7 +31,7 @@ async def lifespan_handler(app_instance: FastAPI):
     Yields:
         None
     """
-    # Initialize the SOLI graph
+    # Initialize the FOLIO graph
     app_instance.state.config = load_config()
 
     # get log level
@@ -46,7 +46,7 @@ async def lifespan_handler(app_instance: FastAPI):
     )
 
     # set up the logger at api.log
-    app_instance.state.logger = logging.getLogger("soli_api")
+    app_instance.state.logger = logging.getLogger("folio_api")
     app_instance.state.logger.setLevel(log_level)
     log_handler = logging.FileHandler("api.log")
     log_handler.setLevel(log_level)
@@ -56,15 +56,15 @@ async def lifespan_handler(app_instance: FastAPI):
     log_handler.setFormatter(log_formatter)
     app_instance.state.logger.addHandler(log_handler)
 
-    # initialize the SOLI instance
-    app_instance.state.soli = initialize_soli(
-        app_instance.state.config["soli"],
+    # initialize the FOLIO instance
+    app_instance.state.folio = initialize_folio(
+        app_instance.state.config["folio"],
         app_instance.state.config["llm"],
     )
 
     # log it
     app_instance.state.logger.info(
-        "SOLI instance initialized with llm %s", app_instance.state.soli.llm.model
+        "FOLIO instance initialized with llm %s", app_instance.state.folio.llm.model
     )
 
     yield
@@ -73,15 +73,15 @@ async def lifespan_handler(app_instance: FastAPI):
     app_instance.state.logger.info("Shutting down API")
 
 
-def initialize_soli(soli_config: Dict[str, Any], llm_config: Dict[str, Any]) -> SOLI:
-    """Initialize SOLI instance based on configuration
+def initialize_folio(folio_config: Dict[str, Any], llm_config: Dict[str, Any]) -> FOLIO:
+    """Initialize FOLIO instance based on configuration
 
     Args:
-        soli_config (Dict[str, Any]): SOLI configuration dictionary
+        folio_config (Dict[str, Any]): FOLIO configuration dictionary
         llm_config (Dict[str, Any]): LLM configuration dictionary
 
     Returns:
-        SOLI: Initialized SOLI instance
+        FOLIO: Initialized FOLIO instance
     """
     # initialize an llm
     llm_engine = llm_config.get("type", "openai").lower().strip()
@@ -117,11 +117,11 @@ def initialize_soli(soli_config: Dict[str, Any], llm_config: Dict[str, Any]) -> 
     else:
         llm = None
 
-    return SOLI(
-        source_type=soli_config["source"],
-        github_repo_owner=soli_config["repository"].split("/")[0],
-        github_repo_name=soli_config["repository"].split("/")[1],
-        github_repo_branch=soli_config["branch"],
+    return FOLIO(
+        source_type=folio_config["source"],
+        github_repo_owner=folio_config["repository"].split("/")[0],
+        github_repo_name=folio_config["repository"].split("/")[1],
+        github_repo_branch=folio_config["branch"],
         use_cache=True,
         llm=llm,
     )
@@ -158,10 +158,10 @@ def get_app() -> FastAPI:
     )
 
     # Attach the routes
-    app_instance.include_router(soli_api.routes.info.router)
-    app_instance.include_router(soli_api.routes.root.router)
-    app_instance.include_router(soli_api.routes.search.router)
-    app_instance.include_router(soli_api.routes.taxonomy.router)
+    app_instance.include_router(folio_api.routes.info.router)
+    app_instance.include_router(folio_api.routes.root.router)
+    app_instance.include_router(folio_api.routes.search.router)
+    app_instance.include_router(folio_api.routes.taxonomy.router)
 
     return app_instance
 
@@ -177,4 +177,4 @@ if __name__ == "__main__":
     uvicorn.run(app, host=bind_host, port=bind_port)
 
     # Alternatively, run the app on CLI from the uvicorn command:
-    # uvicorn soli_api.api:app --reload
+    # uvicorn folio_api.api:app --reload

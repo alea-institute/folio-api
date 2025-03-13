@@ -6,10 +6,10 @@ Search routes.
 
 # packages
 from fastapi import APIRouter, Request
-from soli import SOLI
+from folio import FOLIO
 
 # project
-from soli_api.models.owl import OWLClassList, OWLSearchResults
+from folio_api.models.owl import OWLClassList, OWLSearchResults
 
 # API router
 router = APIRouter(prefix="/search", tags=["search"])
@@ -51,14 +51,14 @@ async def search_prefix(request: Request, query: str) -> OWLClassList:
     if not query_length_check(query):
         return OWLClassList(classes=[])
 
-    soli: SOLI = request.app.state.soli
-    return OWLClassList(classes=soli.search_by_prefix(query))
+    folio: FOLIO = request.app.state.folio
+    return OWLClassList(classes=folio.search_by_prefix(query))
 
 
 @router.get("/label", tags=["search"], response_model=OWLSearchResults)
 async def search_label(request: Request, query: str) -> OWLSearchResults:
     """
-    Get class information using the soli-python search_by_label method.
+    Get class information using the folio-python search_by_label method.
 
     Args:
         request (Request): FastAPI request object
@@ -71,14 +71,14 @@ async def search_label(request: Request, query: str) -> OWLSearchResults:
     if not query_length_check(query):
         return OWLClassList(classes=[])
 
-    soli: SOLI = request.app.state.soli
-    return OWLSearchResults(results=soli.search_by_label(query))
+    folio: FOLIO = request.app.state.folio
+    return OWLSearchResults(results=folio.search_by_label(query))
 
 
 @router.get("/definition", tags=["search"], response_model=OWLSearchResults)
 async def search_definition(request: Request, query: str) -> OWLSearchResults:
     """
-    Get class information using the soli-python search_by_definition method.
+    Get class information using the folio-python search_by_definition method.
 
     Args:
         request (Request): FastAPI request object
@@ -91,8 +91,8 @@ async def search_definition(request: Request, query: str) -> OWLSearchResults:
     if not query_length_check(query):
         return OWLClassList(classes=[])
 
-    soli: SOLI = request.app.state.soli
-    return OWLSearchResults(results=soli.search_by_definition(query))
+    folio: FOLIO = request.app.state.folio
+    return OWLSearchResults(results=folio.search_by_definition(query))
 
 
 @router.get("/llm/area-of-law", tags=["search"], response_model=OWLSearchResults)
@@ -100,7 +100,7 @@ async def search_llm_area_of_law(
     request: Request, query: str, max_depth: int = DEFAULT_MAX_DEPTH
 ) -> OWLSearchResults:
     """
-    Get class information using the SOLI areas of law.
+    Get class information using the FOLIO areas of law.
 
     Args:
         request (Request): FastAPI request object
@@ -114,10 +114,10 @@ async def search_llm_area_of_law(
     if not query_length_check(query):
         return OWLClassList(classes=[])
 
-    soli: SOLI = request.app.state.soli
+    folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
-        results=await soli.search_by_llm(
-            query=query, search_set=soli.get_areas_of_law(max_depth=max_depth)
+        results=await folio.search_by_llm(
+            query=query, search_set=folio.get_areas_of_law(max_depth=max_depth)
         )
     )
 
@@ -127,7 +127,7 @@ async def search_asset_types(
     request: Request, query: str, max_depth: int = DEFAULT_MAX_DEPTH
 ) -> OWLSearchResults:
     """
-    Get class information using the SOLI asset types.
+    Get class information using the FOLIO asset types.
 
     Args:
         request (Request): FastAPI request object
@@ -141,10 +141,10 @@ async def search_asset_types(
     if not query_length_check(query):
         return OWLClassList(classes=[])
 
-    soli: SOLI = request.app.state.soli
+    folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
-        results=await soli.search_by_llm(
-            query=query, search_set=soli.get_asset_types(max_depth=max_depth)
+        results=await folio.search_by_llm(
+            query=query, search_set=folio.get_asset_types(max_depth=max_depth)
         )
     )
 
@@ -157,7 +157,7 @@ async def search_communication_modalities(
     request: Request, query: str, max_depth: int = DEFAULT_MAX_DEPTH
 ) -> OWLSearchResults:
     """
-    Get class information using the SOLI communication modalities.
+    Get class information using the FOLIO communication modalities.
 
     Args:
         request (Request): FastAPI request object
@@ -171,11 +171,11 @@ async def search_communication_modalities(
     if not query_length_check(query):
         return OWLClassList(classes=[])
 
-    soli: SOLI = request.app.state.soli
+    folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
-        results=await soli.search_by_llm(
+        results=await folio.search_by_llm(
             query=query,
-            search_set=soli.get_communication_modalities(max_depth=max_depth),
+            search_set=folio.get_communication_modalities(max_depth=max_depth),
         )
     )
 
@@ -186,7 +186,7 @@ async def search_currencies(
     request: Request, query: str, max_depth: int = DEFAULT_MAX_DEPTH
 ) -> OWLSearchResults:
     """
-    Get class information using the SOLI currencies.
+    Get class information using the FOLIO currencies.
 
     Args:
         request (Request): FastAPI request object
@@ -200,10 +200,10 @@ async def search_currencies(
     if not query_length_check(query):
         return OWLClassList(classes=[])
 
-    soli: SOLI = request.app.state.soli
+    folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
-        results=await soli.search_by_llm(
-            query=query, search_set=soli.get_currencies(max_depth=max_depth)
+        results=await folio.search_by_llm(
+            query=query, search_set=folio.get_currencies(max_depth=max_depth)
         )
     )
 
@@ -214,7 +214,7 @@ async def search_data_formats(
     request: Request, query: str, max_depth: int = DEFAULT_MAX_DEPTH
 ) -> OWLSearchResults:
     """
-    Get class information using the SOLI data formats.
+    Get class information using the FOLIO data formats.
 
     Args:
         request (Request): FastAPI request object
@@ -228,10 +228,10 @@ async def search_data_formats(
     if not query_length_check(query):
         return OWLClassList(classes=[])
 
-    soli: SOLI = request.app.state.soli
+    folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
-        results=await soli.search_by_llm(
-            query=query, search_set=soli.get_data_formats(max_depth=max_depth)
+        results=await folio.search_by_llm(
+            query=query, search_set=folio.get_data_formats(max_depth=max_depth)
         )
     )
 
@@ -242,7 +242,7 @@ async def search_document_artifacts(
     request: Request, query: str, max_depth: int = DEFAULT_MAX_DEPTH
 ) -> OWLSearchResults:
     """
-    Get class information using the SOLI document artifacts.
+    Get class information using the FOLIO document artifacts.
 
     Args:
         request (Request): FastAPI request object
@@ -256,10 +256,10 @@ async def search_document_artifacts(
     if not query_length_check(query):
         return OWLClassList(classes=[])
 
-    soli: SOLI = request.app.state.soli
+    folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
-        results=await soli.search_by_llm(
-            query=query, search_set=soli.get_document_artifacts(max_depth=max_depth)
+        results=await folio.search_by_llm(
+            query=query, search_set=folio.get_document_artifacts(max_depth=max_depth)
         )
     )
 
@@ -270,7 +270,7 @@ async def search_engagement_terms(
     request: Request, query: str, max_depth: int = DEFAULT_MAX_DEPTH
 ) -> OWLSearchResults:
     """
-    Get class information using the SOLI engagement terms.
+    Get class information using the FOLIO engagement terms.
 
     Args:
         request (Request): FastAPI request object
@@ -284,10 +284,10 @@ async def search_engagement_terms(
     if not query_length_check(query):
         return OWLClassList(classes=[])
 
-    soli: SOLI = request.app.state.soli
+    folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
-        results=await soli.search_by_llm(
-            query=query, search_set=soli.get_engagement_terms(max_depth=max_depth)
+        results=await folio.search_by_llm(
+            query=query, search_set=folio.get_engagement_terms(max_depth=max_depth)
         )
     )
 
@@ -298,7 +298,7 @@ async def search_events(
     request: Request, query: str, max_depth: int = DEFAULT_MAX_DEPTH
 ) -> OWLSearchResults:
     """
-    Get class information using the SOLI events.
+    Get class information using the FOLIO events.
 
     Args:
         request (Request): FastAPI request object
@@ -312,10 +312,10 @@ async def search_events(
     if not query_length_check(query):
         return OWLClassList(classes=[])
 
-    soli: SOLI = request.app.state.soli
+    folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
-        results=await soli.search_by_llm(
-            query=query, search_set=soli.get_events(max_depth=max_depth)
+        results=await folio.search_by_llm(
+            query=query, search_set=folio.get_events(max_depth=max_depth)
         )
     )
 
@@ -328,7 +328,7 @@ async def search_governmental_bodies(
     request: Request, query: str, max_depth: int = DEFAULT_MAX_DEPTH
 ) -> OWLSearchResults:
     """
-    Get class information using the SOLI governmental bodies.
+    Get class information using the FOLIO governmental bodies.
 
     Args:
         request (Request): FastAPI request object
@@ -342,10 +342,10 @@ async def search_governmental_bodies(
     if not query_length_check(query):
         return OWLClassList(classes=[])
 
-    soli: SOLI = request.app.state.soli
+    folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
-        results=await soli.search_by_llm(
-            query=query, search_set=soli.get_governmental_bodies(max_depth=max_depth)
+        results=await folio.search_by_llm(
+            query=query, search_set=folio.get_governmental_bodies(max_depth=max_depth)
         )
     )
 
@@ -356,7 +356,7 @@ async def search_industries(
     request: Request, query: str, max_depth: int = DEFAULT_MAX_DEPTH
 ) -> OWLSearchResults:
     """
-    Get class information using the SOLI industries.
+    Get class information using the FOLIO industries.
 
     Args:
         request (Request): FastAPI request object
@@ -370,10 +370,10 @@ async def search_industries(
     if not query_length_check(query):
         return OWLClassList(classes=[])
 
-    soli: SOLI = request.app.state.soli
+    folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
-        results=await soli.search_by_llm(
-            query=query, search_set=soli.get_industries(max_depth=max_depth)
+        results=await folio.search_by_llm(
+            query=query, search_set=folio.get_industries(max_depth=max_depth)
         )
     )
 
@@ -384,7 +384,7 @@ async def search_legal_authorities(
     request: Request, query: str, max_depth: int = DEFAULT_MAX_DEPTH
 ) -> OWLSearchResults:
     """
-    Get class information using the SOLI legal authorities.
+    Get class information using the FOLIO legal authorities.
 
     Args:
         request (Request): FastAPI request object
@@ -398,10 +398,10 @@ async def search_legal_authorities(
     if not query_length_check(query):
         return OWLClassList(classes=[])
 
-    soli: SOLI = request.app.state.soli
+    folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
-        results=await soli.search_by_llm(
-            query=query, search_set=soli.get_legal_authorities(max_depth=max_depth)
+        results=await folio.search_by_llm(
+            query=query, search_set=folio.get_legal_authorities(max_depth=max_depth)
         )
     )
 
@@ -412,16 +412,16 @@ async def search_locations(
     request: Request, query: str, max_depth: int = DEFAULT_MAX_DEPTH
 ) -> OWLSearchResults:
     """
-    Get class information using the SOLI locations.
+    Get class information using the FOLIO locations.
     """
     # check query length
     if not query_length_check(query):
         return OWLClassList(classes=[])
 
-    soli: SOLI = request.app.state.soli
+    folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
-        results=await soli.search_by_llm(
-            query=query, search_set=soli.get_locations(max_depth=max_depth)
+        results=await folio.search_by_llm(
+            query=query, search_set=folio.get_locations(max_depth=max_depth)
         )
     )
 
@@ -432,16 +432,16 @@ async def search_matter_narratives(
     request: Request, query: str, max_depth: int = DEFAULT_MAX_DEPTH
 ) -> OWLSearchResults:
     """
-    Get class information using the SOLI matter narratives.
+    Get class information using the FOLIO matter narratives.
     """
     # check query length
     if not query_length_check(query):
         return OWLClassList(classes=[])
 
-    soli: SOLI = request.app.state.soli
+    folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
-        results=await soli.search_by_llm(
-            query=query, search_set=soli.get_matter_narratives(max_depth=max_depth)
+        results=await folio.search_by_llm(
+            query=query, search_set=folio.get_matter_narratives(max_depth=max_depth)
         )
     )
 
@@ -454,17 +454,17 @@ async def search_matter_narrative_formats(
     request: Request, query: str, max_depth: int = DEFAULT_MAX_DEPTH
 ) -> OWLSearchResults:
     """
-    Get class information using the SOLI matter narrative formats.
+    Get class information using the FOLIO matter narrative formats.
     """
     # check query length
     if not query_length_check(query):
         return OWLClassList(classes=[])
 
-    soli: SOLI = request.app.state.soli
+    folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
-        results=await soli.search_by_llm(
+        results=await folio.search_by_llm(
             query=query,
-            search_set=soli.get_matter_narrative_formats(max_depth=max_depth),
+            search_set=folio.get_matter_narrative_formats(max_depth=max_depth),
         )
     )
 
@@ -475,16 +475,16 @@ async def search_objectives(
     request: Request, query: str, max_depth: int = DEFAULT_MAX_DEPTH
 ) -> OWLSearchResults:
     """
-    Get class information using the SOLI objectives.
+    Get class information using the FOLIO objectives.
     """
     # check query length
     if not query_length_check(query):
         return OWLClassList(classes=[])
 
-    soli: SOLI = request.app.state.soli
+    folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
-        results=await soli.search_by_llm(
-            query=query, search_set=soli.get_objectives(max_depth=max_depth)
+        results=await folio.search_by_llm(
+            query=query, search_set=folio.get_objectives(max_depth=max_depth)
         )
     )
 
@@ -494,7 +494,7 @@ async def search_player_actors(
     request: Request, query: str, max_depth: int = DEFAULT_MAX_DEPTH
 ) -> OWLSearchResults:
     """
-    Get class information using the SOLI player actors.
+    Get class information using the FOLIO player actors.
 
     Args:
         request (Request): FastAPI request object
@@ -508,10 +508,10 @@ async def search_player_actors(
     if not query_length_check(query):
         return OWLClassList(classes=[])
 
-    soli: SOLI = request.app.state.soli
+    folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
-        results=await soli.search_by_llm(
-            query=query, search_set=soli.get_player_actors(max_depth=max_depth)
+        results=await folio.search_by_llm(
+            query=query, search_set=folio.get_player_actors(max_depth=max_depth)
         )
     )
 
@@ -524,17 +524,17 @@ async def search_standards_compatibilities(
     request: Request, query: str, max_depth: int = DEFAULT_MAX_DEPTH
 ) -> OWLSearchResults:
     """
-    Get class information using the SOLI standards compatibilities.
+    Get class information using the FOLIO standards compatibilities.
     """
     # check query length
     if not query_length_check(query):
         return OWLClassList(classes=[])
 
-    soli: SOLI = request.app.state.soli
+    folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
-        results=await soli.search_by_llm(
+        results=await folio.search_by_llm(
             query=query,
-            search_set=soli.get_standards_compatibilities(max_depth=max_depth),
+            search_set=folio.get_standards_compatibilities(max_depth=max_depth),
         )
     )
 
@@ -545,16 +545,16 @@ async def search_statuses(
     request: Request, query: str, max_depth: int = DEFAULT_MAX_DEPTH
 ) -> OWLSearchResults:
     """
-    Get class information using the SOLI statuses.
+    Get class information using the FOLIO statuses.
     """
     # check query length
     if not query_length_check(query):
         return OWLClassList(classes=[])
 
-    soli: SOLI = request.app.state.soli
+    folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
-        results=await soli.search_by_llm(
-            query=query, search_set=soli.get_statuses(max_depth=max_depth)
+        results=await folio.search_by_llm(
+            query=query, search_set=folio.get_statuses(max_depth=max_depth)
         )
     )
 
@@ -565,15 +565,15 @@ async def search_system_identifiers(
     request: Request, query: str, max_depth: int = DEFAULT_MAX_DEPTH
 ) -> OWLSearchResults:
     """
-    Get class information using the SOLI system identifiers.
+    Get class information using the FOLIO system identifiers.
     """
     # check query length
     if not query_length_check(query):
         return OWLClassList(classes=[])
 
-    soli: SOLI = request.app.state.soli
+    folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
-        results=await soli.search_by_llm(
-            query=query, search_set=soli.get_system_identifiers(max_depth=max_depth)
+        results=await folio.search_by_llm(
+            query=query, search_set=folio.get_system_identifiers(max_depth=max_depth)
         )
     )

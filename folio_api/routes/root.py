@@ -7,10 +7,10 @@ import json
 
 # packages
 from fastapi import APIRouter, Request
-from soli import SOLI, OWLClass
+from folio import FOLIO, OWLClass
 from starlette.responses import JSONResponse, Response
 
-from soli_api.templates.basic_html import render_tailwind_html
+from folio_api.templates.basic_html import render_tailwind_html
 
 # project
 
@@ -44,11 +44,11 @@ async def get_class(request: Request, iri: str) -> OWLClass or JSONResponse:
     Returns:
         OWLClass: Pydantic model with class information
     """
-    soli: SOLI = request.app.state.soli
-    if iri not in soli:
+    folio: FOLIO = request.app.state.folio
+    if iri not in folio:
         return JSONResponse(status_code=404, content={"message": "Class not found."})
 
-    return soli[iri]
+    return folio[iri]
 
 
 # add /{iri}/markdown with Response format and .to_markdown()
@@ -64,11 +64,11 @@ async def get_class_markdown(request: Request, iri: str) -> Response:
     Returns:
         str: Markdown formatted class information
     """
-    soli: SOLI = request.app.state.soli
-    if iri not in soli:
+    folio: FOLIO = request.app.state.folio
+    if iri not in folio:
         return Response(status_code=404, content="Class not found.")
 
-    return Response(content=soli[iri].to_markdown(), media_type="text/markdown")
+    return Response(content=folio[iri].to_markdown(), media_type="text/markdown")
 
 
 @router.get("/{iri}/jsonld", tags=[], response_model=None)
@@ -84,11 +84,11 @@ async def get_class_jsonld(request: Request, iri: str) -> JSONResponse:
         JSONResponse: JSON-LD formatted class information
     """
 
-    soli: SOLI = request.app.state.soli
-    if iri not in soli:
+    folio: FOLIO = request.app.state.folio
+    if iri not in folio:
         return JSONResponse(status_code=404, content={"message": "Class not found."})
 
-    return JSONResponse(content=soli[iri].to_jsonld(), media_type="application/ld+json")
+    return JSONResponse(content=folio[iri].to_jsonld(), media_type="application/ld+json")
 
 
 @router.get("/{iri}/xml", tags=[], response_model=None)
@@ -104,34 +104,34 @@ async def get_class_xml(request: Request, iri: str) -> Response:
         Response: XML formatted class information
     """
 
-    soli: SOLI = request.app.state.soli
-    if iri not in soli:
+    folio: FOLIO = request.app.state.folio
+    if iri not in folio:
         return Response(
             status_code=404, content=json.dumps({"message": "Class not found."})
         )
 
-    return Response(content=soli[iri].to_owl_xml(), media_type="application/xml")
+    return Response(content=folio[iri].to_owl_xml(), media_type="application/xml")
 
 
 @router.get("/{iri}/html", tags=[], response_model=None)
 async def get_class_html(request: Request, iri: str) -> Response:
     """
-    Get class information in XML format by IRI.
+    Get class information in HTML format by IRI.
 
     Args:
         request (Request): FastAPI request object
         iri (str): IRI of the class
 
     Returns:
-        Response: XML formatted class information
+        Response: HTML formatted class information
     """
 
-    soli: SOLI = request.app.state.soli
-    if iri not in soli:
+    folio: FOLIO = request.app.state.folio
+    if iri not in folio:
         return Response(
             status_code=404, content=json.dumps({"message": "Class not found."})
         )
 
     return Response(
-        content=render_tailwind_html(soli[iri], soli), media_type="text/html"
+        content=render_tailwind_html(folio[iri], folio), media_type="text/html"
     )
