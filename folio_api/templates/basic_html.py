@@ -192,7 +192,7 @@ def render_tailwind_html(owl_class: OWLClass, folio_graph: FOLIO) -> str:
         <meta property="og:title" content="{format_label(owl_class)} - FOLIO Ontology">
         <meta property="og:description" content="{format_description(owl_class)}">
         <meta property="og:type" content="website">
-        <meta property="og:url" content="https://folio.openlegalstandard.org/{owl_class.iri}">
+        <meta property="og:url" content="{owl_class.iri}">
         <meta property="og:image" content="https://folio.openlegalstandard.org/images/folio_logo.png">
         <meta property="og:image:alt" content="FOLIO Logo">
         <meta property="og:image:width" content="400">
@@ -423,7 +423,7 @@ def render_tailwind_html(owl_class: OWLClass, folio_graph: FOLIO) -> str:
         </main>
         <footer class="bg-[--color-primary] text-white py-8 mt-8">
             <div class="container mx-auto px-4 text-center">
-                <a href="https://openlegalstandard.org/" target="_blank"><img src="https://openlegalstandard.org/_astro/soli-2x1-accent.B8_1Hd3M_NsFb5.webp" alt="FOLIO Logo" class="w-16 mx-auto mt-4"></a>
+                <a href="https://openlegalstandard.org/" target="_blank"><img src="https://openlegalstandard.org/_astro/soli-2x1-accent.DYUFAzgH_1CFhgX.webp" alt="FOLIO Logo" class="w-16 mx-auto mt-4"></a>
                 <p>The FOLIO ontology is licensed under the CC-BY 4.0 license.</p>
                 <p>Any FOLIO software is licensed under the MIT license.</p>
                 <div class="mt-1">

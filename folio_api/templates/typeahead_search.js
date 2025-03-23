@@ -1,5 +1,56 @@
 // Typeahead initialization
 $(document).ready(function () {
+    // Try multiple query forms to improve matching (lowercase, titlecase, etc.)
+    function searchWithMultipleQueryForms(query, sync, async) {
+        // If no query, return empty results
+        if (!query) {
+            return async([]);
+        }
+        
+        // Original query as entered by user
+        let originalQuery = query;
+        
+        // Lowercase query
+        let lowercaseQuery = query.toLowerCase();
+        
+        // Titlecase query (capitalize first letter of each word)
+        let titlecaseQuery = query.split(' ')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+            .join(' ');
+        
+        // First try with the original query
+        results.search(originalQuery, sync, function(results1) {
+            // If we got results, return them
+            if (results1 && results1.length > 0) {
+                async(results1);
+                return;
+            }
+            
+            // If original query didn't work, try lowercase
+            if (originalQuery !== lowercaseQuery) {
+                results.search(lowercaseQuery, sync, function(results2) {
+                    if (results2 && results2.length > 0) {
+                        async(results2);
+                        return;
+                    }
+                    
+                    // If lowercase didn't work, try titlecase
+                    if (originalQuery !== titlecaseQuery && lowercaseQuery !== titlecaseQuery) {
+                        results.search(titlecaseQuery, sync, async);
+                    } else {
+                        async(results2);
+                    }
+                });
+            } 
+            // If original and lowercase are the same, try titlecase
+            else if (originalQuery !== titlecaseQuery) {
+                results.search(titlecaseQuery, sync, async);
+            } else {
+                async(results1);
+            }
+        });
+    }
+    
     var results = new Bloodhound({
         datumTokenizer: Bloodhound.tokenizers.obj.whitespace('label'),
         queryTokenizer: Bloodhound.tokenizers.whitespace,
@@ -22,7 +73,7 @@ $(document).ready(function () {
                         search_results.push({
                             label: label,
                             iri: c.iri,
-                            alternative_labels: c.alternative_labels.join(', '),
+                            alternative_labels: c.alternative_labels && c.alternative_labels.length ? c.alternative_labels.join(', ') : 'None',
                             definition: c.definition || 'No definition available'
                         });
                     }
@@ -41,7 +92,7 @@ $(document).ready(function () {
         {
             name: 'results',
             display: 'label',
-            source: results,
+            source: searchWithMultipleQueryForms, // Use our custom search function
             limit: 10,
             templates: {
                 suggestion: function (data) {

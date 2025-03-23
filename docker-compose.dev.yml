@@ -1,0 +1,45 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    ports:
+      - "${PORT:-8000}:${PORT:-8000}"
+    volumes:
+      - ./config.json:/app/config.json:ro
+      - ./logs:/app/logs
+      - ./folio_api:/app/folio_api:ro  # Mount code for development
+    environment:
+      - PORT=${PORT:-8000}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - PYTHONPATH=/app
+    # Override the command to enable hot-reloading
+    command: ["bash", "-c", "/app/.local/bin/uv run uvicorn folio_api.api:app --host 0.0.0.0 --port ${PORT:-8000} --reload --reload-dir /app/folio_api"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${PORT:-8000}/info/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    # Use development-specific container name
+    container_name: folio-api-dev
+
+  caddy:
+    image: caddy:latest
+    ports:
+      - "${WEB_PORT:-80}:80"
+    environment:
+      - PORT=${PORT:-8000}
+    volumes:
+      - ./docker/Caddyfile.dev:/etc/caddy/Caddyfile:ro
+      - ./logs/caddy:/var/log/caddy
+      - caddy_dev_data:/data
+      - caddy_dev_config:/config
+    depends_on:
+      - api
+    # Use development-specific container name
+    container_name: folio-caddy-dev
+
+volumes:
+  caddy_dev_data:
+  caddy_dev_config:

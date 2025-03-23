@@ -141,10 +141,35 @@ def get_app() -> FastAPI:
         description=api_config["description"],
         version=api_config["version"],
         openapi_url="/openapi.json",
-        openapi_tags=[],
+        openapi_tags=[
+            {
+                "name": "documentation",
+                "description": "Documentation-related endpoints"
+            },
+            {
+                "name": "info",
+                "description": "API information and health monitoring endpoints"
+            },
+            {
+                "name": "ontology",
+                "description": "Endpoints for retrieving specific ontology classes by IRI in various formats"
+            },
+            {
+                "name": "search",
+                "description": "Search endpoints for finding relevant classes in the FOLIO ontology"
+            },
+            {
+                "name": "taxonomy",
+                "description": "Endpoints for exploring ontology hierarchies and class categories"
+            }
+        ],
         docs_url="/docs",
         terms_of_service=api_config["terms_of_service"],
         contact=api_config["contact"],
+        license_info={
+            "name": "CC-BY 4.0",
+            "url": "https://creativecommons.org/licenses/by/4.0/deed.en",
+        },
         lifespan=lifespan_handler,
     )
 

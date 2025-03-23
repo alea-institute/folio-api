@@ -1,0 +1,40 @@
+# Exclude development and system files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Exclude .git and version control
+.git
+.gitignore
+.github
+
+# Exclude Docker files
+.dockerignore
+docker-compose*.yml
+
+# Exclude test and cache directories
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Exclude logs and local data
+logs/
+*.log
+*.sqlite
+
+# Exclude documentation and example files
+docs/
+*.md
+!README.md
+
+# Keep config example but exclude actual config
+config.json
+!config.json.example

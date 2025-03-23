@@ -1,0 +1,8 @@
+localhost:80 {
+    encode gzip
+    reverse_proxy api:{$PORT}
+    log {
+        output file /var/log/caddy/access.log
+        format json
+    }
+}

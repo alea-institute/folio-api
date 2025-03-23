@@ -1,4 +1,28 @@
 folio.openlegalstandard.org {
-        encode gzip
-        reverse_proxy localhost:8000
+    encode gzip
+    reverse_proxy api:{$PORT}
+    tls {
+        protocols tls1.2 tls1.3
+    }
+    log {
+        output file /var/log/caddy/access.log
+        format json
+    }
+    header {
+        # Enable HTTP Strict Transport Security (HSTS)
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        # Enable Cross-Site Filter (XSS Protection)
+        X-XSS-Protection "1; mode=block"
+        # Disable clients from inferring the MIME type
+        X-Content-Type-Options "nosniff"
+        # Prevent clickjacking
+        X-Frame-Options "SAMEORIGIN"
+        # Remove the Server header
+        -Server
+    }
+    # Add rate limiting
+    @api {
+        path /search/* /taxonomy/*
+    }
+    rate_limit @api 100r/m
 }
