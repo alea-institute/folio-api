@@ -5,14 +5,17 @@ Search routes.
 # imports
 
 # packages
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, HTTPException, status
 from folio import FOLIO
 
 # project
-from folio_api.models.owl import OWLClassList, OWLSearchResults
+from folio_api.models import OWLClassList, OWLSearchResults
 
 # API router
-router = APIRouter(prefix="/search", tags=["search"])
+router = APIRouter(
+    prefix="/search", 
+    tags=["search"]
+)
 
 # set min and max query length defaults
 MIN_QUERY_LENGTH = 2
@@ -35,37 +38,139 @@ def query_length_check(query: str) -> bool:
     return MIN_QUERY_LENGTH <= len(query) <= MAX_QUERY_LENGTH
 
 
-@router.get("/prefix", tags=["search"], response_model=OWLClassList)
+@router.get("/prefix", 
+           tags=["search"], 
+           response_model=OWLClassList,
+           summary="Search by Label Prefix",
+           description="Find ontology classes whose labels start with the given query string",
+           status_code=status.HTTP_200_OK,
+           responses={
+               status.HTTP_200_OK: {
+                   "description": "Successfully retrieved matching classes",
+                   "content": {
+                       "application/json": {
+                           "example": {
+                               "classes": [
+                                   {
+                                       "iri": "8H5wUAUQ0N9s4hHaF2cNO8k",
+                                       "label": "Contract",
+                                       "definition": "A legally binding agreement between two or more parties."
+                                   }
+                               ]
+                           }
+                       }
+                   }
+               },
+               status.HTTP_400_BAD_REQUEST: {
+                   "description": "Invalid query parameter",
+                   "content": {
+                       "application/json": {
+                           "example": {"detail": "Query must be between 2 and 1024 characters"}
+                       }
+                   }
+               }
+           })
 async def search_prefix(request: Request, query: str) -> OWLClassList:
     """
-    Get class information for labels that start with the query string.
-
-    Args:
-        request (Request): FastAPI request object
-        query (str): Query string
-
-    Returns:
-        OWLClassList: Pydantic model with list of classes
+    Search for FOLIO ontology classes whose labels start with the provided prefix.
+    
+    This endpoint performs a prefix-based search on class labels, returning all classes
+    whose labels begin with the provided query string. The search is case-insensitive.
+    
+    This is useful for:
+    - Autocomplete suggestions in user interfaces
+    - Finding classes with similar naming conventions
+    - Exploring related concepts in the ontology
+    
+    Example queries:
+    - `Contract` would match "Contract", "Contractual Agreement", "Contract Breach", etc.
+    - `Agr` would match "Agreement", "Agricultural Land", etc.
+    
+    Requirements:
+    - Query must be at least 2 characters long (limited to 1024 characters)
+    - An HTTP 400 error is returned if query length requirements are not met
+    - A successful response with an empty array is returned if no matches are found
+    
+    Example response:
+    ```json
+    {
+      "classes": [
+        {
+          "iri": "8H5wUAUQ0N9s4hHaF2cNO8k",
+          "label": "Contract",
+          "definition": "A legally binding agreement between two or more parties.",
+          ...
+        },
+        {...}
+      ]
+    }
+    ```
     """
     # check query length
-    if not query_length_check(query):
-        return OWLClassList(classes=[])
+    if len(query) < MIN_QUERY_LENGTH:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Query must be at least {MIN_QUERY_LENGTH} characters long"
+        )
+    if len(query) > MAX_QUERY_LENGTH:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Query exceeds maximum length of {MAX_QUERY_LENGTH} characters"
+        )
 
     folio: FOLIO = request.app.state.folio
-    return OWLClassList(classes=folio.search_by_prefix(query))
+    results = folio.search_by_prefix(query)
+    
+    # Return 200 OK with results (empty array if no matches)
+    return OWLClassList(classes=results)
 
 
-@router.get("/label", tags=["search"], response_model=OWLSearchResults)
+@router.get("/label", 
+           tags=["search"], 
+           response_model=OWLSearchResults,
+           summary="Search by Label Content",
+           description="Find ontology classes whose labels contain the given query string, with relevance scores")
 async def search_label(request: Request, query: str) -> OWLSearchResults:
     """
-    Get class information using the folio-python search_by_label method.
-
-    Args:
-        request (Request): FastAPI request object
-        query (str): Query string
-
-    Returns:
-        OWLSearchResults: Pydantic model with list of classes
+    Search for FOLIO ontology classes whose labels contain the provided query string.
+    
+    This endpoint performs a fuzzy search on class labels, returning classes with labels
+    that contain the query string along with a relevance score. Unlike the prefix search,
+    this searches for the query string anywhere in the label, not just at the beginning.
+    
+    This is useful for:
+    - Finding classes when you know part of the label but not the beginning
+    - More flexible searching when the exact term is unknown
+    - Getting results ranked by relevance
+    
+    Example queries:
+    - `agreement` would match "Lease Agreement", "Purchase Agreement", etc.
+    - `party` would match "Third Party", "Party to Contract", "Political Party", etc.
+    
+    Requirements:
+    - Query must be at least 2 characters long (limited to 1024 characters)
+    - Returns an empty list if no matches are found or query is too short/long
+    
+    Example response:
+    ```json
+    {
+      "results": [
+        [
+          {
+            "iri": "8H5wUAUQ0N9s4hHaF2cNO8k",
+            "label": "Contractual Agreement",
+            "definition": "A legally binding agreement between two or more parties.",
+            ...
+          },
+          0.95  // Relevance score
+        ],
+        [...]
+      ]
+    }
+    ```
+    
+    Note: The results are returned as a list of tuples, each containing an OWLClass object
+    and a numeric relevance score between 0 and 1, with higher scores indicating better matches.
     """
     # check query length
     if not query_length_check(query):
@@ -75,17 +180,52 @@ async def search_label(request: Request, query: str) -> OWLSearchResults:
     return OWLSearchResults(results=folio.search_by_label(query))
 
 
-@router.get("/definition", tags=["search"], response_model=OWLSearchResults)
+@router.get("/definition", 
+           tags=["search"], 
+           response_model=OWLSearchResults,
+           summary="Search by Definition Content",
+           description="Find ontology classes whose definitions contain the given query string, with relevance scores")
 async def search_definition(request: Request, query: str) -> OWLSearchResults:
     """
-    Get class information using the folio-python search_by_definition method.
-
-    Args:
-        request (Request): FastAPI request object
-        query (str): Query string
-
-    Returns:
-        OWLClassList: Pydantic model with list of classes
+    Search for FOLIO ontology classes whose definitions contain the provided query string.
+    
+    This endpoint performs a text search on class definitions, returning classes with definitions
+    that contain the query string along with a relevance score. This allows you to find concepts
+    based on their meaning rather than just their labels.
+    
+    This is useful for:
+    - Finding classes based on conceptual meaning
+    - Exploring concepts related to specific terms or ideas
+    - Research and discovery of related legal concepts
+    
+    Example queries:
+    - `property` would match classes with definitions mentioning property concepts
+    - `obligation` would match classes related to duties, requirements, or obligations
+    
+    Requirements:
+    - Query must be at least 2 characters long (limited to 1024 characters)
+    - Returns an empty list if no matches are found or query is too short/long
+    
+    Example response:
+    ```json
+    {
+      "results": [
+        [
+          {
+            "iri": "rTn1gH6J3mLpOqZxS0uW9vY",
+            "label": "Real Property",
+            "definition": "Land and anything fixed, immovable, or permanently attached to it.",
+            ...
+          },
+          0.88  // Relevance score
+        ],
+        [...]
+      ]
+    }
+    ```
+    
+    Note: The results are returned as a list of tuples, each containing an OWLClass object
+    and a numeric relevance score between 0 and 1, with higher scores indicating better matches.
     """
     # check query length
     if not query_length_check(query):
@@ -95,20 +235,60 @@ async def search_definition(request: Request, query: str) -> OWLSearchResults:
     return OWLSearchResults(results=folio.search_by_definition(query))
 
 
-@router.get("/llm/area-of-law", tags=["search"], response_model=OWLSearchResults)
+@router.get("/llm/area-of-law", 
+           tags=["search"], 
+           response_model=OWLSearchResults,
+           summary="AI-Powered Area of Law Search",
+           description="Use LLM-based semantic search to find areas of law related to your query")
 async def search_llm_area_of_law(
     request: Request, query: str, max_depth: int = DEFAULT_MAX_DEPTH
 ) -> OWLSearchResults:
     """
-    Get class information using the FOLIO areas of law.
-
-    Args:
-        request (Request): FastAPI request object
-        query (str): Query string
-        max_depth (int): Maximum depth of the search
-
-    Returns:
-        OWLClassList: Pydantic model with list of classes
+    Search for areas of law in the FOLIO ontology using AI-powered semantic search.
+    
+    This endpoint uses a Large Language Model (LLM) to perform semantic search against
+    the Areas of Law in the FOLIO ontology. Unlike traditional keyword search, this can
+    understand the meaning and intent behind your query, even if it doesn't match the
+    exact words used in class labels or definitions.
+    
+    This is useful for:
+    - Finding relevant legal domains for specific legal questions
+    - Exploring which areas of law might apply to a particular scenario
+    - Discovering connections between legal concepts and practice areas
+    
+    Parameters:
+    - query: A natural language description of what you're looking for
+    - max_depth: Controls how many levels deep in the taxonomy to search (default: 3)
+    
+    Example queries:
+    - "I'm having issues with my landlord not fixing things"
+    - "My business partner is using company funds for personal expenses"
+    - "Can I use copyrighted material in my educational presentations?"
+    
+    Requirements:
+    - Query must be at least 2 characters long (limited to 1024 characters)
+    - Returns an empty list if no matches are found or query is too short/long
+    
+    Example response:
+    ```json
+    {
+      "results": [
+        [
+          {
+            "iri": "uY5tR1zX9vB7nM3kL7jH5gF",
+            "label": "Landlord-Tenant Law",
+            "definition": "Body of law that governs rental properties and agreements.",
+            ...
+          },
+          0.92  // Relevance score
+        ],
+        [...]
+      ]
+    }
+    ```
+    
+    Note: LLM-based search may take slightly longer than traditional keyword search
+    but provides more semantically meaningful results.
     """
     # check query length
     if not query_length_check(query):

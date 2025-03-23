@@ -5,39 +5,53 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 \
-    python3-pip \
-    python3-venv \
-    pipx \
     curl \
-    build-essential \
-    &&  \
-    rm -rf /var/lib/apt/lists/* \
-    && \
-    pipx install uv \
-    && \
-    pipx ensurepath
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
-# create /app directory
+# Set up non-root user
+RUN groupadd -r app && useradd -r -g app app -d /app
+
+# Switch to app user
+USER app
 WORKDIR /app
-RUN cd /app
 
-# create /app directory
-WORKDIR /app
-RUN cd /app
+# Install uv using the curl install script
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# copy the poetry configuration \
-COPY pyproject.toml uv.lock README.md ./
+# Update path
+ENV PATH="/app/.local/bin/:$PATH"
 
-# build the poetry environment
+# Install Python tools with uv
+RUN uv python install 3.12 \
+    && \
+    uv tool install pipx \
+    && \
+    uv tool install poetry \
+    && \
+    uv tool install pip
+
+# Copy dependency files first for better layer caching
+COPY --chown=app:app pyproject.toml ./
+COPY --chown=app:app README.md ./
+
+# Install dependencies
 RUN bash -l -c "uv sync --upgrade && uv venv && uv run python"
 
-# copy the python api code
-COPY folio_api folio_api
+# Copy application code
+COPY --chown=app:app folio_api folio_api
+COPY --chown=app:app config.json.example ./config.json.example
 
-# you could copy the config.json file, but we're using bind mounts by default instead.
-# COPY config.json config.json
+# Set default port
+ENV PORT=8000
 
-# run uvicorn: # uvicorn folio_api.api:app --reload
-CMD ["bash", "-l", "-c", "PYTHONPATH=. uv run uvicorn folio_api.api:app --host 0.0.0.0 --port 8000"]
-EXPOSE 8000
+# Define healthcheck
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:${PORT}/info/health || exit 1
+
+# Expose port
+EXPOSE ${PORT}
+
+# Run the application
+CMD ["/bin/bash", "-c", "/app/.local/bin/uv run uvicorn folio_api.api:app --host 0.0.0.0 --port ${PORT}"]
+
