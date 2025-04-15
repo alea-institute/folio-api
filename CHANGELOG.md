@@ -5,6 +5,21 @@ All notable changes to the FOLIO API will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2025-04-15
+
+### Added
+- Footer version display showing FOLIO branch and repository information
+- Expanded editorial information display in HTML templates
+
+### Changed
+- Replaced D3.js with Cytoscape.js for improved graph visualization
+- Enhanced HTML templates with better responsive design and user interface
+- Improved search functionality to handle case-insensitive substring matching
+- Updated typeahead search to highlight matching text
+- Improved graph interactivity with tooltips and better controls
+- Expanded footer with additional resources and links
+- Updated copyright years to include 2025
+
 ## [0.2.0] - 2025-03-23
 
 ### Added
