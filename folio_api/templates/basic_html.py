@@ -14,7 +14,9 @@ from folio import FOLIO, OWLClass
 # project
 
 # JavaScript sources
-CYTOSCAPE_JS_SOURCE = (Path(__file__).parent / "cytoscape_graph.js").read_text(encoding="utf-8")
+CYTOSCAPE_JS_SOURCE = (Path(__file__).parent / "cytoscape_graph.js").read_text(
+    encoding="utf-8"
+)
 TYPEAHEAD_JS_SOURCE = (Path(__file__).parent / "typeahead_search.js").read_text(
     encoding="utf-8"
 )
@@ -61,7 +63,6 @@ def format_description(owl_class: OWLClass) -> str:
         return owl_class.definition
     else:
         return "No description available."
-
 
 
 def get_node_neighbors(
@@ -156,7 +157,9 @@ def get_node_neighbors(
     return list(nodes.values()), edges
 
 
-def render_tailwind_html(owl_class: OWLClass, folio_graph: FOLIO, config: dict = None) -> str:
+def render_tailwind_html(
+    owl_class: OWLClass, folio_graph: FOLIO, config: dict = None
+) -> str:
     """
     Render a complete HTML document with the class information
     in a user-friendly format using Tailwind CSS.
@@ -190,7 +193,9 @@ def render_tailwind_html(owl_class: OWLClass, folio_graph: FOLIO, config: dict =
         <script src="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/6.3.7/tippy.umd.min.js" integrity="sha512-2TtfktSlvvPzopzBA49C+MX6sdc7ykHGbBQUTH8Vk78YpkXVD5r6vrNU+nOmhhl1MyTWdVfxXdZfyFsvBvOllw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
         <meta name="description" content="{format_description(owl_class)}">
         <meta name="author" content="FOLIO - The Federated Open Legal Information Ontology">
-        <meta name="keywords" content="legal, ontology, standard, open, information, {format_label(owl_class)}">
+        <meta name="keywords" content="legal, ontology, standard, open, information, {
+        format_label(owl_class)
+    }">
         <meta name="robots" content="index, follow">
         <meta property="og:title" content="{format_label(owl_class)} - FOLIO Ontology">
         <meta property="og:description" content="{format_description(owl_class)}">
@@ -255,8 +260,12 @@ def render_tailwind_html(owl_class: OWLClass, folio_graph: FOLIO, config: dict =
             <div class="container mx-auto px-4">
                 <div class="flex justify-between items-start">
                     <div>
-                        <h1 class="text-3xl font-bold mb-2">{format_label(owl_class)}</h1>
-                        <p class="text-xl text-white opacity-80">{format_description(owl_class)}</p>
+                        <h1 class="text-3xl font-bold mb-2">{
+        format_label(owl_class)
+    }</h1>
+                        <p class="text-xl text-white opacity-80">{
+        format_description(owl_class)
+    }</p>
                     </div>
                     <div class="hidden md:block">
                         <a href="https://openlegalstandard.org/" target="_blank" class="inline-block bg-white text-[--color-primary] font-semibold px-4 py-2 rounded hover:bg-opacity-90 transition-colors duration-200 mr-2">FOLIO Website</a>
@@ -276,10 +285,18 @@ def render_tailwind_html(owl_class: OWLClass, folio_graph: FOLIO, config: dict =
         <div class="bg-white border-b">
             <div class="container mx-auto px-4 py-4">
                 <div class="flex flex-wrap gap-2">
-                    <a href="{owl_class.iri}" class="bg-[--color-primary] hover:bg-[--color-accent] text-white font-semibold py-2 px-4 rounded transition-colors duration-200">JSON</a>
-                    <a href="{owl_class.iri}/jsonld" class="bg-[--color-primary] hover:bg-[--color-accent] text-white font-semibold py-2 px-4 rounded transition-colors duration-200">JSON-LD</a>
-                    <a href="{owl_class.iri}/xml" class="bg-[--color-primary] hover:bg-[--color-accent] text-white font-semibold py-2 px-4 rounded transition-colors duration-200">OWL XML</a>
-                    <a href="{owl_class.iri}/markdown" class="bg-[--color-primary] hover:bg-[--color-accent] text-white font-semibold py-2 px-4 rounded transition-colors duration-200">Markdown</a>
+                    <a href="{
+        owl_class.iri
+    }" class="bg-[--color-primary] hover:bg-[--color-accent] text-white font-semibold py-2 px-4 rounded transition-colors duration-200">JSON</a>
+                    <a href="{
+        owl_class.iri
+    }/jsonld" class="bg-[--color-primary] hover:bg-[--color-accent] text-white font-semibold py-2 px-4 rounded transition-colors duration-200">JSON-LD</a>
+                    <a href="{
+        owl_class.iri
+    }/xml" class="bg-[--color-primary] hover:bg-[--color-accent] text-white font-semibold py-2 px-4 rounded transition-colors duration-200">OWL XML</a>
+                    <a href="{
+        owl_class.iri
+    }/markdown" class="bg-[--color-primary] hover:bg-[--color-accent] text-white font-semibold py-2 px-4 rounded transition-colors duration-200">Markdown</a>
                     <a href="/taxonomy/browse" class="bg-white hover:bg-gray-100 text-gray-800 font-semibold py-2 px-4 rounded border border-gray-300 transition-colors duration-200">← Back to Browse</a>
                 </div>
             </div>
@@ -293,7 +310,9 @@ def render_tailwind_html(owl_class: OWLClass, folio_graph: FOLIO, config: dict =
                     <div class="space-y-4">
                         <div>
                             <p class="text-gray-500 text-sm mb-1">IRI <button onclick="copyIRI()" class="copy-button py-1 px-2 rounded text-sm">📋</button></p>
-                            <p id="iri-value" class="truncate font-mono text-sm" title="{owl_class.iri}">{owl_class.iri}</p>
+                            <p id="iri-value" class="truncate font-mono text-sm" title="{
+        owl_class.iri
+    }">{owl_class.iri}</p>
                         </div>
                         
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -323,14 +342,20 @@ def render_tailwind_html(owl_class: OWLClass, folio_graph: FOLIO, config: dict =
                 <!-- Definition and Examples -->
                 <section class="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow">
                     <h3 class="text-xl font-semibold mb-4 text-[--color-primary]">Definition</h3>
-                    <p class="text-gray-700 mb-6">{owl_class.definition or "No definition available."}</p>
+                    <p class="text-gray-700 mb-6">{
+        owl_class.definition or "No definition available."
+    }</p>
                     
-                    {f"""
+                    {
+        f'''
                     <h4 class="text-lg font-medium mb-3 text-[--color-primary]">Examples</h4>
                     <ul class="list-disc pl-5 space-y-2 mb-4">
                         {"\n".join([f"<li>{example}</li>" for example in owl_class.examples])}
                     </ul>
-                    """ if owl_class.examples else ""}
+                    '''
+        if owl_class.examples
+        else ""
+    }
                 </section>
                 
                 <!-- Class Relationships -->
@@ -341,7 +366,14 @@ def render_tailwind_html(owl_class: OWLClass, folio_graph: FOLIO, config: dict =
                         <div>
                             <p class="text-gray-500 text-sm mb-2">Sub Class Of</p>
                             <ul class="list-disc pl-5 space-y-1">
-                                {"\n".join(f"""<li><a class="text-blue-500 hover:text-blue-700 hover:underline" href="{sub_class}/html">{folio_graph[sub_class].label}</a></li>""" for sub_class in owl_class.sub_class_of if folio_graph[sub_class]) or "<li>None</li>"}
+                                {
+        "\n".join(
+            f'''<li><a class="text-blue-500 hover:text-blue-700 hover:underline" href="{sub_class}/html">{folio_graph[sub_class].label}</a></li>'''
+            for sub_class in owl_class.sub_class_of
+            if folio_graph[sub_class]
+        )
+        or "<li>None</li>"
+    }
                             </ul>
                         </div>
                         
@@ -355,29 +387,49 @@ def render_tailwind_html(owl_class: OWLClass, folio_graph: FOLIO, config: dict =
                     </div>
                     
                     <div class="mt-6">
-                        <p class="text-gray-500 text-sm mb-2">Parent Class Of ({len(owl_class.parent_class_of) if hasattr(owl_class, 'parent_class_of') else 0})</p>
+                        <p class="text-gray-500 text-sm mb-2">Parent Class Of ({
+        len(owl_class.parent_class_of) if hasattr(owl_class, "parent_class_of") else 0
+    })</p>
                         <div class="max-h-60 overflow-y-auto border border-gray-200 rounded p-2 bg-gray-50">
                             <ul class="list-disc pl-5 space-y-1">
-                                {"\n".join(f"""<li><a class="text-blue-500 hover:text-blue-700 hover:underline" href="{parent_class}/html">{folio_graph[parent_class].label}</a></li>""" for parent_class in owl_class.parent_class_of if folio_graph[parent_class]) or "<li>None</li>"}
+                                {
+        "\n".join(
+            f'''<li><a class="text-blue-500 hover:text-blue-700 hover:underline" href="{parent_class}/html">{folio_graph[parent_class].label}</a></li>'''
+            for parent_class in owl_class.parent_class_of
+            if folio_graph[parent_class]
+        )
+        or "<li>None</li>"
+    }
                             </ul>
                         </div>
                     </div>
                 </section>
                 
                 <!-- Translations -->
-                {f"""
+                {
+        f'''
                 <section class="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow">
                     <h3 class="text-xl font-semibold mb-4 text-[--color-primary]">Translations</h3>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {"\n".join([f"""
+                        {
+            "\n".join(
+                [
+                    f"""
                         <div class="border-b pb-2">
                             <p class="text-gray-500 text-sm font-medium">{language}</p>
                             <p class="mt-1">{translation}</p>
                         </div>
-                        """ for language, translation in owl_class.translations.items()])}
+                        """
+                    for language, translation in owl_class.translations.items()
+                ]
+            )
+        }
                     </div>
                 </section>
-                """ if owl_class.translations else ""}
+                '''
+        if owl_class.translations
+        else ""
+    }
                 
                 <!-- Graph Visualization -->
                 <section class="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow">
@@ -407,7 +459,9 @@ def render_tailwind_html(owl_class: OWLClass, folio_graph: FOLIO, config: dict =
                                 <div>
                                     <p class="text-gray-500 text-sm">Notes</p>
                                     <ul class="list-disc pl-5">
-                                        {"\n".join([f"<li>{note}</li>" for note in owl_class.notes]) or "<li>None</li>"}
+                                        {
+        "\n".join([f"<li>{note}</li>" for note in owl_class.notes]) or "<li>None</li>"
+    }
                                     </ul>
                                 </div>
                             </div>
@@ -459,7 +513,13 @@ def render_tailwind_html(owl_class: OWLClass, folio_graph: FOLIO, config: dict =
                 </div>
                 
                 <p class="mt-4 text-small">Copyright &copy; 2024-2025. <a href="https://aleainstitute.ai/" target="_blank">The Institute for the Advancement of Legal and Ethical AI</a>.</p>
-                <p class="mt-2 text-xs">FOLIO Version: <span class="font-mono">{config["folio"]["branch"] if config else "2.0.0"}</span> | Repository: <a href="https://github.com/{config["folio"]["repository"] if config else "alea-institute/folio"}" class="text-[--color-secondary] hover:text-white transition-colors duration-200">{config["folio"]["repository"] if config else "alea-institute/folio"}</a></p>
+                <p class="mt-2 text-xs">FOLIO Version: <span class="font-mono">{
+        config["folio"]["branch"] if config else "2.0.0"
+    }</span> | Repository: <a href="https://github.com/{
+        config["folio"]["repository"] if config else "alea-institute/folio"
+    }" class="text-[--color-secondary] hover:text-white transition-colors duration-200">{
+        config["folio"]["repository"] if config else "alea-institute/folio"
+    }</a></p>
             </div>
         </footer>
         

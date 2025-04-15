@@ -14,79 +14,78 @@ from starlette.responses import Response
 from folio_api.models import OWLClassList
 
 # API router
-router = APIRouter(
-    prefix="/taxonomy", 
-    tags=["taxonomy"]
+router = APIRouter(prefix="/taxonomy", tags=["taxonomy"])
+
+
+@router.get(
+    "/actor_player",
+    tags=["taxonomy"],
+    response_model=OWLClassList,
+    summary="Get Actor Player Classes",
+    description="Retrieve all Actor Player classes from the FOLIO ontology with optional traversal depth",
+    status_code=status.HTTP_200_OK,
+    responses={
+        status.HTTP_200_OK: {
+            "description": "Successfully retrieved actor player classes",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "classes": [
+                            {
+                                "iri": "kL8jH4gF2dS5aP9oI6uY3tR",
+                                "label": "Legal Person",
+                                "definition": "An entity recognized by the legal system as having legal rights and obligations.",
+                            },
+                            {
+                                "iri": "7bN3mK6jH5gF1dS4aP8oI7u",
+                                "label": "Natural Person",
+                                "definition": "A human being, as distinguished from a legal entity created by law.",
+                            },
+                        ]
+                    }
+                }
+            },
+        },
+        status.HTTP_422_UNPROCESSABLE_ENTITY: {
+            "description": "Validation error (e.g., invalid max_depth parameter)",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": [
+                            {
+                                "loc": ["query", "max_depth"],
+                                "msg": "value is not a valid integer",
+                                "type": "type_error.integer",
+                            }
+                        ]
+                    }
+                }
+            },
+        },
+    },
 )
-
-
-@router.get("/actor_player", 
-           tags=["taxonomy"], 
-           response_model=OWLClassList,
-           summary="Get Actor Player Classes",
-           description="Retrieve all Actor Player classes from the FOLIO ontology with optional traversal depth",
-           status_code=status.HTTP_200_OK,
-           responses={
-               status.HTTP_200_OK: {
-                   "description": "Successfully retrieved actor player classes",
-                   "content": {
-                       "application/json": {
-                           "example": {
-                               "classes": [
-                                   {
-                                       "iri": "kL8jH4gF2dS5aP9oI6uY3tR",
-                                       "label": "Legal Person",
-                                       "definition": "An entity recognized by the legal system as having legal rights and obligations."
-                                   },
-                                   {
-                                       "iri": "7bN3mK6jH5gF1dS4aP8oI7u",
-                                       "label": "Natural Person",
-                                       "definition": "A human being, as distinguished from a legal entity created by law."
-                                   }
-                               ]
-                           }
-                       }
-                   }
-               },
-               status.HTTP_422_UNPROCESSABLE_ENTITY: {
-                   "description": "Validation error (e.g., invalid max_depth parameter)",
-                   "content": {
-                       "application/json": {
-                           "example": {
-                               "detail": [
-                                   {
-                                       "loc": ["query", "max_depth"],
-                                       "msg": "value is not a valid integer",
-                                       "type": "type_error.integer"
-                                   }
-                               ]
-                           }
-                       }
-                   }
-               }
-           })
 async def get_actor_player(request: Request, max_depth: int = 1) -> OWLClassList:
     """
     Retrieve all classes of type 'Actor Player' from the FOLIO ontology.
-    
+
     Actor Players in FOLIO represent entities that can participate in legal relationships,
     such as individuals, organizations, or other legal entities that can act within legal contexts.
-    
+
     This endpoint returns the entire hierarchy of Actor Player classes, allowing you to explore:
     - Types of legal entities
     - Roles that individuals or organizations can play in legal contexts
     - Relationships between different actor types
-    
+
     Parameters:
     - max_depth: Controls how many levels of subclasses to include (default: 1)
       - Set to 1 for direct subclasses only
       - Set to higher values to retrieve deeper hierarchies
       - Higher values will return more classes but may increase response time
-    
+
     HTTP Status Codes:
     - 200 OK: Successfully retrieved actor player classes
     - 422 Unprocessable Entity: Validation error (e.g., invalid max_depth parameter)
-    
+
     Example response:
     ```json
     {
@@ -107,22 +106,24 @@ async def get_actor_player(request: Request, max_depth: int = 1) -> OWLClassList
       ]
     }
     ```
-    
+
     Use this endpoint to explore the taxonomy of actors in the legal domain and understand
     the different types of entities that can participate in legal relationships.
     """
     # Parameter validation is handled by FastAPI via the type annotation (int)
     # If max_depth is not an integer, FastAPI will return a 422 Unprocessable Entity error
-    
+
     folio: FOLIO = request.app.state.folio
     return OWLClassList(classes=folio.get_player_actors(max_depth=max_depth))
 
 
-@router.get("/area_of_law", 
-           tags=["taxonomy"], 
-           response_model=OWLClassList,
-           summary="Get Area of Law Classes",
-           description="Retrieve all Area of Law classes from the FOLIO ontology with optional traversal depth")
+@router.get(
+    "/area_of_law",
+    tags=["taxonomy"],
+    response_model=OWLClassList,
+    summary="Get Area of Law Classes",
+    description="Retrieve all Area of Law classes from the FOLIO ontology with optional traversal depth",
+)
 async def get_area_of_law(request: Request, max_depth: int = 1) -> OWLClassList:
     """
     Get all classes of type Area of Law.
@@ -445,7 +446,9 @@ async def get_standards_compatibility(
         OWLClassList: Pydantic model with list of OWLClass objects
     """
     folio: FOLIO = request.app.state.folio
-    return OWLClassList(classes=folio.get_standards_compatibilities(max_depth=max_depth))
+    return OWLClassList(
+        classes=folio.get_standards_compatibilities(max_depth=max_depth)
+    )
 
 
 @router.get("/status", tags=["taxonomy"], response_model=OWLClassList)
@@ -480,52 +483,61 @@ async def get_system_identifiers(request: Request, max_depth: int = 1) -> OWLCla
     return OWLClassList(classes=folio.get_system_identifiers(max_depth=max_depth))
 
 
-@router.get("/browse", 
-          tags=["taxonomy"], 
-          response_model=None,
-          summary="Browse Top-Level OWL Classes",
-          description="Browse all top-level OWL classes in the ontology in a human-readable HTML format",
-          status_code=status.HTTP_200_OK)
+@router.get(
+    "/browse",
+    tags=["taxonomy"],
+    response_model=None,
+    summary="Browse Top-Level OWL Classes",
+    description="Browse all top-level OWL classes in the ontology in a human-readable HTML format",
+    status_code=status.HTTP_200_OK,
+)
 async def browse_top_level_classes(request: Request) -> Response:
     """
     Browse all top-level (root) classes from the FOLIO ontology in a rich HTML format.
-    
+
     This endpoint returns an interactive HTML representation of the top-level classes in the
-    ontology hierarchy, styled with Tailwind CSS for a modern, responsive design. 
-    
-    Top-level classes are those that are direct subclasses of the OWL Thing class 
+    ontology hierarchy, styled with Tailwind CSS for a modern, responsive design.
+
+    Top-level classes are those that are direct subclasses of the OWL Thing class
     (http://www.w3.org/2002/07/owl#Thing).
-    
+
     This view is ideal for:
     - Getting a visual overview of the ontology structure
     - Human-readable browsing of the ontology's top-level categories
     - Educational purposes and learning about FOLIO
     - Sharing ontology information with non-technical stakeholders
-    
+
     HTTP Status Codes:
     - 200 OK: Successfully retrieved top-level classes in HTML format
     """
     folio: FOLIO = request.app.state.folio
-    
+
     # OWL_THING URI from the FOLIO library
     OWL_THING = "http://www.w3.org/2002/07/owl#Thing"
-    
+
     # Filter for classes that are direct subclasses of owl:Thing
     root_classes = []
-    
+
     # Get all IRIs from the FOLIO instance
     for iri in FOLIO_TYPE_IRIS.values():
         owl_class = folio[iri]
-        
+
         # Check if this class directly inherits from owl:Thing
-        if hasattr(owl_class, "sub_class_of") and isinstance(owl_class.sub_class_of, list):
-            if len(owl_class.sub_class_of) == 1 and owl_class.sub_class_of[0] == OWL_THING:
+        if hasattr(owl_class, "sub_class_of") and isinstance(
+            owl_class.sub_class_of, list
+        ):
+            if (
+                len(owl_class.sub_class_of) == 1
+                and owl_class.sub_class_of[0] == OWL_THING
+            ):
                 root_classes.append(owl_class)
-                
+
     # Import JavaScript for typeahead search
-    typeahead_js_path = Path(__file__).parent.parent / "templates" / "typeahead_search.js"
+    typeahead_js_path = (
+        Path(__file__).parent.parent / "templates" / "typeahead_search.js"
+    )
     typeahead_js_source = typeahead_js_path.read_text(encoding="utf-8")
-    
+
     # Generate HTML content
     html_content = f"""
     <!DOCTYPE html>
@@ -637,22 +649,27 @@ async def browse_top_level_classes(request: Request) -> Response:
             
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 auto-rows-fr">
                 {
-                    ''.join([f'''
+        "".join(
+            [
+                f'''
                         <div class="bg-white rounded-lg shadow p-8 flex flex-col h-full min-h-56">
                             <h2 class="text-xl font-semibold mb-2 text-[--color-primary]">
                                 <a href="{owl_class.iri}">{owl_class.label or "Unnamed Class"}</a>
                             </h2>
                             <p class="text-gray-500 text-sm mb-2 truncate" title="{owl_class.iri}">IRI: {owl_class.iri}</p>
                             <div class="flex-grow mb-4">
-                                <p class="text-gray-700 line-clamp-3" title="{owl_class.definition or 'No definition available'}">{owl_class.definition or "No definition available"}</p>
+                                <p class="text-gray-700 line-clamp-3" title="{owl_class.definition or "No definition available"}">{owl_class.definition or "No definition available"}</p>
                             </div>
                             <div class="flex justify-between items-center mt-auto">
-                                <span class="text-xs text-gray-500">{len(owl_class.parent_class_of) if hasattr(owl_class, 'parent_class_of') else 0} subclasses</span>
+                                <span class="text-xs text-gray-500">{len(owl_class.parent_class_of) if hasattr(owl_class, "parent_class_of") else 0} subclasses</span>
                                 <a href="{owl_class.iri}/html" class="text-blue-500 text-sm font-medium">View details →</a>
                             </div>
                         </div>
-                    ''' for owl_class in root_classes])
-                }
+                    '''
+                for owl_class in root_classes
+            ]
+        )
+    }
             </div>
         </main>
         
@@ -680,7 +697,13 @@ async def browse_top_level_classes(request: Request) -> Response:
                 </div>
                 
                 <p class="mt-4 text-small">Copyright &copy; 2024-2025. <a href="https://aleainstitute.ai/" target="_blank">The Institute for the Advancement of Legal and Ethical AI</a>.</p>
-                <p class="mt-2 text-xs">FOLIO Version: <span class="font-mono">{request.app.state.config["folio"]["branch"]}</span> | Repository: <a href="https://github.com/{request.app.state.config["folio"]["repository"]}" class="text-[--color-secondary] hover:text-white transition-colors duration-200">{request.app.state.config["folio"]["repository"]}</a></p>
+                <p class="mt-2 text-xs">FOLIO Version: <span class="font-mono">{
+        request.app.state.config["folio"]["branch"]
+    }</span> | Repository: <a href="https://github.com/{
+        request.app.state.config["folio"]["repository"]
+    }" class="text-[--color-secondary] hover:text-white transition-colors duration-200">{
+        request.app.state.config["folio"]["repository"]
+    }</a></p>
             </div>
         </footer>
         
@@ -690,5 +713,5 @@ async def browse_top_level_classes(request: Request) -> Response:
     </body>
     </html>
     """
-    
+
     return Response(content=html_content, media_type="text/html")

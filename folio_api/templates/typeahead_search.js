@@ -52,7 +52,19 @@ $(document).ready(function () {
     }
     
     var results = new Bloodhound({
-        datumTokenizer: Bloodhound.tokenizers.obj.whitespace('label'),
+        datumTokenizer: function(obj) {
+            // Tokenize the label, alt labels, and preferred label
+            let tokens = Bloodhound.tokenizers.whitespace(obj.label || '');
+            if (obj.alternative_labels) {
+                obj.alternative_labels.forEach(function(alt) {
+                    tokens = tokens.concat(Bloodhound.tokenizers.whitespace(alt || ''));
+                });
+            }
+            if (obj.preferred_label) {
+                tokens = tokens.concat(Bloodhound.tokenizers.whitespace(obj.preferred_label));
+            }
+            return tokens;
+        },
         queryTokenizer: Bloodhound.tokenizers.whitespace,
         remote: {
             url: '/search/prefix?query=%QUERY',
@@ -93,12 +105,30 @@ $(document).ready(function () {
             name: 'results',
             display: 'label',
             source: searchWithMultipleQueryForms, // Use our custom search function
-            limit: 10,
+            limit: 20, // Increased limit to show more results
             templates: {
                 suggestion: function (data) {
+                    // Highlight the matching part of the label if possible
+                    let label = data.label;
+                    const query = $('#search-input').val().trim().toLowerCase();
+                    
+                    if (query && query.length > 0 && label) {
+                        // Try to highlight the query within the label
+                        const labelLower = label.toLowerCase();
+                        const index = labelLower.indexOf(query);
+                        
+                        if (index >= 0) {
+                            const beforeMatch = label.substring(0, index);
+                            const match = label.substring(index, index + query.length);
+                            const afterMatch = label.substring(index + query.length);
+                            
+                            label = `${beforeMatch}<span class="bg-yellow-200 text-black">${match}</span>${afterMatch}`;
+                        }
+                    }
+                    
                     return `
-                        <div class="flex flex-col">
-                            <span class="font-semibold text-[--color-primary]">${data.label}</span>
+                        <div class="flex flex-col p-2 hover:bg-gray-100">
+                            <span class="font-semibold text-[--color-primary]">${label}</span>
                             <span class="text-sm font-semibold text-[--color-text-secondary] truncate">${data.iri}</span>
                             <span class="text-sm font-light text-[--color-text-muted] truncate">Synonyms: ${data.alternative_labels}</span>
                             <span class="text-sm font-light text-[--color-text-muted] truncate">Definition: ${data.definition}</span>
