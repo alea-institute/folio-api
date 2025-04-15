@@ -635,18 +635,20 @@ async def browse_top_level_classes(request: Request) -> Response:
         <main class="container mx-auto px-4 py-8">
             <p class="mb-6 text-gray-600">These classes are direct subclasses of owl:Thing and represent the highest level categories in the FOLIO ontology.</p>
             
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 auto-rows-fr">
                 {
                     ''.join([f'''
-                        <div class="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow">
+                        <div class="bg-white rounded-lg shadow p-8 flex flex-col h-full min-h-56">
                             <h2 class="text-xl font-semibold mb-2 text-[--color-primary]">
-                                <a href="{owl_class.iri}" class="hover:underline">{owl_class.label or "Unnamed Class"}</a>
+                                <a href="{owl_class.iri}">{owl_class.label or "Unnamed Class"}</a>
                             </h2>
-                            <p class="text-gray-500 text-sm mb-2">IRI: {owl_class.iri}</p>
-                            <p class="text-gray-700 mb-4">{owl_class.definition or "No definition available"}</p>
-                            <div class="flex justify-between items-center">
+                            <p class="text-gray-500 text-sm mb-2 truncate" title="{owl_class.iri}">IRI: {owl_class.iri}</p>
+                            <div class="flex-grow mb-4">
+                                <p class="text-gray-700 line-clamp-3" title="{owl_class.definition or 'No definition available'}">{owl_class.definition or "No definition available"}</p>
+                            </div>
+                            <div class="flex justify-between items-center mt-auto">
                                 <span class="text-xs text-gray-500">{len(owl_class.parent_class_of) if hasattr(owl_class, 'parent_class_of') else 0} subclasses</span>
-                                <a href="{owl_class.iri}/html" class="text-blue-500 hover:text-blue-700 text-sm font-medium">View details →</a>
+                                <a href="{owl_class.iri}/html" class="text-blue-500 text-sm font-medium">View details →</a>
                             </div>
                         </div>
                     ''' for owl_class in root_classes])
@@ -677,7 +679,8 @@ async def browse_top_level_classes(request: Request) -> Response:
                     </div>
                 </div>
                 
-                <p class="mt-4 text-small">Copyright &copy; 2024. <a href="https://aleainstitute.ai/" target="_blank">The Institute for the Advancement of Legal and Ethical AI</a>.</p>
+                <p class="mt-4 text-small">Copyright &copy; 2024-2025. <a href="https://aleainstitute.ai/" target="_blank">The Institute for the Advancement of Legal and Ethical AI</a>.</p>
+                <p class="mt-2 text-xs">FOLIO Version: <span class="font-mono">{request.app.state.config["folio"]["branch"]}</span> | Repository: <a href="https://github.com/{request.app.state.config["folio"]["repository"]}" class="text-[--color-secondary] hover:text-white transition-colors duration-200">{request.app.state.config["folio"]["repository"]}</a></p>
             </div>
         </footer>
         

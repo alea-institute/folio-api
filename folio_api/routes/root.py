@@ -282,5 +282,5 @@ async def get_class_html(request: Request, iri: str) -> Response:
         )
 
     return Response(
-        content=render_tailwind_html(folio[iri], folio), media_type="text/html"
+        content=render_tailwind_html(folio[iri], folio, request.app.state.config), media_type="text/html"
     )
