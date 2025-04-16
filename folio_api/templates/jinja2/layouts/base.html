@@ -42,7 +42,9 @@
         </div>
     </noscript>
     
+    {% block header %}
     {% include "components/header.html" %}
+    {% endblock %}
     
     {% block navbar %}
     <div class="bg-white border-b">
@@ -54,7 +56,7 @@
     </div>
     {% endblock %}
     
-    <main class="container mx-auto px-4 py-8">
+    <main class="container mx-auto px-4 py-8 max-w-[1600px]">
         {% block content %}{% endblock %}
     </main>
     

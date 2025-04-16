@@ -12,31 +12,34 @@
     </div>
 </section>
 
-<div class="space-y-6">
+<div class="grid grid-cols-1 xl:grid-cols-2 gap-6 w-full" style="width: 100%; max-width: 100%;" id="detail-grid">
+    <!-- COLUMN 1 -->
     <!-- Parents section -->
     {% if class_data.parents %}
-    <section class="card animate-fade-in mb-6">
+    <section class="card animate-fade-in">
         <h4 class="text-lg font-medium text-[--color-primary] mb-3">Parent Classes</h4>
-        <ul class="list-disc pl-5 space-y-1">
-            {% for parent in class_data.parents %}
-            <li>
-                <a href="#" class="text-blue-600 hover:underline" 
-                   onclick="selectNodeByIri('{{ parent.iri }}'); return false;">
-                   {{ parent.label }}
-                </a> - {{ parent.definition }}
-            </li>
-            {% endfor %}
-        </ul>
+        <div class="max-h-[200px] overflow-y-auto pr-1">
+            <ul class="list-disc pl-5 space-y-1">
+                {% for parent in class_data.parents %}
+                <li>
+                    <a href="#" class="text-blue-600 hover:underline" 
+                       onclick="selectNodeByIri('{{ parent.iri }}'); return false;">
+                       {{ parent.label }}
+                    </a> - {{ parent.definition }}
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
     </section>
     {% endif %}
     
     <!-- Children section -->
     {% if class_data.children %}
-    <section class="card animate-fade-in mb-6">
+    <section class="card animate-fade-in">
         <h4 class="text-lg font-medium text-[--color-primary] mb-3">
             Child Classes <span class="text-gray-500">({{ class_data.children|length }})</span>
         </h4>
-        <div class="max-h-60 overflow-y-auto">
+        <div class="max-h-[300px] overflow-y-auto pr-1">
             <ul class="list-disc pl-5 space-y-1">
                 {% for child in class_data.children %}
                 <li>
@@ -51,104 +54,115 @@
     </section>
     {% endif %}
     
+    <!-- Translations section -->
+    {% if class_data.translations and class_data.translations.items() | list | length > 0 %}
+    <section class="card animate-fade-in">
+        <h4 class="text-lg font-medium text-[--color-primary] mb-3">Translations</h4>
+        <div class="max-h-[200px] overflow-y-auto pr-1">
+            <div class="grid grid-cols-1 gap-4">
+                {% for language, translation in class_data.translations.items() %}
+                <div class="border-b pb-2">
+                    <p class="text-gray-500 text-sm font-medium">{{ language }}</p>
+                    <p class="mt-1">{{ translation }}</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </section>
+    {% endif %}
+    
+    <!-- COLUMN 2 -->
+    <!-- Additional metadata section -->
+    <section class="card animate-fade-in">
+        <h4 class="text-lg font-medium text-[--color-primary] mb-3">Additional Information</h4>
+        
+        <div class="max-h-[200px] overflow-y-auto pr-1">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {% if class_data.preferred_label %}
+                <div>
+                    <p class="text-gray-500 text-sm font-medium">Preferred Label</p>
+                    <p>{{ class_data.preferred_label }}</p>
+                </div>
+                {% endif %}
+                
+                {% if class_data.alternative_labels %}
+                <div>
+                    <p class="text-gray-500 text-sm font-medium">Alternative Labels</p>
+                    <p>{{ class_data.alternative_labels|join(', ') }}</p>
+                </div>
+                {% endif %}
+                
+                {% if class_data.identifier %}
+                <div>
+                    <p class="text-gray-500 text-sm font-medium">Identifier</p>
+                    <p>{{ class_data.identifier }}</p>
+                </div>
+                {% endif %}
+                
+                {% if class_data.description %}
+                <div>
+                    <p class="text-gray-500 text-sm font-medium">Description</p>
+                    <p>{{ class_data.description }}</p>
+                </div>
+                {% endif %}
+                
+                {% if class_data.comment %}
+                <div>
+                    <p class="text-gray-500 text-sm font-medium">Comment</p>
+                    <p>{{ class_data.comment }}</p>
+                </div>
+                {% endif %}
+                
+                <div>
+                    <p class="text-gray-500 text-sm font-medium">Deprecated</p>
+                    <p>{{ 'Yes' if class_data.deprecated else 'No' }}</p>
+                </div>
+            </div>
+        </div>
+    </section>
+    
     <!-- Examples section -->
     {% if class_data.examples %}
-    <section class="card animate-fade-in mb-6">
+    <section class="card animate-fade-in">
         <h4 class="text-lg font-medium text-[--color-primary] mb-3">Examples</h4>
-        <ul class="list-disc pl-5 space-y-1">
-            {% for example in class_data.examples %}
-            <li>{{ example }}</li>
-            {% endfor %}
-        </ul>
+        <div class="max-h-[200px] overflow-y-auto pr-1">
+            <ul class="list-disc pl-5 space-y-1">
+                {% for example in class_data.examples %}
+                <li>{{ example }}</li>
+                {% endfor %}
+            </ul>
+        </div>
     </section>
     {% endif %}
 
     <!-- Notes section -->
     {% if class_data.notes %}
-    <section class="card animate-fade-in mb-6">
+    <section class="card animate-fade-in">
         <h4 class="text-lg font-medium text-[--color-primary] mb-3">Notes</h4>
-        <ul class="list-disc pl-5 space-y-1">
-            {% for note in class_data.notes %}
-            <li>{{ note }}</li>
-            {% endfor %}
-        </ul>
+        <div class="max-h-[200px] overflow-y-auto pr-1">
+            <ul class="list-disc pl-5 space-y-1">
+                {% for note in class_data.notes %}
+                <li>{{ note }}</li>
+                {% endfor %}
+            </ul>
+        </div>
     </section>
     {% endif %}
 
     <!-- See Also section -->
     {% if class_data.see_also %}
-    <section class="card animate-fade-in mb-6">
+    <section class="card animate-fade-in">
         <h4 class="text-lg font-medium text-[--color-primary] mb-3">See Also</h4>
-        <ul class="list-disc pl-5 space-y-1">
-            {% for see in class_data.see_also %}
-            <li>
-                <a href="{{ see }}" class="text-blue-600 hover:underline" target="_blank">
-                    {{ see }}
-                </a>
-            </li>
-            {% endfor %}
-        </ul>
-    </section>
-    {% endif %}
-    
-    <!-- Additional metadata section -->
-    <section class="card animate-fade-in mb-6">
-        <h4 class="text-lg font-medium text-[--color-primary] mb-3">Additional Information</h4>
-        
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {% if class_data.preferred_label %}
-            <div>
-                <p class="text-gray-500 text-sm font-medium">Preferred Label</p>
-                <p>{{ class_data.preferred_label }}</p>
-            </div>
-            {% endif %}
-            
-            {% if class_data.alternative_labels %}
-            <div>
-                <p class="text-gray-500 text-sm font-medium">Alternative Labels</p>
-                <p>{{ class_data.alternative_labels|join(', ') }}</p>
-            </div>
-            {% endif %}
-            
-            {% if class_data.identifier %}
-            <div>
-                <p class="text-gray-500 text-sm font-medium">Identifier</p>
-                <p>{{ class_data.identifier }}</p>
-            </div>
-            {% endif %}
-            
-            {% if class_data.description %}
-            <div>
-                <p class="text-gray-500 text-sm font-medium">Description</p>
-                <p>{{ class_data.description }}</p>
-            </div>
-            {% endif %}
-            
-            {% if class_data.comment %}
-            <div>
-                <p class="text-gray-500 text-sm font-medium">Comment</p>
-                <p>{{ class_data.comment }}</p>
-            </div>
-            {% endif %}
-            
-            <div>
-                <p class="text-gray-500 text-sm font-medium">Deprecated</p>
-                <p>{{ 'Yes' if class_data.deprecated else 'No' }}</p>
-            </div>
-        </div>
-    </section>
-    
-    <!-- Translations section -->
-    {% if class_data.translations and class_data.translations.items() | list | length > 0 %}
-    <section class="card animate-fade-in mb-6">
-        <h4 class="text-lg font-medium text-[--color-primary] mb-3">Translations</h4>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {% for language, translation in class_data.translations.items() %}
-            <div class="border-b pb-2">
-                <p class="text-gray-500 text-sm font-medium">{{ language }}</p>
-                <p class="mt-1">{{ translation }}</p>
-            </div>
-            {% endfor %}
+        <div class="max-h-[200px] overflow-y-auto pr-1">
+            <ul class="list-disc pl-5 space-y-1">
+                {% for see in class_data.see_also %}
+                <li>
+                    <a href="{{ see }}" class="text-blue-600 hover:underline" target="_blank">
+                        {{ see }}
+                    </a>
+                </li>
+                {% endfor %}
+            </ul>
         </div>
     </section>
     {% endif %}

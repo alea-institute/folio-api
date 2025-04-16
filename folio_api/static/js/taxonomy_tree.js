@@ -63,6 +63,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // setupSearchHandlers(); - Removed to avoid interference with typeahead_search.js
     setupTreeControls();
     setupHistoryNavigation();
+    setupKeyboardNavigation();
 });
 
 /**
@@ -79,6 +80,9 @@ function initializeTree() {
     
     // Style the tree
     applyTreeStyles();
+    
+    // Apply global styles for arrows to ensure consistency
+    applyArrowStyles();
 }
 
 /**
@@ -125,7 +129,7 @@ function renderTreeNode(node, container) {
     const nodeClass = hasChildren ? 'has-children collapsed' : '';
     const expandIcon = hasChildren ? 
         '<span class="expand-icon mr-1">▸</span>' : 
-        '<span class="ml-4"></span>';
+        '<span class="leaf-indicator ml-1 mr-3 inline-flex shrink-0 items-center justify-center w-[8px] h-[8px] rounded-full bg-gray-200"></span>';
     
     const li = $(`
         <li class="tree-node ${nodeClass}" data-id="${node.id}">
@@ -196,6 +200,14 @@ function toggleNode(li) {
         if (childrenContainer.children().length === 0) {
             loadTreeNodes(nodeId, childrenContainer);
         }
+        
+        // Ensure child nodes have correct styling
+        setTimeout(function() {
+            childrenContainer.find('> li:not(.selected):not(.tree-node-highlighted):not(.tree-node-match) > .node-content').css({
+                'background-color': 'white',
+                'color': 'var(--color-text-default, rgb(16, 16, 16))'
+            });
+        }, 250); // Wait a bit for animation to complete
     } else {
         // Collapse the node
         li.removeClass('expanded').addClass('collapsed');
@@ -253,33 +265,36 @@ function applyTreeStyles() {
             padding-left: 0;
         }
         .children-container {
-            padding-left: 20px;
+            padding-left: 14px;
+            border-left: 1px solid rgba(209, 213, 219, 0.7);
+            margin-left: 6px;
+        }
+        .children-container .tree-node:not(.selected):not(.tree-node-highlighted) > .node-content {
+            background-color: white;
+            color: var(--color-text-default, rgb(16, 16, 16));
         }
         .tree-node {
-            margin: 4px 0;
+            margin: 1px 0;
+            position: relative;
         }
         .node-content {
             display: flex;
             align-items: center;
-            padding: 6px 8px;
-            border-radius: 4px;
+            padding: 3px 8px;
+            border-radius: 3px;
             cursor: pointer;
             word-break: break-word;
             white-space: normal;
+            border-bottom: 1px solid rgba(229, 231, 235, 0.3);
+            line-height: 1.2;
         }
         .node-content:hover {
             background-color: rgba(59, 130, 246, 0.1);
         }
         .tree-node.selected > .node-content {
-            background-color: rgba(59, 130, 246, 0.2);
+            background-color: var(--color-primary, rgb(24, 70, 120)) !important;
+            color: white !important;
             font-weight: 600;
-        }
-        .expand-icon {
-            cursor: pointer;
-            width: 16px;
-            display: inline-block;
-            text-align: center;
-            flex-shrink: 0;
         }
         .node-label {
             flex-grow: 1;
@@ -316,14 +331,43 @@ function applyTreeStyles() {
         }
         
         /* Search highlight styling */
-        .node-label span.bg-yellow-200 {
-            background-color: #FEFCBF;
+        .node-label span.bg-blue-100 {
+            background-color: rgba(229, 231, 235, 0.7);
             padding: 0 2px;
             border-radius: 2px;
             font-weight: bold;
+            color: var(--color-primary, rgb(24, 70, 120));
         }
     `;
     document.head.appendChild(style);
+}
+
+/**
+ * Apply consistent arrow styles throughout the tree
+ */
+function applyArrowStyles() {
+    // Create a style element for arrow styling
+    if (!document.getElementById('taxonomy-tree-arrow-styles')) {
+        const arrowStyle = document.createElement('style');
+        arrowStyle.id = 'taxonomy-tree-arrow-styles';
+        arrowStyle.textContent = `
+            .expand-icon {
+                cursor: pointer;
+                width: 16px;
+                display: inline-flex !important;
+                align-items: center !important;
+                justify-content: center;
+                text-align: center;
+                flex-shrink: 0;
+                font-size: 24px !important;
+                line-height: 16px !important;
+                vertical-align: middle !important;
+                position: relative !important;
+                top: -2px !important;
+            }
+        `;
+        document.head.appendChild(arrowStyle);
+    }
 }
 
 /**
@@ -401,7 +445,7 @@ function searchTree(query) {
             
             // Highlight match
             const regex = new RegExp('(' + escapeRegExp(query) + ')', 'gi');
-            nodeLabel.html(label.replace(regex, '<span class="bg-yellow-200">$1</span>'));
+            nodeLabel.html(label.replace(regex, '<span class="bg-blue-100">$1</span>'));
             
             // Add all parent nodes to matching set
             let parent = li.parents('li');
@@ -581,6 +625,31 @@ function setupHistoryNavigation() {
     window.addEventListener('popstate', function(event) {
         if (event.state && event.state.nodeId) {
             loadAndSelectNode(event.state.nodeId, false);
+        }
+    });
+}
+
+/**
+ * Setup keyboard navigation for the tree
+ */
+function setupKeyboardNavigation() {
+    // Add keydown event listener to handle spacebar
+    document.addEventListener('keydown', function(event) {
+        // Only proceed if space bar is pressed and we're not in an input field
+        if (event.key === ' ' && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
+            // Prevent default scroll behavior of space bar
+            event.preventDefault();
+            
+            // Find the selected node
+            const selectedNode = document.querySelector('.tree-node.selected');
+            if (selectedNode && selectedNode.classList.contains('has-children')) {
+                // Get the expand icon
+                const expandIcon = selectedNode.querySelector('.expand-icon');
+                if (expandIcon) {
+                    // Directly trigger a click on the expand icon
+                    expandIcon.click();
+                }
+            }
         }
     });
 }

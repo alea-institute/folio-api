@@ -8,39 +8,111 @@
 {% block header_title %}FOLIO Taxonomy Explorer{% endblock %}
 {% block header_subtitle %}Navigate the FOLIO ontology hierarchy{% endblock %}
 
+{% block header %}
+<header class="bg-[--color-primary] py-6 text-white">
+    <div class="container mx-auto px-4">
+        <div class="flex justify-between items-start">
+            <div>
+                <h1 class="text-3xl font-bold">FOLIO Taxonomy Explorer</h1>
+            </div>
+            <div class="hidden md:block header-buttons">
+                <a href="https://openlegalstandard.org/" target="_blank" class="inline-block bg-white text-[--color-primary] font-semibold px-4 py-2 rounded hover:bg-opacity-90 transition-colors duration-200 mr-2">FOLIO Website</a>
+                <a href="https://openlegalstandard.org/education/" target="_blank" class="inline-block bg-transparent text-white border border-white font-semibold px-4 py-2 rounded hover:bg-white hover:bg-opacity-10 transition-colors duration-200">Learn More</a>
+            </div>
+        </div>
+    </div>
+</header>
+{% endblock %}
+
 {% block extra_head %}
 <style>
-    /* Tree search highlight styles */
-    .tree-node-highlighted > .node-content {
-        background-color: rgba(59, 130, 246, 0.2);
+    /* Additional tree styling */
+    .children-container {
+        border-left: 1px solid rgba(209, 213, 219, 0.7);
+        margin-left: 6px;
+        padding-left: 14px;
     }
     
-    .tree-node-highlighted .node-label span.bg-yellow-200 {
-        background-color: #FEFCBF;
+    .tree-node {
+        margin: 1px 0;
+    }
+    
+    /* Root-level styling */
+    .taxonomy-root-list > .tree-node > .node-content {
+        background-color: rgba(241, 245, 249, 0.7);
+        border-left: 3px solid var(--color-primary, rgb(24, 70, 120));
+        font-weight: 600;
+        padding-left: 6px;
+        margin-bottom: 2px;
+    }
+    
+    /* Second-level styling */
+    .taxonomy-root-list > .tree-node > .children-container > .tree-node > .node-content {
+        font-weight: 500;
+        border-bottom: 1px solid rgba(209, 213, 219, 0.5);
+    }
+    
+    /* Third-level styling */
+    .taxonomy-root-list > .tree-node > .children-container > .tree-node > .children-container > .tree-node > .node-content {
+        font-weight: normal;
+        font-size: 0.93rem;
+    }
+    
+    /* Base node content styling */
+    .node-content {
+        padding: 3px 8px;
+        border-bottom: 1px solid rgba(229, 231, 235, 0.3);
+        line-height: 1.2;
+        font-size: 0.95rem;
+    }
+    
+    .leaf-indicator {
+        flex: 0 0 8px;
+        min-width: 8px;
+        aspect-ratio: 1 / 1;
+    }
+    
+    /* Tree search highlight styles */
+    .tree-node-highlighted > .node-content {
+        background-color: var(--color-primary, rgb(24, 70, 120)) !important;
+        color: white !important;
+        border-bottom-color: transparent !important;
+        border-left-color: transparent !important;
+    }
+    
+    .tree-node-highlighted .node-label span.bg-blue-100 {
+        background-color: rgba(229, 231, 235, 0.7);
         padding: 0 2px;
         border-radius: 2px;
         font-weight: bold;
+        color: var(--color-primary, rgb(24, 70, 120));
+    }
+    
+    /* Make sure child nodes show with white background when not selected */
+    .children-container .tree-node:not(.selected):not(.tree-node-highlighted):not(.tree-node-match) > .node-content {
+        background-color: white;
+        color: var(--color-text-default, rgb(16, 16, 16));
     }
 </style>
 {% endblock %}
 
 {% block navigation_buttons %}
-<a href="/taxonomy/browse" class="btn btn-secondary">Switch to Browse View</a>
+<a href="/taxonomy/browse" class="text-xs bg-white text-[--color-primary] border border-[--color-primary] px-3 py-0.5 rounded hover:bg-gray-50">Switch to Browse View</a>
 {% endblock %}
 
 {% block content %}
-<div class="flex flex-col md:flex-row tree-explorer-container bg-white rounded-lg shadow-md overflow-hidden" style="min-height: calc(100vh - 200px);">
+<div class="flex flex-col md:flex-row tree-explorer-container bg-white rounded-lg shadow-md overflow-hidden" style="min-height: calc(100vh - 180px);">
     <!-- Tree Panel - Fixed, scrollable left side -->
-    <div id="tree-container" class="w-full md:w-1/3 p-4 md:h-[calc(100vh-200px)] md:overflow-hidden flex flex-col">
-        <h2 class="text-xl font-semibold mb-4 text-[--color-primary]">Taxonomy Tree</h2>
-        <div class="mb-4 sticky top-0 z-10 bg-white">
+    <div id="tree-container" class="w-full md:w-1/3 lg:w-1/4 p-4 md:h-[calc(100vh-180px)] md:overflow-hidden flex flex-col">
+        <h2 class="text-lg font-semibold mb-2 text-[--color-primary]">Taxonomy Tree</h2>
+        <div class="mb-2 sticky top-0 z-10 bg-white">
             <div class="relative search-container">
                 <div class="absolute inset-y-0 start-0 flex items-center ps-3 pointer-events-none">
                     <svg class="w-4 h-4 text-gray-500" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 20">
                         <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m19 19-4-4m0-7A7 7 0 1 1 1 8a7 7 0 0 1 14 0Z"/>
                     </svg>
                 </div>
-                <input type="search" id="taxonomy-search-input" class="block w-full p-2 ps-10 pe-14 text-sm border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="Search classes...">
+                <input type="search" id="taxonomy-search-input" class="block w-full py-1 px-2 ps-10 pe-14 text-sm border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="Search classes...">
                 <button type="button" id="taxonomy-search-button" class="absolute inset-y-0 end-0 flex items-center pe-3 text-blue-600 hover:text-blue-800">
                     <svg class="w-4 h-4" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 20">
                         <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m19 19-4-4m0-7A7 7 0 1 1 1 8a7 7 0 0 1 14 0Z"/>
@@ -48,18 +120,18 @@
                 </button>
             </div>
         </div>
-        <div class="tree-controls mb-2 flex flex-col space-y-1">
+        <div class="tree-controls mb-1 flex flex-col space-y-0.5">
             <div class="flex space-x-2">
-                <button id="expand-all-tree" class="text-xs bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded" onclick="expandAllNodes()">Expand All</button>
-                <button id="collapse-all-tree" class="text-xs bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded" onclick="collapseAllNodes()">Collapse All</button>
+                <button id="expand-all-tree" class="text-xs bg-gray-200 hover:bg-gray-300 px-2 py-0.5 rounded" onclick="expandAllNodes()">Expand All</button>
+                <button id="collapse-all-tree" class="text-xs bg-gray-200 hover:bg-gray-300 px-2 py-0.5 rounded" onclick="collapseAllNodes()">Collapse All</button>
             </div>
-            <div class="text-xs text-gray-500 italic">Tip: Double-click on a node to expand/collapse it</div>
+            <div class="text-xs text-gray-500 italic">Tip: Double-click, press Space key, or click the arrow to expand/collapse</div>
         </div>
-        <div id="taxonomy-tree" class="overflow-y-auto flex-grow border border-gray-100 rounded p-2" style="max-height: calc(100vh - 280px);"></div>
+        <div id="taxonomy-tree" class="overflow-y-auto flex-grow border border-gray-100 rounded p-2" style="max-height: calc(100vh - 260px);"></div>
     </div>
     
-    <!-- Detail Panel - Scrollable right side -->
-    <div id="detail-container" class="w-full md:w-2/3 p-6 bg-gray-50 md:overflow-y-auto md:h-[calc(100vh-200px)]">
+    <!-- Detail Panel - Right side with contained scrollable content -->
+    <div id="detail-container" class="w-full md:w-2/3 lg:w-3/4 p-6 bg-gray-50 max-w-full md:h-[calc(100vh-180px)] flex flex-col">
         <div id="class-details">
             <div class="flex items-center justify-center h-full text-gray-500">
                 <div class="text-center">
@@ -242,8 +314,8 @@
             (isExpanded ? 'has-children expanded' : 'has-children collapsed') : '';
         const isMatch = node.is_match ? 'tree-node-match' : '';
         const expandIcon = hasChildren ? 
-            `<span class="expand-icon mr-1">${isExpanded ? '▾' : '▸'}</span>` : 
-            '<span class="ml-4"></span>';
+            `<span class="expand-icon mr-1" style="font-size: 24px; line-height: 16px; display: inline-flex; align-items: center; vertical-align: middle; position: relative; top: -2px;">${isExpanded ? '▾' : '▸'}</span>` : 
+            '<span class="leaf-indicator ml-1 mr-3 inline-flex shrink-0 items-center justify-center w-[8px] h-[8px] rounded-full bg-gray-200"></span>';
         
         const li = document.createElement('li');
         li.className = `tree-node ${nodeClass} ${isMatch}`;
@@ -429,8 +501,8 @@
                 const hasChildren = node.children === true;
                 const nodeClass = hasChildren ? 'has-children collapsed' : '';
                 const expandIcon = hasChildren ? 
-                    '<span class="expand-icon mr-1">▸</span>' : 
-                    '<span class="ml-4"></span>';
+                    '<span class="expand-icon mr-1" style="font-size: 24px; line-height: 16px; display: inline-flex; align-items: center; vertical-align: middle; position: relative; top: -2px;">▸</span>' : 
+                    '<span class="leaf-indicator ml-1 mr-3 inline-flex shrink-0 items-center justify-center w-[8px] h-[8px] rounded-full bg-gray-200"></span>';
                 
                 const li = document.createElement('li');
                 li.className = `tree-node ${nodeClass}`;
@@ -487,13 +559,31 @@
         // Check if styles already exist
         if (document.getElementById('filter-mode-styles')) return;
         
+        // Add global arrow styles to ensure consistency across all states
+        if (!document.getElementById('taxonomy-tree-arrow-styles')) {
+            const arrowStyle = document.createElement('style');
+            arrowStyle.id = 'taxonomy-tree-arrow-styles';
+            arrowStyle.textContent = `
+                .expand-icon {
+                    font-size: 24px !important;
+                    line-height: 16px !important;
+                    display: inline-flex !important;
+                    align-items: center !important;
+                    vertical-align: middle !important;
+                    position: relative !important;
+                    top: -2px !important;
+                }
+            `;
+            document.head.appendChild(arrowStyle);
+        }
+        
         // Create style element
         const style = document.createElement('style');
         style.id = 'filter-mode-styles';
         style.textContent = `
             /* Filter mode controls */
             .filter-mode-controls {
-                background: rgba(59, 130, 246, 0.1);
+                background: rgba(24, 70, 120, 0.1);
                 border-radius: 4px;
                 padding: 8px 12px;
                 margin-bottom: 12px;
@@ -508,22 +598,24 @@
             
             .clear-filter-btn {
                 background: #fff;
-                border: 1px solid rgba(59, 130, 246, 0.5);
+                border: 1px solid var(--color-primary, rgb(24, 70, 120));
                 padding: 3px 8px;
                 border-radius: 4px;
                 font-size: 12px;
                 cursor: pointer;
+                color: var(--color-primary, rgb(24, 70, 120));
             }
             
             .clear-filter-btn:hover {
-                background: rgba(59, 130, 246, 0.1);
+                background: rgba(24, 70, 120, 0.1);
             }
             
             /* Enhanced highlighting for filter mode */
             .tree-node-highlighted > .node-content,
             .tree-node-match > .node-content {
-                background-color: rgba(59, 130, 246, 0.2);
-                border-left: 3px solid rgba(59, 130, 246, 0.8);
+                background-color: var(--color-primary, rgb(24, 70, 120)) !important;
+                color: white !important;
+                border-left-color: rgba(255, 255, 255, 0.8) !important;
             }
             
             /* Make match nodes stand out more in the filtered tree */
@@ -1014,7 +1106,7 @@
     
     function highlightText(text, query) {
         const regex = new RegExp('(' + escapeRegEx(query) + ')', 'gi');
-        return text.replace(regex, '<span class="bg-yellow-200">$1</span>');
+        return text.replace(regex, '<span class="bg-blue-100">$1</span>');
     }
     
     function escapeRegEx(string) {
