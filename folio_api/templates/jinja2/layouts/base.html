@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <!-- Security: Content Security Policy -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' cdn.tailwindcss.com cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' fonts.googleapis.com cdnjs.cloudflare.com; font-src 'self' fonts.gstatic.com; img-src 'self' https://openlegalstandard.org data:;">
+    
+    <title>{% block title %}FOLIO Ontology{% endblock %}</title>
+    
+    <!-- Resource Preloading/Optimization -->
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preload" href="/static/css/styles.css" as="style">
+    <link rel="preload" href="/static/js/copy_iri.js" as="script">
+    
+    <!-- Critical scripts loaded with high priority -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms,typography,aspect-ratio"></script>
+    <script src="/static/js/vendor/jquery.min.js"></script>
+    <script src="/static/js/vendor/typeahead.bundle.min.js"></script>
+    
+    <!-- All styles -->
+    <link rel="stylesheet" href="/static/css/styles.css">
+    
+    {% block extra_head %}{% endblock %}
+    
+    <meta name="description" content="{% block meta_description %}FOLIO - The Federated Open Legal Information Ontology{% endblock %}">
+    <meta name="author" content="FOLIO - The Federated Open Legal Information Ontology">
+    <meta name="keywords" content="{% block meta_keywords %}legal, ontology, standard, open, information{% endblock %}">
+    <meta name="robots" content="index, follow">
+    
+    {% block page_styles %}{% endblock %}
+</head>
+<body class="font-['Public_Sans'] bg-gray-100 min-h-screen">
+    <!-- Progressive Enhancement: Support for browsers without JavaScript -->
+    <noscript>
+        <div style="background-color: #fff3cd; color: #856404; padding: 1rem; margin-bottom: 1rem; border: 1px solid #ffeeba; border-radius: 0.25rem;">
+            <strong>Notice:</strong> Some features of this page require JavaScript. 
+            Basic navigation and content viewing will still work without JavaScript.
+        </div>
+    </noscript>
+    
+    {% include "components/header.html" %}
+    
+    {% block navbar %}
+    <div class="bg-white border-b">
+        <div class="container mx-auto px-4 py-4">
+            <div class="flex flex-wrap gap-2">
+                {% block navigation_buttons %}{% endblock %}
+            </div>
+        </div>
+    </div>
+    {% endblock %}
+    
+    <main class="container mx-auto px-4 py-8">
+        {% block content %}{% endblock %}
+    </main>
+    
+    {% block extra_content %}{% endblock %}
+    
+    {% include "components/footer.html" %}
+    
+    <!-- Global Scripts -->
+    <script src="/static/js/copy_iri.js"></script>
+    
+    <!-- Page specific scripts -->
+    {% block scripts %}{% endblock %}
+</body>
+</html>

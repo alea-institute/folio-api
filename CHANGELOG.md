@@ -5,6 +5,25 @@ All notable changes to the FOLIO API will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2025-04-16
+
+### Added
+- JavaScript linting configuration for improved code quality
+- Double-click functionality to expand/collapse tree nodes
+
+### Changed
+- Enhanced search functionality in taxonomy tree to show all matching results
+- Improved taxonomy tree filtering to reduce unnecessary API calls
+- Fixed search bar interaction to prevent unintended taxonomy tree filtering
+- Replaced print statements with proper logging in API initialization
+- Removed console.log statements from JavaScript for production readiness
+- Improved error handling in JavaScript with user-friendly error messages
+
+### Fixed
+- Issue with top search input affecting taxonomy tree search
+- Performance issues when clearing tree filters
+- Memory usage issues by reducing duplicate API calls
+
 ## [0.3.0] - 2025-04-15
 
 ### Added

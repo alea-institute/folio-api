@@ -10,9 +10,8 @@ from fastapi import APIRouter, Request, status
 from folio import FOLIO, OWLClass
 from starlette.responses import JSONResponse, Response
 
-from folio_api.templates.basic_html import render_tailwind_html
-
 # project
+from basic_html import get_node_neighbors
 
 # API router
 router = APIRouter(prefix="", tags=["ontology"])
@@ -281,14 +280,25 @@ async def get_class_html(request: Request, iri: str) -> Response:
 
     If the IRI does not exist in the ontology, a 404 error is returned.
     """
-
     folio: FOLIO = request.app.state.folio
     if iri not in folio:
         return Response(
             status_code=404, content=json.dumps({"message": "Class not found."})
         )
 
-    return Response(
-        content=render_tailwind_html(folio[iri], folio, request.app.state.config),
-        media_type="text/html",
+    # Get the class and its graph data
+    owl_class = folio[iri]
+    nodes, edges = get_node_neighbors(owl_class, folio)
+
+    # Render using Jinja2 template
+    return request.app.state.templates.TemplateResponse(
+        "taxonomy/class_detail.html",
+        {
+            "request": request,
+            "owl_class": owl_class,
+            "folio_graph": folio,
+            "nodes": nodes,
+            "edges": edges,
+            "config": request.app.state.config,
+        },
     )

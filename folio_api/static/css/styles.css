@@ -1,0 +1,237 @@
+/* FOLIO API CSS Variables */
+@import url('https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,100..900;1,100..900&display=swap');
+
+:root {
+    --font-sans: 'Public Sans Variable';
+    --font-serif: 'Public Sans Variable';
+    --font-heading: 'Public Sans Variable';
+    --color-primary: rgb(24 70 120);
+    --color-secondary: rgb(134, 147, 171);
+    --color-accent: rgb(234, 82, 111);
+    --color-text-heading: rgb(0 0 0);
+    --color-text-default: rgb(16 16 16);
+    --color-text-muted: rgb(16 16 16 / 66%);
+    --color-bg-page: rgb(255 255 255);
+    --color-bg-page-dark: rgb(12 35 60);
+}
+
+.dark {
+    --color-primary: rgb(24 70 120);
+    --color-secondary: rgb(134 147 171);
+    --color-accent: rgb(234 82 111);
+    --color-text-heading: rgb(247 248 248);
+    --color-text-default: rgb(229 236 246);
+    --color-text-muted: rgba(229, 236, 246, 0.66);
+    --color-bg-page: rgb(12 35 60);
+}
+
+.dark ::selection {
+    background-color: black;
+    color: snow;
+}
+
+/* Typeahead Styles */
+.twitter-typeahead {
+    width: 100%;
+}
+
+.tt-menu {
+    width: 100%;
+    margin-top: 0.5rem;
+    background-color: white;
+    border: 1px solid var(--color-secondary);
+    border-radius: 0.5rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.tt-suggestion {
+    padding: 0.75rem 1rem;
+    cursor: pointer;
+}
+
+.tt-suggestion:hover, .tt-suggestion.tt-cursor {
+    background-color: rgba(24, 70, 120, 0.1);
+}
+
+/* Cytoscape Graph Styles */
+.cy-tooltip {
+    display: none;
+    position: absolute;
+    z-index: 999;
+    background-color: white;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    padding: 8px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+    max-width: 250px;
+    font-size: 12px;
+    line-height: 1.4;
+    pointer-events: none;
+}
+
+/* Responsive Styles */
+@media (max-width: 768px) {
+    .header-buttons {
+        display: none;
+    }
+    
+    .mobile-menu {
+        display: block;
+    }
+}
+
+@media (min-width: 769px) {
+    .header-buttons {
+        display: flex;
+    }
+    
+    .mobile-menu {
+        display: none;
+    }
+}
+
+/* Accessibility Improvements */
+:focus {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+}
+
+/* Button Styles */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    padding: 0.5rem 1rem;
+    border-radius: 0.375rem;
+    transition: all 0.2s;
+    cursor: pointer;
+}
+
+.btn-primary {
+    background-color: var(--color-primary);
+    color: white;
+}
+
+.btn-primary:hover {
+    background-color: var(--color-accent);
+}
+
+.btn-secondary {
+    background-color: white;
+    color: var(--color-primary);
+    border: 1px solid var(--color-primary);
+}
+
+.btn-secondary:hover {
+    background-color: rgba(24, 70, 120, 0.1);
+}
+
+/* Card Styles */
+.card {
+    background-color: white;
+    border-radius: 0.5rem;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+    padding: 1.5rem;
+    transition: box-shadow 0.3s ease;
+}
+
+.card:hover {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+/* Animation Utilities */
+.animate-fade-in {
+    animation: fadeIn 0.5s ease-in;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.animate-slide-up {
+    animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+    from { transform: translateY(20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+/* Tree View Styles */
+.tree-explorer-container {
+    display: flex;
+    min-height: 600px;
+}
+
+#tree-container {
+    overflow: auto;
+    border-right: 1px solid #e2e8f0;
+}
+
+#detail-container {
+    overflow: auto;
+}
+
+.jstree-default .jstree-anchor {
+    color: var(--color-text-default);
+    padding: 5px;
+}
+
+.jstree-default .jstree-hovered {
+    background-color: rgba(24, 70, 120, 0.1);
+    border-radius: 4px;
+}
+
+.jstree-default .jstree-clicked {
+    background-color: rgb(24, 70, 120);
+    color: white;
+    border-radius: 4px;
+}
+
+/* Spinner for loading states */
+.spinner-border {
+    display: inline-block;
+    width: 2rem;
+    height: 2rem;
+    vertical-align: text-bottom;
+    border: 0.25em solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: spinner-border .75s linear infinite;
+}
+
+@keyframes spinner-border {
+    to { transform: rotate(360deg); }
+}
+
+/* Responsive layout for the tree explorer */
+@media (max-width: 768px) {
+    .tree-explorer-container {
+        flex-direction: column;
+    }
+    
+    #tree-container {
+        width: 100% !important;
+        max-height: 300px;
+        border-right: none;
+        border-bottom: 1px solid #e2e8f0;
+    }
+    
+    #detail-container {
+        width: 100% !important;
+    }
+}

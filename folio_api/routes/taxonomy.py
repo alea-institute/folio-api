@@ -8,10 +8,11 @@ from pathlib import Path
 # packages
 from fastapi import APIRouter, Request, status
 from folio import FOLIO, FOLIO_TYPE_IRIS
-from starlette.responses import Response
+from starlette.responses import Response, JSONResponse
 
 # project
 from folio_api.models import OWLClassList
+from basic_html import get_node_neighbors
 
 # API router
 router = APIRouter(prefix="/taxonomy", tags=["taxonomy"])
@@ -484,6 +485,668 @@ async def get_system_identifiers(request: Request, max_depth: int = 1) -> OWLCla
 
 
 @router.get(
+    "/tree/data",
+    tags=["taxonomy"],
+    response_model=None,
+    summary="Get Taxonomy Tree Data",
+    description="Get hierarchical data for the taxonomy tree view in jsTree format",
+    status_code=status.HTTP_200_OK,
+)
+async def get_tree_data(
+    request: Request, node_id: str = "#", max_depth: int = 1
+) -> JSONResponse:
+    """
+    Get hierarchical data for the taxonomy tree in a format compatible with jsTree.
+
+    This endpoint supports lazy loading of tree nodes by providing the node_id parameter.
+    - For the root level (node_id = "#"), it returns top-level classes
+    - For specific nodes, it returns their children
+
+    Args:
+        request (Request): FastAPI request object
+        node_id (str): The ID of the node to get children for (default: "#" for root)
+        max_depth (int): Maximum depth to traverse when getting children
+
+    Returns:
+        JSONResponse: A list of nodes in jsTree format
+    """
+    folio: FOLIO = request.app.state.folio
+
+    # If requesting root nodes
+    if node_id == "#":
+        # OWL_THING URI from the FOLIO library
+        OWL_THING = "http://www.w3.org/2002/07/owl#Thing"
+
+        # Filter for classes that are direct subclasses of owl:Thing
+        root_classes = []
+
+        # Get all IRIs from the FOLIO instance
+        for iri in FOLIO_TYPE_IRIS.values():
+            owl_class = folio[iri]
+
+            # Check if this class directly inherits from owl:Thing
+            if hasattr(owl_class, "sub_class_of") and isinstance(
+                owl_class.sub_class_of, list
+            ):
+                if (
+                    len(owl_class.sub_class_of) == 1
+                    and owl_class.sub_class_of[0] == OWL_THING
+                ):
+                    root_classes.append(owl_class)
+
+        # Format for jsTree
+        result = []
+        for owl_class in root_classes:
+            # Check if this class has children
+            has_children = bool(owl_class.parent_class_of)
+
+            result.append(
+                {
+                    "id": owl_class.iri,
+                    "text": owl_class.label or "Unnamed Class",
+                    "children": has_children,
+                    "data": {
+                        "iri": owl_class.iri,
+                        "definition": owl_class.definition or "No definition available",
+                        "type": "top_level",
+                    },
+                }
+            )
+
+        return JSONResponse(content=result)
+
+    # If requesting children of a specific node
+    else:
+        owl_class = folio[node_id]
+        if not owl_class:
+            return JSONResponse(content=[])
+
+        # Get children of this class
+        children = []
+        for child_iri in owl_class.parent_class_of:
+            child = folio[child_iri]
+            if child:
+                # Check if this child has its own children
+                has_grandchildren = bool(child.parent_class_of)
+
+                children.append(
+                    {
+                        "id": child.iri,
+                        "text": child.label or "Unnamed Class",
+                        "children": has_grandchildren,
+                        "data": {
+                            "iri": child.iri,
+                            "definition": child.definition or "No definition available",
+                            "type": "subclass",
+                        },
+                    }
+                )
+
+        return JSONResponse(content=children)
+
+
+@router.get(
+    "/tree/node/{iri}",
+    tags=["taxonomy"],
+    response_model=None,
+    summary="Get Single Node Data",
+    description="Get detailed data for a single taxonomy node",
+    status_code=status.HTTP_200_OK,
+)
+async def get_node_data(request: Request, iri: str) -> JSONResponse:
+    """
+    Get detailed data for a single taxonomy node by IRI.
+
+    Args:
+        request (Request): FastAPI request object
+        iri (str): The IRI of the node to get data for
+
+    Returns:
+        JSONResponse: Detailed information about the node
+    """
+    folio: FOLIO = request.app.state.folio
+
+    # Try multiple strategies to find the class
+    owl_class = None
+
+    # Strategy 1: Use the IRI directly as given
+    owl_class = folio[iri]
+
+    # Strategy 2: If not found and this is a full IRI, try extracting just the ID part
+    if not owl_class and iri.startswith("http"):
+        # Extract the ID from the full IRI - get the last part after the last '/'
+        parts = iri.rstrip("/").split("/")
+        if parts:
+            id_part = parts[-1]
+            owl_class = folio[id_part]
+
+    # Strategy 3: If not found and this is just an ID, try with the FOLIO IRI prefix
+    if not owl_class and not iri.startswith("http"):
+        full_iri = f"https://folio.openlegalstandard.org/{iri}"
+        owl_class = folio[full_iri]
+
+    # Strategy 4: Try with just the ID part in the FOLIO dictionary directly
+    if not owl_class:
+        # One last attempt by checking all classes
+        for cls in folio.classes:
+            if hasattr(cls, "iri") and (cls.iri.endswith(iri) or iri.endswith(cls.iri)):
+                owl_class = cls
+                break
+
+    if not owl_class:
+        return JSONResponse(
+            content={"error": f"Class not found for identifier: {iri}"},
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+
+    # Prepare node data
+    nodes, edges = get_node_neighbors(owl_class, folio)
+
+    # Build parent list
+    parents = []
+    if hasattr(owl_class, "sub_class_of") and owl_class.sub_class_of:
+        for parent_iri in owl_class.sub_class_of:
+            parent = folio[parent_iri]
+            if parent:
+                parents.append(
+                    {
+                        "iri": parent.iri,
+                        "label": parent.label or "Unnamed Class",
+                        "definition": parent.definition or "No definition available",
+                    }
+                )
+
+    # Build children list
+    children = []
+    if hasattr(owl_class, "parent_class_of") and owl_class.parent_class_of:
+        for child_iri in owl_class.parent_class_of:
+            child = folio[child_iri]
+            if child:
+                children.append(
+                    {
+                        "iri": child.iri,
+                        "label": child.label or "Unnamed Class",
+                        "definition": child.definition or "No definition available",
+                    }
+                )
+
+    # Check if translations are available
+    translations = {}
+    if hasattr(owl_class, "translations") and owl_class.translations:
+        translations = owl_class.translations
+
+    result = {
+        "iri": owl_class.iri,
+        "label": owl_class.label or "Unnamed Class",
+        "definition": owl_class.definition or "No definition available",
+        "preferred_label": owl_class.preferred_label,
+        "alternative_labels": owl_class.alternative_labels,
+        "identifier": owl_class.identifier,
+        "description": owl_class.description,
+        "comment": owl_class.comment,
+        "examples": owl_class.examples,
+        "notes": owl_class.notes,
+        "parents": parents,
+        "children": children,
+        "see_also": owl_class.see_also,
+        "is_defined_by": owl_class.is_defined_by,
+        "deprecated": owl_class.deprecated,
+        "translations": translations,
+        "nodes": nodes,
+        "edges": edges,
+    }
+
+    return JSONResponse(content=result)
+
+
+@router.get(
+    "/tree/path/{iri}",
+    tags=["taxonomy"],
+    response_model=None,
+    summary="Get Path to Node",
+    description="Get the complete path from root to a specific node in the taxonomy tree",
+    status_code=status.HTTP_200_OK,
+)
+async def get_path_to_node(request: Request, iri: str) -> JSONResponse:
+    """
+    Get the complete path from root to a specific node in the taxonomy tree.
+
+    This endpoint is useful for expanding the tree to show a specific node that
+    may be deep in the hierarchy. It returns an ordered array of nodes representing
+    the full path from a root node to the requested node.
+
+    Args:
+        request (Request): FastAPI request object
+        iri (str): The IRI of the node to find the path for
+
+    Returns:
+        JSONResponse: An array of nodes representing the path from root to the target node
+    """
+    folio: FOLIO = request.app.state.folio
+
+    # Try multiple strategies to find the class
+    owl_class = None
+
+    # Strategy 1: Use the IRI directly as given
+    owl_class = folio[iri]
+
+    # Strategy 2: If not found and this is a full IRI, try extracting just the ID part
+    if not owl_class and iri.startswith("http"):
+        # Extract the ID from the full IRI - get the last part after the last '/'
+        parts = iri.rstrip("/").split("/")
+        if parts:
+            id_part = parts[-1]
+            owl_class = folio[id_part]
+
+    # Strategy 3: If not found and this is just an ID, try with the FOLIO IRI prefix
+    if not owl_class and not iri.startswith("http"):
+        full_iri = f"https://folio.openlegalstandard.org/{iri}"
+        owl_class = folio[full_iri]
+
+    # Strategy 4: Try with just the ID part in the FOLIO dictionary directly
+    if not owl_class:
+        # One last attempt by checking all classes
+        for cls in folio.classes:
+            if hasattr(cls, "iri") and (cls.iri.endswith(iri) or iri.endswith(cls.iri)):
+                owl_class = cls
+                break
+
+    if not owl_class:
+        return JSONResponse(
+            content={"error": f"Class not found for identifier: {iri}"},
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+
+    # Start building the path from the current node
+    path = []
+    current = owl_class
+
+    # Add current node to path
+    path.insert(
+        0,
+        {
+            "iri": current.iri,
+            "label": current.label or "Unnamed Class",
+            "id": current.iri.split("/")[-1]
+            if current.iri.startswith("http")
+            else current.iri,
+        },
+    )
+
+    # Traverse up the parent hierarchy to build the path
+    while current and hasattr(current, "sub_class_of") and current.sub_class_of:
+        # Get the first parent - assuming a tree structure
+        # In a multi-inheritance scenario, we would need to choose which path to follow
+        parent_iri = current.sub_class_of[0]
+
+        # Skip owl:Thing as it's not part of our visible tree
+        if parent_iri == "http://www.w3.org/2002/07/owl#Thing":
+            break
+
+        parent = folio[parent_iri]
+        if parent:
+            # Add parent to the beginning of the path
+            path.insert(
+                0,
+                {
+                    "iri": parent.iri,
+                    "label": parent.label or "Unnamed Class",
+                    "id": parent.iri.split("/")[-1]
+                    if parent.iri.startswith("http")
+                    else parent.iri,
+                },
+            )
+            current = parent
+        else:
+            # If parent not found, stop traversal
+            break
+
+    return JSONResponse(content={"path": path})
+
+
+@router.get(
+    "/tree/search",
+    tags=["taxonomy"],
+    response_model=None,
+    summary="Search Taxonomy Tree",
+    description="Search for classes and return a filtered tree structure containing only matches and their ancestors",
+    status_code=status.HTTP_200_OK,
+)
+async def search_taxonomy_tree(request: Request, query: str) -> JSONResponse:
+    """
+    Search for classes in the taxonomy and return a filtered tree structure.
+
+    This endpoint combines search functionality with tree structure building:
+    1. It searches for all classes matching the query
+    2. For each match, it finds all ancestors up to the root
+    3. It returns a complete tree structure containing only matches and their ancestry
+
+    This allows the client to display a filtered tree view without multiple API calls.
+
+    Args:
+        request (Request): FastAPI request object
+        query (str): The search query string
+
+    Returns:
+        JSONResponse: A filtered tree structure containing only matching classes and their ancestors
+    """
+    folio: FOLIO = request.app.state.folio
+
+    # First, search for matching classes
+    # Reusing exactly the same logic from search endpoint
+    search_results = []
+    seen_iris = set()
+
+    # First, try to get results with original case
+    prefix_results_original = folio.search_by_prefix(query)
+
+    # Then try with lowercase
+    query_lower = query.lower()
+    prefix_results_lower = (
+        [] if query == query_lower else folio.search_by_prefix(query_lower)
+    )
+
+    # Then try with uppercase first letter
+    query_title = query.title()
+    prefix_results_title = (
+        [] if query == query_title else folio.search_by_prefix(query_title)
+    )
+
+    # Add results in order of priority but avoid duplicates
+    for result_list in [
+        prefix_results_original,
+        prefix_results_lower,
+        prefix_results_title,
+    ]:
+        for owl_class in result_list:
+            if owl_class.iri not in seen_iris:
+                seen_iris.add(owl_class.iri)
+                search_results.append(owl_class)
+
+    # Check all classes for substring matches in labels and alternative labels
+    for owl_class in folio.classes:
+        # Skip if we've already seen this IRI in prefix results
+        if owl_class.iri in seen_iris:
+            continue
+
+        # Skip if class has no label
+        if not owl_class.label:
+            continue
+
+        # Check if query is in the label (case-insensitive)
+        # Also check alternative labels for matches
+        label_match = False
+
+        # Check main label
+        if owl_class.label:
+            if (
+                query in owl_class.label
+                or query_lower in owl_class.label.lower()
+                or query_title in owl_class.label
+            ):
+                label_match = True
+
+        # Check alternative labels
+        if not label_match and owl_class.alternative_labels:
+            for alt_label in owl_class.alternative_labels:
+                if alt_label and (
+                    query in alt_label
+                    or query_lower in alt_label.lower()
+                    or query_title in alt_label
+                ):
+                    label_match = True
+                    break
+
+        if label_match:
+            seen_iris.add(owl_class.iri)
+            search_results.append(owl_class)
+
+    # Process search results
+    if not search_results:
+        return JSONResponse(content={"matches": [], "tree": {}})
+
+    # Now build the filtered tree structure
+    # We'll keep track of all nodes (classes) that should be in the tree
+    included_nodes = set()
+    matches = []
+
+    # Process each match
+    for cls in search_results:
+        # Add this match to our results
+        match_data = {
+            "iri": cls.iri,
+            "label": cls.label or "Unnamed Class",
+            "definition": cls.definition or "No definition available",
+            "is_match": True,  # Flag to identify this as a direct search match
+        }
+        matches.append(match_data)
+
+        # Add this node to our included set
+        included_nodes.add(cls.iri)
+
+        # Now trace all ancestors and add them to included_nodes
+        current = cls
+        while current and hasattr(current, "sub_class_of") and current.sub_class_of:
+            for parent_iri in current.sub_class_of:
+                # Skip owl:Thing as it's the ultimate root
+                if parent_iri == "http://www.w3.org/2002/07/owl#Thing":
+                    continue
+
+                # Get the parent class using the standard lookup pattern
+                parent = folio[parent_iri]
+                if parent:
+                    included_nodes.add(parent_iri)
+                    current = parent
+                    # We only follow the first parent for simplicity
+                    break
+            else:
+                # No valid parent found, break the loop
+                break
+
+    # Now build the actual tree structure
+    tree = {
+        "nodes": {},  # All nodes by IRI
+        "root_nodes": [],  # Top-level nodes
+    }
+
+    # Step 1: Add all included nodes to the tree
+    for node_iri in included_nodes:
+        # Get the class using the standard lookup pattern
+        cls = folio[node_iri]
+        if cls:
+            # Basic node data
+            tree["nodes"][node_iri] = {
+                "id": node_iri,
+                "label": cls.label or "Unnamed Class",
+                "children": [],
+                "is_match": any(match["iri"] == node_iri for match in matches),
+            }
+
+    # Step 2: Build parent-child relationships
+    for node_iri in tree["nodes"]:
+        # Get the class using the standard lookup pattern
+        cls = folio[node_iri]
+
+        # Check if this is a top-level node (has no parents or parent is owl:Thing)
+        is_top_level = True
+
+        if hasattr(cls, "sub_class_of") and cls.sub_class_of:
+            for parent_iri in cls.sub_class_of:
+                # Skip owl:Thing
+                if parent_iri == "http://www.w3.org/2002/07/owl#Thing":
+                    continue
+
+                # If the parent is in our included set, add this as a child
+                if parent_iri in tree["nodes"]:
+                    tree["nodes"][parent_iri]["children"].append(node_iri)
+                    is_top_level = False
+
+        # If this is a top-level node, add to root_nodes
+        if is_top_level:
+            tree["root_nodes"].append(node_iri)
+
+    # Return the search matches and filtered tree structure
+    return JSONResponse(content={"matches": matches, "tree": tree})
+
+
+@router.get(
+    "/class-details/{iri}",
+    tags=["taxonomy"],
+    response_model=None,
+    summary="Get Rendered Class Details",
+    description="Get rendered HTML for a class's details using Jinja2 templates",
+    include_in_schema=False,  # Hide from API docs
+)
+async def get_class_details_html(request: Request, iri: str) -> Response:
+    """
+    Get rendered HTML for a specific class's details using Jinja2 templates.
+
+    Args:
+        request (Request): FastAPI request object
+        iri (str): The IRI of the class to get details for
+
+    Returns:
+        Response: HTML content for the class details
+    """
+    folio: FOLIO = request.app.state.folio
+
+    # Try multiple strategies to find the class
+    owl_class = None
+
+    # Strategy 1: Use the IRI directly as given
+    owl_class = folio[iri]
+
+    # Strategy 2: If not found and this is a full IRI, try extracting just the ID part
+    if not owl_class and iri.startswith("http"):
+        # Extract the ID from the full IRI - get the last part after the last '/'
+        parts = iri.rstrip("/").split("/")
+        if parts:
+            id_part = parts[-1]
+            owl_class = folio[id_part]
+
+    # Strategy 3: If not found and this is just an ID, try with the FOLIO IRI prefix
+    if not owl_class and not iri.startswith("http"):
+        full_iri = f"https://folio.openlegalstandard.org/{iri}"
+        owl_class = folio[full_iri]
+
+    # Strategy 4: Try with just the ID part in the FOLIO dictionary directly
+    if not owl_class:
+        # One last attempt by checking all classes
+        for cls in folio.classes:
+            if hasattr(cls, "iri") and (cls.iri.endswith(iri) or iri.endswith(cls.iri)):
+                owl_class = cls
+                break
+
+    if not owl_class:
+        # Return empty template if class not found
+        return request.app.state.templates.TemplateResponse(
+            "components/class_details.html", {"request": request, "class_data": None}
+        )
+
+    # Prepare node data
+    nodes, edges = get_node_neighbors(owl_class, folio)
+
+    # Build parent list
+    parents = []
+    if hasattr(owl_class, "sub_class_of") and owl_class.sub_class_of:
+        for parent_iri in owl_class.sub_class_of:
+            parent = folio[parent_iri]
+            if parent:
+                parents.append(
+                    {
+                        "iri": parent.iri,
+                        "label": parent.label or "Unnamed Class",
+                        "definition": parent.definition or "No definition available",
+                    }
+                )
+
+    # Build children list
+    children = []
+    if hasattr(owl_class, "parent_class_of") and owl_class.parent_class_of:
+        for child_iri in owl_class.parent_class_of:
+            child = folio[child_iri]
+            if child:
+                children.append(
+                    {
+                        "iri": child.iri,
+                        "label": child.label or "Unnamed Class",
+                        "definition": child.definition or "No definition available",
+                    }
+                )
+
+    # Check if translations are available
+    translations = {}
+    if hasattr(owl_class, "translations") and owl_class.translations:
+        translations = owl_class.translations
+
+    class_data = {
+        "iri": owl_class.iri,
+        "label": owl_class.label or "Unnamed Class",
+        "definition": owl_class.definition or "No definition available",
+        "preferred_label": owl_class.preferred_label,
+        "alternative_labels": owl_class.alternative_labels,
+        "identifier": owl_class.identifier,
+        "description": owl_class.description,
+        "comment": owl_class.comment,
+        "examples": owl_class.examples,
+        "notes": owl_class.notes,
+        "parents": parents,
+        "children": children,
+        "see_also": owl_class.see_also,
+        "is_defined_by": owl_class.is_defined_by,
+        "deprecated": owl_class.deprecated,
+        "translations": translations,
+        "nodes": nodes,
+        "edges": edges,
+    }
+
+    return request.app.state.templates.TemplateResponse(
+        "components/class_details.html", {"request": request, "class_data": class_data}
+    )
+
+
+@router.get(
+    "/tree",
+    tags=["taxonomy"],
+    response_model=None,
+    summary="Interactive Taxonomy Tree Explorer",
+    description="Explore the FOLIO taxonomy using an interactive tree view",
+    status_code=status.HTTP_200_OK,
+)
+async def explore_taxonomy_tree(request: Request) -> Response:
+    """
+    Interactive taxonomic explorer using jsTree for navigation.
+
+    This endpoint provides an interactive UI for exploring the FOLIO taxonomy hierarchy.
+    The left panel shows a navigable tree view of all classes, while the right panel
+    displays detailed information about the selected class.
+
+    Features:
+    - Lazy-loaded tree for efficient browsing of large hierarchies
+    - Detailed class information in the right panel
+    - Interactive visualization of class relationships
+    - Search functionality
+
+    Returns:
+        Response: HTML page with the interactive taxonomy explorer
+    """
+    # Import JavaScript for tree view
+    typeahead_js_path = (
+        Path(__file__).parent.parent / "static" / "js" / "typeahead_search.js"
+    )
+    typeahead_js_source = typeahead_js_path.read_text(encoding="utf-8")
+
+    return request.app.state.templates.TemplateResponse(
+        "taxonomy/tree.html",
+        {
+            "request": request,
+            "typeahead_js_source": typeahead_js_source,
+            "config": request.app.state.config,
+        },
+    )
+
+
+@router.get(
     "/browse",
     tags=["taxonomy"],
     response_model=None,
@@ -534,184 +1197,17 @@ async def browse_top_level_classes(request: Request) -> Response:
 
     # Import JavaScript for typeahead search
     typeahead_js_path = (
-        Path(__file__).parent.parent / "templates" / "typeahead_search.js"
+        Path(__file__).parent.parent / "static" / "js" / "typeahead_search.js"
     )
     typeahead_js_source = typeahead_js_path.read_text(encoding="utf-8")
 
-    # Generate HTML content
-    html_content = f"""
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>FOLIO Top-Level Classes</title>
-        <script src="https://cdn.tailwindcss.com?plugins=forms,typography,aspect-ratio"></script>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js" integrity="sha512-v2CJ7UaYy4JwqLDIrZUI/4hqeoQieOmAZNXBeQyjo21dadnwR+8ZaIJVT8EE2iyI61OV8e6M8PP2/4hpQINQ/g==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/typeahead.js/0.11.1/typeahead.bundle.min.js" integrity="sha512-qOBWNAMfkz+vXXgbh0Wz7qYSLZp6c14R0bZeVX2TdQxWpuKr6yHjBIM69fcF8Ve4GUX6B6AKRQJqiiAmwvmUmQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-        <style type="text/css">
-            @import url('https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,100..900;1,100..900&display=swap');
-            :root {{
-                --font-sans: 'Public Sans Variable';
-                --font-serif: 'Public Sans Variable';
-                --font-heading: 'Public Sans Variable';
-                --color-primary: rgb(24 70 120);
-                --color-secondary: rgb(134, 147, 171);
-                --color-accent: rgb(234, 82, 111);
-                --color-text-heading: rgb(0 0 0);
-                --color-text-default: rgb(16 16 16);
-                --color-text-muted: rgb(16 16 16 / 66%);
-                --color-bg-page: rgb(255 255 255);
-                --color-bg-page-dark: rgb(12 35 60);
-            }}
-
-            .dark {{
-                --color-primary: rgb(24 70 120);
-                --color-secondary: rgb(134 147 171);
-                --color-accent: rgb(234 82 111);
-                --color-text-heading: rgb(247 248 248);
-                --color-text-default: rgb(229 236 246);
-                --color-text-muted: rgba(229, 236, 246, 0.66);
-                --color-bg-page: rgb(12 35 60);
-            }}
-            .dark ::selection {{
-                background-color: black;
-                color: snow;
-            }}
-
-            .twitter-typeahead {{
-                width: 100%;
-            }}
-            .tt-menu {{
-                width: 100%;
-                margin-top: 0.5rem;
-                background-color: white;
-                border: 1px solid var(--color-secondary);
-                border-radius: 0.5rem;
-                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-            }}
-            .tt-suggestion {{
-                padding: 0.75rem 1rem;
-                cursor: pointer;
-            }}
-            .tt-suggestion:hover, .tt-suggestion.tt-cursor {{
-                background-color: rgba(24, 70, 120, 0.1);
-            }}
-        </style>
-    </head>
-    <body class="font-['Public_Sans'] bg-gray-100 min-h-screen">
-        <header class="bg-[--color-primary] py-6 text-white">
-            <div class="container mx-auto px-4">
-                <div class="flex justify-between items-start">
-                    <div>
-                        <h1 class="text-3xl font-bold mb-2">FOLIO Top-Level Classes</h1>
-                        <p class="text-xl text-white opacity-80">Browse the highest level categories in the FOLIO ontology hierarchy</p>
-                    </div>
-                    <div class="hidden md:block">
-                        <a href="https://openlegalstandard.org/" target="_blank" class="inline-block bg-white text-[--color-primary] font-semibold px-4 py-2 rounded hover:bg-opacity-90 transition-colors duration-200 mr-2">FOLIO Website</a>
-                        <a href="https://openlegalstandard.org/education/" target="_blank" class="inline-block bg-transparent text-white border border-white font-semibold px-4 py-2 rounded hover:bg-white hover:bg-opacity-10 transition-colors duration-200">Learn More</a>
-                    </div>
-                </div>
-                
-                <div class="mt-6 max-w-3xl">
-                    <p class="mb-3 text-white text-opacity-90">FOLIO is an open standard for legal concepts and knowledge.</p>
-                    <div class="relative">
-                        <input id="search-input" type="text" placeholder="Search for FOLIO classes..." class="w-full p-3 rounded-lg border border-white focus:outline-none focus:ring-2 focus:ring-white focus:ring-opacity-50 text-gray-800">
-                        <div id="search-results" class="absolute top-14 left-0 w-full bg-white dark:bg-[--color-bg-page] shadow-lg rounded-lg overflow-hidden mt-2 border border-[--color-secondary] border-opacity-20"></div>
-                    </div>
-                </div>
-            </div>
-        </header>
-        
-        <div class="bg-white border-b">
-            <div class="container mx-auto px-4 py-6">
-                <div class="flex flex-col md:flex-row gap-6">
-                    <div class="flex-1">
-                        <h2 class="text-xl font-bold text-[--color-primary] mb-2">About FOLIO</h2>
-                        <p class="text-gray-700 mb-2">FOLIO is an open standard for legal concepts and knowledge, designed to make legal information more accessible and interoperable.</p>
-                        <p class="text-gray-700">Explore the <a href="https://openlegalstandard.org/resources/folio-python-library/" class="text-blue-600 hover:underline">FOLIO Python Library</a> to integrate FOLIO ontology into your applications.</p>
-                    </div>
-                    <div class="flex-1">
-                        <h2 class="text-xl font-bold text-[--color-primary] mb-2">Resources</h2>
-                        <ul class="list-disc list-inside text-gray-700 space-y-1">
-                            <li><a href="https://openlegalstandard.org/" class="text-blue-600 hover:underline">Official FOLIO Website</a></li>
-                            <li><a href="https://openlegalstandard.org/education/" class="text-blue-600 hover:underline">FOLIO Education Resources</a></li>
-                            <li><a href="https://openlegalstandard.org/resources/folio-python-library/" class="text-blue-600 hover:underline">FOLIO Python Library Documentation</a></li>
-                            <li><a href="https://github.com/alea-institute/folio-api" class="text-blue-600 hover:underline">FOLIO API on GitHub</a></li>
-                        </ul>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <main class="container mx-auto px-4 py-8">
-            <p class="mb-6 text-gray-600">These classes are direct subclasses of owl:Thing and represent the highest level categories in the FOLIO ontology.</p>
-            
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 auto-rows-fr">
-                {
-        "".join(
-            [
-                f'''
-                        <div class="bg-white rounded-lg shadow p-8 flex flex-col h-full min-h-56">
-                            <h2 class="text-xl font-semibold mb-2 text-[--color-primary]">
-                                <a href="{owl_class.iri}">{owl_class.label or "Unnamed Class"}</a>
-                            </h2>
-                            <p class="text-gray-500 text-sm mb-2 truncate" title="{owl_class.iri}">IRI: {owl_class.iri}</p>
-                            <div class="flex-grow mb-4">
-                                <p class="text-gray-700 line-clamp-3" title="{owl_class.definition or "No definition available"}">{owl_class.definition or "No definition available"}</p>
-                            </div>
-                            <div class="flex justify-between items-center mt-auto">
-                                <span class="text-xs text-gray-500">{len(owl_class.parent_class_of) if hasattr(owl_class, "parent_class_of") else 0} subclasses</span>
-                                <a href="{owl_class.iri}/html" class="text-blue-500 text-sm font-medium">View details →</a>
-                            </div>
-                        </div>
-                    '''
-                for owl_class in root_classes
-            ]
-        )
-    }
-            </div>
-        </main>
-        
-        <footer class="bg-[--color-primary] text-white py-8 mt-8">
-            <div class="container mx-auto px-4 text-center">
-                <a href="https://openlegalstandard.org/" target="_blank"><img src="https://openlegalstandard.org/_astro/soli-2x1-accent.DYUFAzgH_1CFhgX.webp" alt="FOLIO Logo" class="w-16 mx-auto mt-4"></a>
-                <p>The FOLIO ontology is licensed under the CC-BY 4.0 license.</p>
-                <p>Any FOLIO software is licensed under the MIT license.</p>
-                
-                <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl mx-auto">
-                    <div class="text-left">
-                        <h3 class="font-bold text-lg mb-2">FOLIO Resources</h3>
-                        <ul class="space-y-2">
-                            <li><a href="https://openlegalstandard.org/" class="text-[--color-secondary] hover:text-white transition-colors duration-200">FOLIO Official Website</a></li>
-                            <li><a href="https://openlegalstandard.org/education/" class="text-[--color-secondary] hover:text-white transition-colors duration-200">FOLIO Education</a></li>
-                            <li><a href="https://openlegalstandard.org/resources/folio-python-library/" class="text-[--color-secondary] hover:text-white transition-colors duration-200">FOLIO Python Library</a></li>
-                            <li><a href="https://github.com/alea-institute/folio-api" class="text-[--color-secondary] hover:text-white transition-colors duration-200">FOLIO API (GitHub)</a></li>
-                        </ul>
-                    </div>
-                    <div class="text-left">
-                        <h3 class="font-bold text-lg mb-2">About FOLIO</h3>
-                        <p class="text-sm mb-2">FOLIO is an open standard for legal concepts and knowledge, designed to make legal information more accessible and interoperable.</p>
-                        <p class="text-sm">Learn more about how FOLIO is being used to improve legal technology and access to justice by visiting the <a href="https://openlegalstandard.org/" class="text-[--color-secondary] hover:text-white transition-colors duration-200">Open Legal Standard website</a>.</p>
-                    </div>
-                </div>
-                
-                <p class="mt-4 text-small">Copyright &copy; 2024-2025. <a href="https://aleainstitute.ai/" target="_blank">The Institute for the Advancement of Legal and Ethical AI</a>.</p>
-                <p class="mt-2 text-xs">FOLIO Version: <span class="font-mono">{
-        request.app.state.config["folio"]["branch"]
-    }</span> | Repository: <a href="https://github.com/{
-        request.app.state.config["folio"]["repository"]
-    }" class="text-[--color-secondary] hover:text-white transition-colors duration-200">{
-        request.app.state.config["folio"]["repository"]
-    }</a></p>
-            </div>
-        </footer>
-        
-        <script>
-            {typeahead_js_source}
-        </script>
-    </body>
-    </html>
-    """
-
-    return Response(content=html_content, media_type="text/html")
+    # Render template
+    return request.app.state.templates.TemplateResponse(
+        "taxonomy/browse.html",
+        {
+            "request": request,
+            "root_classes": root_classes,
+            "typeahead_js_source": typeahead_js_source,
+            "config": request.app.state.config,
+        },
+    )

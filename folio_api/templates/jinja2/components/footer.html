@@ -1,0 +1,27 @@
+<footer class="bg-[--color-primary] text-white py-8 mt-8">
+    <div class="container mx-auto px-4 text-center">
+        <a href="https://openlegalstandard.org/" target="_blank"><img src="https://openlegalstandard.org/_astro/soli-2x1-accent.DYUFAzgH_1CFhgX.webp" alt="FOLIO Logo" class="w-16 mx-auto mt-4"></a>
+        <p>The FOLIO ontology is licensed under the CC-BY 4.0 license.</p>
+        <p>Any FOLIO software is licensed under the MIT license.</p>
+        
+        <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl mx-auto">
+            <div class="text-left">
+                <h3 class="font-bold text-lg mb-2">FOLIO Resources</h3>
+                <ul class="space-y-2">
+                    <li><a href="https://openlegalstandard.org/" class="text-[--color-secondary] hover:text-white transition-colors duration-200">FOLIO Official Website</a></li>
+                    <li><a href="https://openlegalstandard.org/education/" class="text-[--color-secondary] hover:text-white transition-colors duration-200">FOLIO Education</a></li>
+                    <li><a href="https://openlegalstandard.org/resources/folio-python-library/" class="text-[--color-secondary] hover:text-white transition-colors duration-200">FOLIO Python Library</a></li>
+                    <li><a href="https://github.com/alea-institute/folio-api" class="text-[--color-secondary] hover:text-white transition-colors duration-200">FOLIO API (GitHub)</a></li>
+                </ul>
+            </div>
+            <div class="text-left">
+                <h3 class="font-bold text-lg mb-2">About FOLIO</h3>
+                <p class="text-sm mb-2">FOLIO is an open standard for legal concepts and knowledge, designed to make legal information more accessible and interoperable.</p>
+                <p class="text-sm">Learn more about how FOLIO is being used to improve legal technology and access to justice by visiting the <a href="https://openlegalstandard.org/" class="text-[--color-secondary] hover:text-white transition-colors duration-200">Open Legal Standard website</a>.</p>
+            </div>
+        </div>
+        
+        <p class="mt-4 text-small">Copyright &copy; 2024-2025. <a href="https://aleainstitute.ai/" target="_blank">The Institute for the Advancement of Legal and Ethical AI</a>.</p>
+        <p class="mt-2 text-xs">FOLIO Version: <span class="font-mono">{{ config.folio.branch }}</span> | Repository: <a href="https://github.com/{{ config.folio.repository }}" class="text-[--color-secondary] hover:text-white transition-colors duration-200">{{ config.folio.repository }}</a></p>
+    </div>
+</footer>

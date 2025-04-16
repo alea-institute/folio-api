@@ -5,11 +5,14 @@ import logging
 import os
 from contextlib import asynccontextmanager
 from typing import Any, Dict
+from pathlib import Path
 
 # packages
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from folio import FOLIO
 from alea_llm_client import OpenAIModel, AnthropicModel, VLLMModel
 
@@ -178,6 +181,38 @@ def get_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # Mount static files with appropriate cache headers
+    static_dir = Path(__file__).parent / "static"
+    app_instance.state.logger.info(f"Mounting static files from: {static_dir}")
+
+    # Check if the directory exists
+    if not static_dir.exists():
+        app_instance.state.logger.warning(f"Static directory does not exist: {static_dir}")
+        # Create the directory if it doesn't exist
+        try:
+            static_dir.mkdir(parents=True, exist_ok=True)
+            app_instance.state.logger.info(f"Created static directory: {static_dir}")
+        except Exception as e:
+            app_instance.state.logger.error(f"Failed to create static directory: {e}")
+
+    app_instance.mount("/static", StaticFiles(directory=static_dir), name="static")
+
+    # Initialize Jinja2 templates
+    templates_dir = Path(__file__).parent / "templates" / "jinja2"
+    app_instance.state.logger.info(f"Setting up Jinja2 templates from: {templates_dir}")
+
+    # Create templates directory if it doesn't exist
+    if not templates_dir.exists():
+        app_instance.state.logger.warning(f"Templates directory does not exist: {templates_dir}")
+        try:
+            templates_dir.mkdir(parents=True, exist_ok=True)
+            app_instance.state.logger.info(f"Created templates directory: {templates_dir}")
+        except Exception as e:
+            app_instance.state.logger.error(f"Failed to create templates directory: {e}")
+
+    # Store templates instance in app state
+    app_instance.state.templates = Jinja2Templates(directory=templates_dir)
 
     # Attach the routes
     app_instance.include_router(folio_api.routes.info.router)

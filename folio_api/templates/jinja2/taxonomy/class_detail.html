@@ -1,0 +1,479 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}{{ owl_class.label or "Unnamed Class" }} - FOLIO Ontology{% endblock %}
+
+{% block meta_description %}{{ owl_class.definition or "No definition available" }}{% endblock %}
+{% block meta_keywords %}legal, ontology, standard, open, information, {{ owl_class.label or "" }}{% endblock %}
+
+{% block header_title %}{{ owl_class.label or "Unnamed Class" }}{% endblock %}
+{% block header_subtitle %}{{ owl_class.definition or "No definition available" }}{% endblock %}
+
+{% block extra_head %}
+<!-- Cytoscape for network visualization -->
+<script src="/static/js/vendor/cytoscape.min.js"></script>
+<script src="/static/js/vendor/dagre.min.js"></script>
+<script src="/static/js/vendor/cytoscape-dagre.min.js"></script>
+<script src="/static/js/vendor/popper.min.js"></script>
+<script src="/static/js/vendor/cytoscape-popper.min.js"></script>
+<script src="/static/js/vendor/tippy.umd.min.js"></script>
+{% endblock %}
+
+{% block navigation_buttons %}
+<a href="/taxonomy/browse" class="btn btn-secondary">Back to Browse</a>
+<a href="/taxonomy/tree" class="btn btn-secondary">Taxonomy Tree</a>
+<a href="{{ owl_class.iri }}" class="btn btn-primary">JSON</a>
+<a href="{{ owl_class.iri }}/jsonld" class="btn btn-primary">JSON-LD</a>
+<a href="{{ owl_class.iri }}/xml" class="btn btn-primary">OWL XML</a>
+<a href="{{ owl_class.iri }}/markdown" class="btn btn-primary">Markdown</a>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-6">
+    <!-- Identification -->
+    <section class="card animate-fade-in">
+        <h3 class="text-xl font-semibold mb-4 text-[--color-primary]">Identification</h3>
+        <div class="space-y-4">
+            <div>
+                <p class="text-gray-500 text-sm mb-1">IRI <button onclick="copyIRI()" class="copy-button py-1 px-2 rounded text-sm" aria-label="Copy IRI to clipboard">📋</button></p>
+                <p id="iri-value" class="truncate font-mono text-sm" title="{{ owl_class.iri }}">{{ owl_class.iri }}</p>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <p class="text-gray-500 text-sm mb-1">Label</p>
+                    <p class="font-medium">{{ owl_class.label or "N/A" }}</p>
+                </div>
+                
+                <div>
+                    <p class="text-gray-500 text-sm mb-1">Preferred Label</p>
+                    <p>{{ owl_class.preferred_label or "N/A" }}</p>
+                </div>
+                
+                <div>
+                    <p class="text-gray-500 text-sm mb-1">Identifier</p>
+                    <p>{{ owl_class.identifier or "N/A" }}</p>
+                </div>
+            </div>
+            
+            <div>
+                <p class="text-gray-500 text-sm mb-1">Alternative Labels</p>
+                <p>{{ owl_class.alternative_labels|join(", ") if owl_class.alternative_labels else "None" }}</p>
+            </div>
+        </div>
+    </section>
+    
+    <!-- Definition and Examples -->
+    <section class="card animate-fade-in">
+        <h3 class="text-xl font-semibold mb-4 text-[--color-primary]">Definition</h3>
+        <p class="text-gray-700 mb-6">{{ owl_class.definition or "No definition available." }}</p>
+        
+        {% if owl_class.examples %}
+        <h4 class="text-lg font-medium mb-3 text-[--color-primary]">Examples</h4>
+        <ul class="list-disc pl-5 space-y-2 mb-4">
+            {% for example in owl_class.examples %}
+            <li>{{ example }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+    </section>
+    
+    <!-- Class Relationships -->
+    <section class="card animate-fade-in">
+        <h3 class="text-xl font-semibold mb-4 text-[--color-primary]">Class Relationships</h3>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+                <p class="text-gray-500 text-sm mb-2">Sub Class Of</p>
+                <ul class="list-disc pl-5 space-y-1">
+                    {% if owl_class.sub_class_of %}
+                        {% for sub_class in owl_class.sub_class_of %}
+                            {% if folio_graph[sub_class] %}
+                            <li><a class="text-blue-500 hover:text-blue-700 hover:underline" href="{{ sub_class }}/html">{{ folio_graph[sub_class].label }}</a></li>
+                            {% endif %}
+                        {% endfor %}
+                    {% else %}
+                    <li>None</li>
+                    {% endif %}
+                </ul>
+            </div>
+            
+            <div>
+                <p class="text-gray-500 text-sm mb-2">Is Defined By</p>
+                <p>{{ owl_class.is_defined_by or "N/A" }}</p>
+                
+                <p class="text-gray-500 text-sm mt-4 mb-2">See Also</p>
+                <p>{{ owl_class.see_also|join(", ") if owl_class.see_also else "None" }}</p>
+            </div>
+        </div>
+        
+        <div class="mt-6">
+            <p class="text-gray-500 text-sm mb-2">Parent Class Of ({{ owl_class.parent_class_of|length if owl_class.parent_class_of else 0 }})</p>
+            <div class="max-h-60 overflow-y-auto border border-gray-200 rounded p-2 bg-gray-50">
+                <ul class="list-disc pl-5 space-y-1">
+                    {% if owl_class.parent_class_of %}
+                        {% for parent_class in owl_class.parent_class_of %}
+                            {% if folio_graph[parent_class] %}
+                            <li><a class="text-blue-500 hover:text-blue-700 hover:underline" href="{{ parent_class }}/html">{{ folio_graph[parent_class].label }}</a></li>
+                            {% endif %}
+                        {% endfor %}
+                    {% else %}
+                    <li>None</li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </section>
+    
+    <!-- Translations -->
+    {% if owl_class.translations %}
+    <section class="card animate-fade-in">
+        <h3 class="text-xl font-semibold mb-4 text-[--color-primary]">Translations</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {% for language, translation in owl_class.translations.items() %}
+            <div class="border-b pb-2">
+                <p class="text-gray-500 text-sm font-medium">{{ language }}</p>
+                <p class="mt-1">{{ translation }}</p>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+    
+    <!-- Graph Visualization -->
+    <section class="card animate-fade-in">
+        <h3 class="text-xl font-semibold mb-4 text-[--color-primary]">
+            Class Hierarchy Visualization
+        </h3>
+        <div id="hierarchy-container" class="h-96 w-full border border-gray-200 rounded-lg relative">
+            <!-- Progressive enhancement: Non-JS fallback for visualization -->
+            <noscript>
+                <div class="absolute inset-0 flex items-center justify-center bg-gray-50 p-4 text-center">
+                    <div>
+                        <svg class="w-12 h-12 mx-auto text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
+                        </svg>
+                        <h4 class="mt-2 text-lg font-medium">Interactive visualization requires JavaScript</h4>
+                        <p class="mt-1 text-sm text-gray-500">
+                            You can still navigate the class hierarchy using the text links in the "Class Relationships" section above.
+                        </p>
+                    </div>
+                </div>
+            </noscript>
+        </div>
+    </section>
+    
+    <!-- Additional Information -->
+    <section class="card animate-fade-in">
+        <h3 class="text-xl font-semibold mb-4 text-[--color-primary]">Additional Information</h3>
+        
+        <div class="space-y-6">
+            <div>
+                <h4 class="text-lg font-medium mb-2 text-[--color-primary]">Metadata</h4>
+                <div class="space-y-3">
+                    <div>
+                        <p class="text-gray-500 text-sm">Comment</p>
+                        <p>{{ owl_class.comment or "None" }}</p>
+                    </div>
+                    <div>
+                        <p class="text-gray-500 text-sm">Description</p>
+                        <p>{{ owl_class.description or "None" }}</p>
+                    </div>
+                    <div>
+                        <p class="text-gray-500 text-sm">Notes</p>
+                        <ul class="list-disc pl-5">
+                            {% if owl_class.notes %}
+                                {% for note in owl_class.notes %}
+                                <li>{{ note }}</li>
+                                {% endfor %}
+                            {% else %}
+                            <li>None</li>
+                            {% endif %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <div>
+                <h4 class="text-lg font-medium mb-2 text-[--color-primary]">Editorial Information</h4>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <p class="text-gray-500 text-sm">History Note</p>
+                        <p>{{ owl_class.history_note or "None" }}</p>
+                    </div>
+                    <div>
+                        <p class="text-gray-500 text-sm">Editorial Note</p>
+                        <p>{{ owl_class.editorial_note or "None" }}</p>
+                    </div>
+                    <div>
+                        <p class="text-gray-500 text-sm">Deprecated</p>
+                        <p>{{ owl_class.deprecated }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Inline node and edge data first
+    var nodes = {{ nodes|tojson|safe }};
+    var edges = {{ edges|tojson|safe }};
+    
+    // Function to copy IRI to clipboard
+    function copyIRI() {
+        const iriElement = document.getElementById('iri-value');
+        if (iriElement) {
+            const iri = iriElement.getAttribute('title') || iriElement.textContent;
+            navigator.clipboard.writeText(iri).then(() => {
+                alert('IRI copied to clipboard');
+            }).catch(err => { console.error('Failed to copy', err); });
+        }
+    }
+    
+    // Setup Cytoscape functionality
+    document.addEventListener('DOMContentLoaded', function() {
+        // Check if Cytoscape is loaded
+        if (typeof cytoscape === 'undefined') {
+            console.error('Cytoscape not loaded');
+            const container = document.getElementById('hierarchy-container');
+            if (container) {
+                container.innerHTML = '<div class="p-4 text-center"><p class="text-lg font-medium text-gray-700">Interactive visualization unavailable.</p><p class="text-sm text-gray-500">Use the text links in the "Class Relationships" section to navigate.</p></div>';
+            }
+            return;
+        }
+        
+        // Initialize Cytoscape
+        const cy = cytoscape({
+            container: document.getElementById('hierarchy-container'),
+            elements: [
+                ...nodes.map(node => ({
+                    data: {
+                        id: node.id,
+                        label: node.label,
+                        description: node.description,
+                        relationship: node.relationship,
+                    }
+                })),
+                ...edges.map(edge => ({
+                    data: {
+                        source: edge.source,
+                        target: edge.target,
+                        type: edge.type
+                    }
+                }))
+            ],
+            style: [
+                {
+                    selector: 'node',
+                    style: {
+                        'label': function(ele) {
+                            return ele.data('label') || ele.id() || 'Unnamed';
+                        },
+                        'text-valign': 'center',
+                        'text-halign': 'center',
+                        'background-color': '#fff',
+                        'border-width': 2,
+                        'border-color': '#184678',
+                        'width': '120px',
+                        'height': '50px',
+                        'text-wrap': 'wrap',
+                        'text-max-width': '100px',
+                        'font-size': '10px',
+                        'color': '#184678',
+                        'padding': '5px',
+                        'shape': 'roundrectangle',
+                        'cursor': 'pointer'
+                    }
+                },
+                {
+                    selector: 'node[relationship="self"]',
+                    style: {
+                        'background-color': '#184678',
+                        'color': '#fff',
+                        'border-color': '#184678',
+                        'border-width': 3
+                    }
+                },
+                {
+                    selector: 'edge',
+                    style: {
+                        'width': 2,
+                        'line-color': '#ccc',
+                        'target-arrow-color': '#ccc',
+                        'target-arrow-shape': 'triangle',
+                        'curve-style': 'bezier'
+                    }
+                },
+                {
+                    selector: 'edge[type="sub_class_of"]',
+                    style: {
+                        'line-color': '#184678',
+                        'target-arrow-color': '#184678'
+                    }
+                },
+                {
+                    selector: 'edge[type="parent_class_of"]',
+                    style: {
+                        'line-color': '#29A35A',
+                        'target-arrow-color': '#29A35A'
+                    }
+                },
+                {
+                    selector: 'edge[type="see_also"]',
+                    style: {
+                        'line-color': '#FFC107',
+                        'target-arrow-color': '#FFC107',
+                        'line-style': 'dashed'
+                    }
+                }
+            ],
+            layout: {
+                name: 'grid'
+            }
+        });
+        
+        // Use Dagre layout for hierarchical display
+        try {
+            // Run the layout using the cytoscape-dagre extension
+            const layout = cy.layout({
+                name: 'dagre',
+                rankDir: 'TB',
+                rankSep: 75,
+                nodeSep: 50,
+                padding: 30,
+                animate: true,
+                animationDuration: 500
+            });
+            layout.run();
+        } catch (error) {
+            console.error('Error setting up dagre layout:', error);
+            // Fallback to a basic layout
+            cy.layout({ name: 'grid' }).run();
+        }
+        
+        // Add click handler for nodes
+        cy.on('tap', 'node', function(evt) {
+            const node = evt.target;
+            const nodeId = node.id();
+            
+            // Only proceed if the node has a valid IRI as ID
+            if (nodeId && (nodeId.startsWith('http') || nodeId.includes(':'))) {
+                // Navigate to the HTML view of the class
+                window.location.href = nodeId + '/html';
+            } else {
+                console.log('Node has no valid IRI:', nodeId);
+            }
+        });
+        
+        // Add tooltips if tippy and popper are available
+        if (typeof tippy !== 'undefined' && typeof cytoscape.popper !== 'undefined') {
+            cy.nodes().forEach(node => {
+                // Get the node's data, with fallbacks for missing properties
+                const nodeLabel = node.data('label') || node.id() || 'Unnamed';
+                const nodeDesc = node.data('description') || 'No description available';
+                
+                const content = document.createElement('div');
+                content.innerHTML = `<div class="bg-white p-2 rounded shadow-lg border border-gray-200">
+                    <div class="font-bold">${nodeLabel}</div>
+                    <div class="text-sm">${nodeDesc}</div>
+                </div>`;
+                
+                // Create the popper reference
+                const popper = node.popper({
+                    content: content,
+                    popper: {
+                        placement: 'bottom',
+                        modifiers: [
+                            {
+                                name: 'offset',
+                                options: {
+                                    offset: [0, 8],
+                                },
+                            },
+                        ],
+                    }
+                });
+                
+                // Create the tippy instance using the popper element
+                const tip = tippy(popper.popper, {
+                    content: content,
+                    trigger: 'manual',
+                    arrow: true,
+                    placement: 'bottom',
+                    hideOnClick: true,
+                    interactive: true,
+                    appendTo: document.body
+                });
+                
+                node.on('mouseover', () => tip.show());
+                node.on('mouseout', () => tip.hide());
+                
+                // Clean up the popper when the node is removed
+                node.on('remove', () => {
+                    popper.destroy();
+                    tip.destroy();
+                });
+            });
+        }
+        
+        // Add legend to the graph
+        createLegend('hierarchy-container');
+        
+        // Center the graph
+        cy.fit();
+        cy.center();
+    });
+    
+    /**
+     * Create a legend for the graph
+     * 
+     * @param {string} container_id - ID of the container element
+     */
+    function createLegend(container_id) {
+        const container = document.getElementById(container_id);
+        
+        // Create legend container
+        const legendContainer = document.createElement('div');
+        legendContainer.id = 'cy-legend';
+        legendContainer.style.position = 'absolute';
+        legendContainer.style.top = '10px';
+        legendContainer.style.right = '10px';
+        legendContainer.style.backgroundColor = 'rgba(255, 255, 255, 0.9)';
+        legendContainer.style.padding = '8px';
+        legendContainer.style.borderRadius = '4px';
+        legendContainer.style.border = '1px solid #ccc';
+        legendContainer.style.fontSize = '11px';
+        legendContainer.style.zIndex = '10';
+        
+        // Add ARIA description
+        legendContainer.setAttribute('role', 'region');
+        legendContainer.setAttribute('aria-label', 'Graph legend');
+        
+        // Legend content
+        legendContainer.innerHTML = `
+          <div style="font-weight: bold; margin-bottom: 5px;">Legend</div>
+          <div style="display: flex; align-items: center; margin-bottom: 3px;">
+            <div style="width: 12px; height: 12px; background-color: #184678; border-radius: 3px; margin-right: 5px;"></div>
+            <div>Current Class</div>
+          </div>
+          <div style="display: flex; align-items: center; margin-bottom: 3px;">
+            <div style="width: 12px; height: 12px; background-color: #fff; border: 1px solid #184678; border-radius: 3px; margin-right: 5px;"></div>
+            <div>Parent Classes</div>
+          </div>
+          <div style="display: flex; align-items: center; margin-bottom: 3px;">
+            <div style="width: 12px; height: 12px; background-color: #fff; border: 1px solid #29A35A; border-radius: 3px; margin-right: 5px;"></div>
+            <div>Child Classes</div>
+          </div>
+          <div style="display: flex; align-items: center; margin-bottom: 3px;">
+            <div style="width: 12px; height: 12px; background-color: #fff; border: 1px solid #FFC107; border-radius: 3px; margin-right: 5px;"></div>
+            <div>See Also</div>
+          </div>
+        `;
+        
+        // Add legend to container
+        container.appendChild(legendContainer);
+    }
+</script>
+{% endblock %}

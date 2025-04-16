@@ -1,0 +1,65 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}FOLIO Top-Level Classes{% endblock %}
+
+{% block meta_description %}Browse the highest level categories in the FOLIO ontology hierarchy{% endblock %}
+{% block meta_keywords %}legal, ontology, standard, open, information, browse, taxonomy{% endblock %}
+
+{% block header_title %}FOLIO Top-Level Classes{% endblock %}
+{% block header_subtitle %}Browse the highest level categories in the FOLIO ontology hierarchy{% endblock %}
+
+{% block navigation_buttons %}
+<a href="/taxonomy/tree" class="btn btn-secondary">Switch to Tree View</a>
+{% endblock %}
+
+{% block content %}
+<p class="mb-6 text-gray-600">These classes are direct subclasses of owl:Thing and represent the highest level categories in the FOLIO ontology.</p>
+
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 auto-rows-fr">
+    {% for owl_class in root_classes %}
+    <div class="bg-white rounded-lg shadow p-8 flex flex-col h-full min-h-56">
+        <h2 class="text-xl font-semibold mb-2 text-[--color-primary]">
+            <a href="{{ owl_class.iri }}">{{ owl_class.label or "Unnamed Class" }}</a>
+        </h2>
+        <p class="text-gray-500 text-sm mb-2 truncate" title="{{ owl_class.iri }}">IRI: {{ owl_class.iri }}</p>
+        <div class="flex-grow mb-4">
+            <p class="text-gray-700 line-clamp-3" title="{{ owl_class.definition or 'No definition available' }}">{{ owl_class.definition or "No definition available" }}</p>
+        </div>
+        <div class="flex justify-between items-center mt-auto">
+            <span class="text-xs text-gray-500">{{ owl_class.parent_class_of|length if owl_class.parent_class_of else 0 }} subclasses</span>
+            <a href="{{ owl_class.iri }}/html" class="text-blue-500 text-sm font-medium">View details →</a>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}
+
+{% block extra_content %}
+<div class="bg-white border-b">
+    <div class="container mx-auto px-4 py-6">
+        <div class="flex flex-col md:flex-row gap-6">
+            <div class="flex-1">
+                <h2 class="text-xl font-bold text-[--color-primary] mb-2">About FOLIO</h2>
+                <p class="text-gray-700 mb-2">FOLIO is an open standard for legal concepts and knowledge, designed to make legal information more accessible and interoperable.</p>
+                <p class="text-gray-700">Explore the <a href="https://openlegalstandard.org/resources/folio-python-library/" class="text-blue-600 hover:underline">FOLIO Python Library</a> to integrate FOLIO ontology into your applications.</p>
+            </div>
+            <div class="flex-1">
+                <h2 class="text-xl font-bold text-[--color-primary] mb-2">Resources</h2>
+                <ul class="list-disc list-inside text-gray-700 space-y-1">
+                    <li><a href="https://openlegalstandard.org/" class="text-blue-600 hover:underline">Official FOLIO Website</a></li>
+                    <li><a href="https://openlegalstandard.org/education/" class="text-blue-600 hover:underline">FOLIO Education Resources</a></li>
+                    <li><a href="https://openlegalstandard.org/resources/folio-python-library/" class="text-blue-600 hover:underline">FOLIO Python Library Documentation</a></li>
+                    <li><a href="https://github.com/alea-institute/folio-api" class="text-blue-600 hover:underline">FOLIO API on GitHub</a></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Typeahead search initialization
+    {{ typeahead_js_source|safe }}
+</script>
+{% endblock %}

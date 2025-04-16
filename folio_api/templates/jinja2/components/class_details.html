@@ -1,0 +1,166 @@
+{% if class_data %}
+<section class="card animate-fade-in mb-6">
+    <h3 class="text-2xl font-semibold mb-2 text-[--color-primary]">{{ class_data.label }}</h3>
+    <p class="text-gray-500 text-sm mb-4 truncate" title="{{ class_data.iri }}">
+        IRI: {{ class_data.iri }} 
+        <button onclick="navigator.clipboard.writeText('{{ class_data.iri }}')" 
+                class="py-1 px-2 rounded text-sm" 
+                aria-label="Copy IRI to clipboard">📋</button>
+    </p>
+    <div class="prose max-w-none">
+        <p>{{ class_data.definition }}</p>
+    </div>
+</section>
+
+<div class="space-y-6">
+    <!-- Parents section -->
+    {% if class_data.parents %}
+    <section class="card animate-fade-in mb-6">
+        <h4 class="text-lg font-medium text-[--color-primary] mb-3">Parent Classes</h4>
+        <ul class="list-disc pl-5 space-y-1">
+            {% for parent in class_data.parents %}
+            <li>
+                <a href="#" class="text-blue-600 hover:underline" 
+                   onclick="selectNodeByIri('{{ parent.iri }}'); return false;">
+                   {{ parent.label }}
+                </a> - {{ parent.definition }}
+            </li>
+            {% endfor %}
+        </ul>
+    </section>
+    {% endif %}
+    
+    <!-- Children section -->
+    {% if class_data.children %}
+    <section class="card animate-fade-in mb-6">
+        <h4 class="text-lg font-medium text-[--color-primary] mb-3">
+            Child Classes <span class="text-gray-500">({{ class_data.children|length }})</span>
+        </h4>
+        <div class="max-h-60 overflow-y-auto">
+            <ul class="list-disc pl-5 space-y-1">
+                {% for child in class_data.children %}
+                <li>
+                    <a href="#" class="text-blue-600 hover:underline" 
+                       onclick="selectNodeByIri('{{ child.iri }}'); return false;">
+                       {{ child.label }}
+                    </a> - {{ child.definition }}
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+    </section>
+    {% endif %}
+    
+    <!-- Examples section -->
+    {% if class_data.examples %}
+    <section class="card animate-fade-in mb-6">
+        <h4 class="text-lg font-medium text-[--color-primary] mb-3">Examples</h4>
+        <ul class="list-disc pl-5 space-y-1">
+            {% for example in class_data.examples %}
+            <li>{{ example }}</li>
+            {% endfor %}
+        </ul>
+    </section>
+    {% endif %}
+
+    <!-- Notes section -->
+    {% if class_data.notes %}
+    <section class="card animate-fade-in mb-6">
+        <h4 class="text-lg font-medium text-[--color-primary] mb-3">Notes</h4>
+        <ul class="list-disc pl-5 space-y-1">
+            {% for note in class_data.notes %}
+            <li>{{ note }}</li>
+            {% endfor %}
+        </ul>
+    </section>
+    {% endif %}
+
+    <!-- See Also section -->
+    {% if class_data.see_also %}
+    <section class="card animate-fade-in mb-6">
+        <h4 class="text-lg font-medium text-[--color-primary] mb-3">See Also</h4>
+        <ul class="list-disc pl-5 space-y-1">
+            {% for see in class_data.see_also %}
+            <li>
+                <a href="{{ see }}" class="text-blue-600 hover:underline" target="_blank">
+                    {{ see }}
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+    </section>
+    {% endif %}
+    
+    <!-- Additional metadata section -->
+    <section class="card animate-fade-in mb-6">
+        <h4 class="text-lg font-medium text-[--color-primary] mb-3">Additional Information</h4>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {% if class_data.preferred_label %}
+            <div>
+                <p class="text-gray-500 text-sm font-medium">Preferred Label</p>
+                <p>{{ class_data.preferred_label }}</p>
+            </div>
+            {% endif %}
+            
+            {% if class_data.alternative_labels %}
+            <div>
+                <p class="text-gray-500 text-sm font-medium">Alternative Labels</p>
+                <p>{{ class_data.alternative_labels|join(', ') }}</p>
+            </div>
+            {% endif %}
+            
+            {% if class_data.identifier %}
+            <div>
+                <p class="text-gray-500 text-sm font-medium">Identifier</p>
+                <p>{{ class_data.identifier }}</p>
+            </div>
+            {% endif %}
+            
+            {% if class_data.description %}
+            <div>
+                <p class="text-gray-500 text-sm font-medium">Description</p>
+                <p>{{ class_data.description }}</p>
+            </div>
+            {% endif %}
+            
+            {% if class_data.comment %}
+            <div>
+                <p class="text-gray-500 text-sm font-medium">Comment</p>
+                <p>{{ class_data.comment }}</p>
+            </div>
+            {% endif %}
+            
+            <div>
+                <p class="text-gray-500 text-sm font-medium">Deprecated</p>
+                <p>{{ 'Yes' if class_data.deprecated else 'No' }}</p>
+            </div>
+        </div>
+    </section>
+    
+    <!-- Translations section -->
+    {% if class_data.translations and class_data.translations.items() | list | length > 0 %}
+    <section class="card animate-fade-in mb-6">
+        <h4 class="text-lg font-medium text-[--color-primary] mb-3">Translations</h4>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {% for language, translation in class_data.translations.items() %}
+            <div class="border-b pb-2">
+                <p class="text-gray-500 text-sm font-medium">{{ language }}</p>
+                <p class="mt-1">{{ translation }}</p>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+</div>
+{% else %}
+<div class="flex items-center justify-center h-full text-gray-500">
+    <div class="text-center">
+        <svg class="w-16 h-16 mx-auto text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+        </svg>
+        <h3 class="mt-2 text-xl font-medium">Select a class</h3>
+        <p class="mt-1">Choose a class from the tree to view its details</p>
+    </div>
+</div>
+{% endif %}

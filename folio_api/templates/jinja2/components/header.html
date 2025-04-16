@@ -1,0 +1,33 @@
+<header class="bg-[--color-primary] py-6 text-white">
+    <div class="container mx-auto px-4">
+        <div class="flex justify-between items-start">
+            <div>
+                <h1 class="text-3xl font-bold mb-2">{% block header_title %}FOLIO Ontology{% endblock %}</h1>
+                <p class="text-xl text-white opacity-80">{% block header_subtitle %}Exploring the Federated Open Legal Information Ontology{% endblock %}</p>
+            </div>
+            <div class="hidden md:block header-buttons">
+                <a href="https://openlegalstandard.org/" target="_blank" class="inline-block bg-white text-[--color-primary] font-semibold px-4 py-2 rounded hover:bg-opacity-90 transition-colors duration-200 mr-2">FOLIO Website</a>
+                <a href="https://openlegalstandard.org/education/" target="_blank" class="inline-block bg-transparent text-white border border-white font-semibold px-4 py-2 rounded hover:bg-white hover:bg-opacity-10 transition-colors duration-200">Learn More</a>
+            </div>
+        </div>
+        
+        <div class="mt-6 max-w-3xl">
+            <div class="relative">
+                <label for="search-input" class="sr-only">Search for FOLIO classes</label>
+                <input id="search-input" type="text" placeholder="Search for FOLIO classes..." class="w-full p-3 rounded-lg border border-white focus:outline-none focus:ring-2 focus:ring-white focus:ring-opacity-50 text-gray-800">
+                <div id="search-results" class="absolute top-14 left-0 w-full bg-white dark:bg-[--color-bg-page] shadow-lg rounded-lg overflow-hidden mt-2 border border-[--color-secondary] border-opacity-20"></div>
+                
+                <!-- Progressive enhancement: Alternative search for non-JS browsers -->
+                <noscript>
+                    <div class="mt-4">
+                        <form action="/search" method="get" class="flex">
+                            <input type="text" name="q" placeholder="Search (basic mode)" class="w-full p-3 rounded-l-lg border border-white focus:outline-none text-gray-800">
+                            <button type="submit" class="bg-white text-[--color-primary] font-semibold px-4 py-2 rounded-r-lg hover:bg-gray-100">Search</button>
+                        </form>
+                        <p class="text-xs text-white opacity-80 mt-1">JavaScript is disabled. Using basic search mode.</p>
+                    </div>
+                </noscript>
+            </div>
+        </div>
+    </div>
+</header>

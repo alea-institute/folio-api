@@ -1,0 +1,1024 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}FOLIO Taxonomy Explorer{% endblock %}
+
+{% block meta_description %}Interactive explorer for the FOLIO taxonomic hierarchy{% endblock %}
+{% block meta_keywords %}legal, ontology, standard, open, information, taxonomy, tree, explorer{% endblock %}
+
+{% block header_title %}FOLIO Taxonomy Explorer{% endblock %}
+{% block header_subtitle %}Navigate the FOLIO ontology hierarchy{% endblock %}
+
+{% block extra_head %}
+<style>
+    /* Tree search highlight styles */
+    .tree-node-highlighted > .node-content {
+        background-color: rgba(59, 130, 246, 0.2);
+    }
+    
+    .tree-node-highlighted .node-label span.bg-yellow-200 {
+        background-color: #FEFCBF;
+        padding: 0 2px;
+        border-radius: 2px;
+        font-weight: bold;
+    }
+</style>
+{% endblock %}
+
+{% block navigation_buttons %}
+<a href="/taxonomy/browse" class="btn btn-secondary">Switch to Browse View</a>
+{% endblock %}
+
+{% block content %}
+<div class="flex flex-col md:flex-row tree-explorer-container bg-white rounded-lg shadow-md overflow-hidden" style="min-height: calc(100vh - 200px);">
+    <!-- Tree Panel - Fixed, scrollable left side -->
+    <div id="tree-container" class="w-full md:w-1/3 p-4 md:h-[calc(100vh-200px)] md:overflow-hidden flex flex-col">
+        <h2 class="text-xl font-semibold mb-4 text-[--color-primary]">Taxonomy Tree</h2>
+        <div class="mb-4 sticky top-0 z-10 bg-white">
+            <div class="relative search-container">
+                <div class="absolute inset-y-0 start-0 flex items-center ps-3 pointer-events-none">
+                    <svg class="w-4 h-4 text-gray-500" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 20">
+                        <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m19 19-4-4m0-7A7 7 0 1 1 1 8a7 7 0 0 1 14 0Z"/>
+                    </svg>
+                </div>
+                <input type="search" id="taxonomy-search-input" class="block w-full p-2 ps-10 pe-14 text-sm border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="Search classes...">
+                <button type="button" id="taxonomy-search-button" class="absolute inset-y-0 end-0 flex items-center pe-3 text-blue-600 hover:text-blue-800">
+                    <svg class="w-4 h-4" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 20">
+                        <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m19 19-4-4m0-7A7 7 0 1 1 1 8a7 7 0 0 1 14 0Z"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+        <div class="tree-controls mb-2 flex flex-col space-y-1">
+            <div class="flex space-x-2">
+                <button id="expand-all-tree" class="text-xs bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded" onclick="expandAllNodes()">Expand All</button>
+                <button id="collapse-all-tree" class="text-xs bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded" onclick="collapseAllNodes()">Collapse All</button>
+            </div>
+            <div class="text-xs text-gray-500 italic">Tip: Double-click on a node to expand/collapse it</div>
+        </div>
+        <div id="taxonomy-tree" class="overflow-y-auto flex-grow border border-gray-100 rounded p-2" style="max-height: calc(100vh - 280px);"></div>
+    </div>
+    
+    <!-- Detail Panel - Scrollable right side -->
+    <div id="detail-container" class="w-full md:w-2/3 p-6 bg-gray-50 md:overflow-y-auto md:h-[calc(100vh-200px)]">
+        <div id="class-details">
+            <div class="flex items-center justify-center h-full text-gray-500">
+                <div class="text-center">
+                    <svg class="w-16 h-16 mx-auto text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                    </svg>
+                    <h3 class="mt-2 text-xl font-medium">Select a class</h3>
+                    <p class="mt-1">Choose a class from the tree to view its details</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Re-initialize the original typeahead search in the header
+    {{ typeahead_js_source|safe }}
+</script>
+<script src="/static/js/taxonomy_tree.js"></script>
+<script>
+    // Initialize tree first without TypeaheadJS
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize the tree immediately
+        if (typeof initializeTree === 'function') {
+            initializeTree();
+        }
+        
+        // Set up tree controls
+        if (typeof setupTreeControls === 'function') {
+            setupTreeControls();
+        }
+        
+        // Set up history navigation
+        if (typeof setupHistoryNavigation === 'function') {
+            setupHistoryNavigation();
+        }
+        
+        // Create our own search handler for taxonomy tree (no typeahead)
+        const taxonomySearchInput = document.getElementById('taxonomy-search-input');
+        const taxonomySearchButton = document.getElementById('taxonomy-search-button');
+        
+        if (taxonomySearchInput && taxonomySearchButton) {
+            
+            // Function to perform search
+            function performTaxonomySearch() {
+                const query = taxonomySearchInput.value;
+                
+                if (query && query.length >= 2) {
+                    // Clear any previous search results first
+                    resetTreeSearch();
+                    
+                    // Perform the search
+                    searchTreeDirect(query);
+                    
+                    // Try to select the first match
+                    setTimeout(function() {
+                        const highlighted = document.querySelectorAll('.tree-node-highlighted');
+                        if (highlighted.length > 0) {
+                            const nodeId = highlighted[0].dataset.id;
+                            loadClassDetails(nodeId);
+                        }
+                    }, 100);
+                } else if (query.length > 0 && query.length < 2) {
+                    alert('Please enter at least 2 characters for search');
+                } else {
+                    resetTreeSearch();
+                }
+            }
+            
+            // Handle search button click
+            taxonomySearchButton.addEventListener('click', function() {
+                performTaxonomySearch();
+            });
+            
+            // Add keyboard navigation (Enter key)
+            taxonomySearchInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    performTaxonomySearch();
+                }
+            });
+            
+            // Add clear functionality when ESC is pressed
+            taxonomySearchInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    taxonomySearchInput.value = '';
+                    resetTreeSearch();
+                }
+            });
+        } else {
+            console.error('Taxonomy search elements not found');
+        }
+    });
+    
+    // Use the server-side filtered tree search endpoint
+    function searchTreeDirect(query) {
+        if (!query || query.length < 2) return;
+        
+        resetTreeSearch();
+        
+        // Show loading indicator in tree container
+        const treeContainer = document.getElementById('taxonomy-tree');
+        if (treeContainer) {
+            treeContainer.innerHTML = `
+                <div class="p-4 text-center">
+                    <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    <p class="mt-2 text-gray-600">Searching...</p>
+                </div>
+            `;
+        }
+        
+        // Use our server-side filtered tree search endpoint
+        fetch(`/taxonomy/tree/search?query=${encodeURIComponent(query)}`)
+            .then(response => response.json())
+            .then(data => {
+                if (!data || !data.matches || data.matches.length === 0) {
+                    // Reset tree to normal view when no matches
+                    treeContainer.innerHTML = '<ul class="taxonomy-root-list"></ul>';
+                    initializeTree();
+                    return;
+                }
+                
+                // Save search results for later reference
+                window.lastSearchResults = data.matches;
+                
+                // Step 1: Add filter mode controls to the UI
+                addFilterModeControls(data.matches.length, query);
+                
+                // Step 2: Render the filtered tree from the server response
+                renderFilteredTree(data.tree, query);
+                
+                // Step 3: Once the tree is rendered, find and highlight all matches
+                highlightAndSelectMatches(data.matches, query);
+            })
+            .catch(error => {
+                // Reset tree to normal view
+                treeContainer.innerHTML = '<ul class="taxonomy-root-list"></ul>';
+                initializeTree();
+                
+                // Fallback to direct search in the tree if the API request fails
+                setTimeout(() => {
+                    searchVisibleTreeNodes(query);
+                }, 1000);
+            });
+    }
+    
+    // Render a completely filtered tree from server-side data
+    function renderFilteredTree(treeData, query) {
+        // Get the tree container
+        const treeContainer = document.getElementById('taxonomy-tree');
+        if (!treeContainer) return;
+        
+        // Clear existing tree
+        treeContainer.innerHTML = '<ul class="taxonomy-root-list"></ul>';
+        const rootList = treeContainer.querySelector('.taxonomy-root-list');
+        
+        // Render root nodes first
+        treeData.root_nodes.forEach(nodeId => {
+            renderFilteredNode(nodeId, treeData, rootList, true);
+        });
+        
+        // Apply tree styles (these should already be in place, but ensure they are)
+        if (typeof applyTreeStyles === 'function') {
+            applyTreeStyles();
+        }
+        
+        // Set up node click handlers
+        setupNodeClickHandlers();
+    }
+    
+    // Render a single node in the filtered tree
+    function renderFilteredNode(nodeId, treeData, container, isExpanded = false) {
+        const node = treeData.nodes[nodeId];
+        if (!node) return;
+        
+        const hasChildren = node.children && node.children.length > 0;
+        const nodeClass = hasChildren ? 
+            (isExpanded ? 'has-children expanded' : 'has-children collapsed') : '';
+        const isMatch = node.is_match ? 'tree-node-match' : '';
+        const expandIcon = hasChildren ? 
+            `<span class="expand-icon mr-1">${isExpanded ? '▾' : '▸'}</span>` : 
+            '<span class="ml-4"></span>';
+        
+        const li = document.createElement('li');
+        li.className = `tree-node ${nodeClass} ${isMatch}`;
+        li.dataset.id = node.id;
+        
+        li.innerHTML = `
+            <div class="node-content">
+                ${expandIcon}
+                <span class="node-label">${node.label}</span>
+            </div>
+            ${hasChildren ? '<ul class="children-container" style="display:' + (isExpanded ? 'block' : 'none') + ';"></ul>' : ''}
+        `;
+        
+        container.appendChild(li);
+        
+        // Render children if this node is expanded
+        if (hasChildren && isExpanded) {
+            const childrenContainer = li.querySelector('.children-container');
+            node.children.forEach(childId => {
+                // Auto-expand child nodes that are matches or have match descendants
+                const childNode = treeData.nodes[childId];
+                const shouldExpandChild = childNode && 
+                    (childNode.is_match || hasMatchDescendant(childId, treeData));
+                    
+                renderFilteredNode(childId, treeData, childrenContainer, shouldExpandChild);
+            });
+        }
+    }
+    
+    // Check if a node has any match descendants
+    function hasMatchDescendant(nodeId, treeData) {
+        const node = treeData.nodes[nodeId];
+        if (!node) return false;
+        
+        if (node.is_match) return true;
+        
+        if (node.children && node.children.length > 0) {
+            for (const childId of node.children) {
+                if (hasMatchDescendant(childId, treeData)) {
+                    return true;
+                }
+            }
+        }
+        
+        return false;
+    }
+    
+    // Highlight and select matches in the filtered tree
+    function highlightAndSelectMatches(matches, query) {
+        // Keep track of found matches for verification
+        const foundMatches = [];
+        
+        // Find all nodes marked as matches
+        document.querySelectorAll('.tree-node-match').forEach(node => {
+            // Highlight node
+            node.classList.add('tree-node-highlighted');
+            
+            // Highlight text
+            const label = node.querySelector('.node-label');
+            if (label) {
+                label.innerHTML = highlightText(label.textContent, query);
+            }
+            
+            foundMatches.push(node);
+        });
+        
+        console.log('Highlighted', foundMatches.length, 'matches in filtered tree');
+        
+        // Select the first match
+        if (foundMatches.length > 0) {
+            const firstMatch = foundMatches[0];
+            
+            // Load details
+            const nodeId = firstMatch.dataset.id;
+            loadClassDetails(nodeId);
+            
+            // Add selected class
+            firstMatch.classList.add('selected');
+            
+            // Scroll to it
+            firstMatch.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }
+    
+    // Add UI controls for filter mode
+    function addFilterModeControls(resultCount, query) {
+        // Remove any existing controls first
+        const existingControls = document.getElementById('filter-mode-controls');
+        if (existingControls) existingControls.remove();
+        
+        // Create new controls
+        const controls = document.createElement('div');
+        controls.id = 'filter-mode-controls';
+        controls.className = 'filter-mode-controls';
+        controls.innerHTML = `
+            <div class="filter-info">
+                <span id="filter-count" class="filter-count">${resultCount} matches for "${query}"</span>
+                <button id="clear-filter" class="clear-filter-btn">Clear Filter</button>
+            </div>
+        `;
+        
+        // Add to tree container at the top
+        const treeContainer = document.querySelector('#tree-container');
+        treeContainer.insertBefore(controls, treeContainer.firstChild);
+        
+        // Add clear filter button handler
+        document.getElementById('clear-filter').addEventListener('click', clearFilterMode);
+        
+        // Add some CSS styles for the filter controls
+        addFilterModeStyles();
+    }
+    
+    // Update the filter count display
+    function updateFilterCount(visibleCount, totalCount, query) {
+        const countElement = document.getElementById('filter-count');
+        if (countElement) {
+            countElement.textContent = `${visibleCount} visible matches of ${totalCount} total for "${query}"`;
+        }
+    }
+    
+    // Clear filter mode and restore normal tree view - simplest possible version
+    function clearFilterMode() {
+        // Remove filter controls
+        const controls = document.getElementById('filter-mode-controls');
+        if (controls) controls.remove();
+        
+        // Get the tree container
+        const treeContainer = document.getElementById('taxonomy-tree');
+        if (!treeContainer) return;
+        
+        // Show loading spinner
+        treeContainer.innerHTML = `
+            <div class="p-4 text-center">
+                <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                <p class="mt-2 text-gray-600">Restoring tree...</p>
+            </div>
+        `;
+        
+        // Create empty tree with just root container
+        treeContainer.innerHTML = '<ul class="taxonomy-root-list"></ul>';
+        const rootList = document.querySelector('.taxonomy-root-list');
+        
+        // These could be extracted to a configuration object or loaded from a server endpoint
+        // but for now we keep them here for performance (avoiding an extra API call)
+        const rootCategories = [
+            { id: "R8CdMpOM0RmyrgCCvbpiLS0", text: "Actor Player", children: true },
+            { id: "RSYBzf149Mi5KE0YtmpUmr", text: "Area of Law", children: true },
+            { id: "RCIwc6WJi6IT7xePURxsi4T", text: "Asset Type", children: true },
+            { id: "R8qItBwG2pRMFhUq1HQEMnb", text: "Communication Modality", children: true },
+            { id: "R767niCLQVC5zIcO5WDQMSl", text: "Currency", children: true },
+            { id: "R79aItNTJQwHgR002wuX3iC", text: "Data Format", children: true },
+            { id: "RDt4vQCYDfY0R9fZ5FNnTbj", text: "Document Artifact", children: true },
+            { id: "R9kmGZf5FSmFdouXWQ1Nndm", text: "Engagement Terms", children: true },
+            { id: "R73hoH1RXYjBTYiGfolpsAF", text: "Event", children: true },
+            { id: "RBjHwNNG2ASVmasLFU42otk", text: "Forums Venues", children: true },
+            { id: "RBQGborh1CfXanGZipDL0Qo", text: "Governmental Body", children: true },
+            { id: "RDIwFaFcH4KY0gwEY0QlMTp", text: "Industry", children: true },
+            { id: "RDOvAHsvY8TKJ1O1orXPM9o", text: "Language", children: true },
+            { id: "RC1CZydjfH8oiM4W3rCkma3", text: "Legal Authorities", children: true },
+            { id: "R7L5eLIzH0CpOUE74uJvSjL", text: "Legal Entity", children: true },
+            { id: "R9aSzp9cEiBCzObnP92jYFX", text: "Location", children: true },
+            { id: "R7ReDY2v13rer1U8AyOj55L", text: "Matter Narrative", children: true }
+        ];
+        
+        if (!rootList) {
+            // If the root list wasn't created properly, reconstruct the tree container
+            treeContainer.innerHTML = '<ul class="taxonomy-root-list"></ul>';
+            const newRootList = treeContainer.querySelector('.taxonomy-root-list');
+            
+            if (!newRootList) {
+                // Still a problem, fallback to initializing the tree
+                initializeTree();
+                return;
+            }
+            
+            // Use the new root list
+            return clearFilterMode(); // Restart with fresh DOM
+        }
+        
+        try {
+            // Render each category manually
+            rootCategories.forEach(node => {
+                const hasChildren = node.children === true;
+                const nodeClass = hasChildren ? 'has-children collapsed' : '';
+                const expandIcon = hasChildren ? 
+                    '<span class="expand-icon mr-1">▸</span>' : 
+                    '<span class="ml-4"></span>';
+                
+                const li = document.createElement('li');
+                li.className = `tree-node ${nodeClass}`;
+                li.dataset.id = node.id;
+                
+                li.innerHTML = `
+                    <div class="node-content">
+                        ${expandIcon}
+                        <span class="node-label">${node.text}</span>
+                    </div>
+                    ${hasChildren ? '<ul class="children-container" style="display:none;"></ul>' : ''}
+                `;
+                
+                rootList.appendChild(li);
+            });
+            
+            // Apply tree styles
+            if (typeof applyTreeStyles === 'function') {
+                applyTreeStyles();
+            }
+            
+            // Set up click handlers for the tree nodes
+            setupNodeClickHandlers();
+            
+            // Clear any selected elements
+            const previouslySelected = document.querySelector('.tree-node.selected');
+            if (previouslySelected) {
+                previouslySelected.classList.remove('selected');
+            }
+            
+            // Reset details panel to default message
+            const detailsContainer = document.getElementById('class-details');
+            if (detailsContainer) {
+                detailsContainer.innerHTML = `
+                    <div class="flex items-center justify-center h-full text-gray-500">
+                        <div class="text-center">
+                            <svg class="w-16 h-16 mx-auto text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                            </svg>
+                            <h3 class="mt-2 text-xl font-medium">Select a class</h3>
+                            <p class="mt-1">Choose a class from the tree to view its details</p>
+                        </div>
+                    </div>
+                `;
+            }
+        } catch (error) {
+            // If anything goes wrong with manual rendering, fall back to initializing the tree
+            initializeTree();
+        }
+    }
+    
+    // Add CSS styles for filter mode
+    function addFilterModeStyles() {
+        // Check if styles already exist
+        if (document.getElementById('filter-mode-styles')) return;
+        
+        // Create style element
+        const style = document.createElement('style');
+        style.id = 'filter-mode-styles';
+        style.textContent = `
+            /* Filter mode controls */
+            .filter-mode-controls {
+                background: rgba(59, 130, 246, 0.1);
+                border-radius: 4px;
+                padding: 8px 12px;
+                margin-bottom: 12px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+            
+            .filter-count {
+                font-weight: 500;
+            }
+            
+            .clear-filter-btn {
+                background: #fff;
+                border: 1px solid rgba(59, 130, 246, 0.5);
+                padding: 3px 8px;
+                border-radius: 4px;
+                font-size: 12px;
+                cursor: pointer;
+            }
+            
+            .clear-filter-btn:hover {
+                background: rgba(59, 130, 246, 0.1);
+            }
+            
+            /* Enhanced highlighting for filter mode */
+            .tree-node-highlighted > .node-content,
+            .tree-node-match > .node-content {
+                background-color: rgba(59, 130, 246, 0.2);
+                border-left: 3px solid rgba(59, 130, 246, 0.8);
+            }
+            
+            /* Make match nodes stand out more in the filtered tree */
+            .tree-node-match > .node-content {
+                font-weight: 500;
+            }
+        `;
+        
+        // Add to document head
+        document.head.appendChild(style);
+    }
+    
+    // Search visible tree nodes but with filter mode behavior
+    function searchVisibleTreeNodesInFilterMode(query) {
+        console.log('Searching visible tree nodes in filter mode for:', query);
+        const matches = [];
+        const parentsToShow = new Set();
+        
+        // Hide all nodes first
+        document.querySelectorAll('.tree-node').forEach(node => {
+            node.classList.add('search-hidden');
+            node.style.display = 'none';
+        });
+        
+        // Find nodes containing the query text
+        document.querySelectorAll('.tree-node').forEach(node => {
+            const label = node.querySelector('.node-label');
+            if (label && label.textContent.toLowerCase().includes(query.toLowerCase())) {
+                // Highlight this node
+                node.classList.add('tree-node-highlighted');
+                label.innerHTML = highlightText(label.textContent, query);
+                matches.push(node);
+                
+                // Make this node visible
+                node.classList.remove('search-hidden');
+                node.style.display = '';
+                
+                // Collect all parents to show
+                let parent = node.parentElement.closest('.tree-node');
+                while (parent) {
+                    parentsToShow.add(parent);
+                    parent = parent.parentElement.closest('.tree-node');
+                }
+            }
+        });
+        
+        // Show all parent nodes
+        parentsToShow.forEach(parent => {
+            parent.classList.remove('search-hidden');
+            parent.style.display = '';
+            
+            // Ensure expanded
+            if (parent.classList.contains('collapsed')) {
+                const expandIcon = parent.querySelector('.expand-icon');
+                if (expandIcon) expandIcon.click();
+            }
+        });
+        
+        // If we have matches, select the first one
+        if (matches.length > 0) {
+            const nodeId = matches[0].dataset.id;
+            loadClassDetails(nodeId);
+            matches[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        
+        return matches;
+    }
+    
+    // Search directly in the currently visible tree nodes by text content (no filter mode)
+    function searchVisibleTreeNodes(query) {
+        console.log('Searching visible tree nodes for:', query);
+        const matches = [];
+        
+        // Find nodes containing the query text
+        const treeNodes = document.querySelectorAll('.tree-node');
+        
+        treeNodes.forEach(node => {
+            const label = node.querySelector('.node-label');
+            if (label && label.textContent.toLowerCase().includes(query.toLowerCase())) {
+                // Highlight this node
+                node.classList.add('tree-node-highlighted');
+                label.innerHTML = highlightText(label.textContent, query);
+                matches.push(node);
+                
+                // Show its parents
+                let parent = node.parentElement.closest('.tree-node');
+                while (parent) {
+                    // Expand parent if collapsed
+                    if (parent.classList.contains('collapsed')) {
+                        // Find and click the expand icon
+                        const expandIcon = parent.querySelector('.expand-icon');
+                        if (expandIcon) expandIcon.click();
+                    }
+                    parent = parent.parentElement.closest('.tree-node');
+                }
+                
+                // If this is the first match, also load its details
+                if (matches.length === 1) {
+                    const nodeId = node.dataset.id;
+                    loadClassDetails(nodeId);
+                    node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }
+        });
+        
+        return matches;
+    }
+    
+    // Highlight a node and expand all its parent nodes
+    function highlightAndExpandToNode(nodeElement, query) {
+        // Highlight the node
+        nodeElement.classList.add('tree-node-highlighted');
+        const label = nodeElement.querySelector('.node-label');
+        if (label) {
+            label.innerHTML = highlightText(label.textContent, query);
+        }
+        
+        // Expand all parent nodes
+        let parent = nodeElement.parentElement.closest('.tree-node');
+        while (parent) {
+            // Expand parent if collapsed
+            if (parent.classList.contains('collapsed')) {
+                const expandIcon = parent.querySelector('.expand-icon');
+                if (expandIcon) expandIcon.click();
+            }
+            parent = parent.parentElement.closest('.tree-node');
+        }
+        
+        // Scroll the node into view
+        nodeElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    
+    // Find and expand the path to a specific node using our new API endpoint
+    // Returns a Promise that resolves when the path finding and expansion is complete
+    function findAndExpandPathToNode(nodeIri, query) {
+        console.log('Finding path to node:', nodeIri);
+        const extractedId = extractIdFromIri(nodeIri);
+        
+        // Return a Promise that resolves when the path finding and expansion is complete
+        return new Promise((resolve, reject) => {
+            // First, make sure we have a properly initialized tree with root nodes
+            ensureTreeInitialized()
+                .then(() => {
+                    // Use the full IRI instead of just the ID to ensure we match correctly
+                    // This provides maximum flexibility and works with both formats
+                    let pathUrl = `/taxonomy/tree/path/${encodeURIComponent(nodeIri)}`;
+                    
+                    // Call the new path API endpoint
+                    return fetch(pathUrl)
+                        .then(response => {
+                            if (!response.ok) {
+                                console.log('Path lookup failed with full IRI, trying with extracted ID');
+                                // Try with just the ID if the full IRI fails
+                                return fetch(`/taxonomy/tree/path/${encodeURIComponent(extractedId)}`);
+                            }
+                            return response;
+                        })
+                        .then(response => {
+                            if (!response.ok) {
+                                throw new Error('Both path lookup methods failed');
+                            }
+                            return response.json();
+                        });
+                })
+                .then(data => {
+                    if (!data || !data.path || data.path.length === 0) {
+                        console.log('No path found for node:', nodeIri);
+                        resolve(false); // Resolve with false to indicate no path was found
+                        return;
+                    }
+                    
+                    console.log('Found path with', data.path.length, 'nodes:', 
+                        data.path.map(n => n.label).join(' > '));
+                    
+                    // Try to directly load and select the node if it exists in search results
+                    const searchMatches = searchVisibleTreeNodes(query);
+                    if (searchMatches.length > 0) {
+                        console.log('Found direct matches in tree, skipping path expansion');
+                        resolve(true); // Resolve with true to indicate success
+                        return;
+                    }
+                    
+                    // Otherwise, start expanding from the root
+                    // Use Promise to track when expansion is complete
+                    expandPathSequentiallyWithPromise(data.path, 0, query)
+                        .then(success => {
+                            resolve(success);
+                        })
+                        .catch(error => {
+                            console.error('Error in path expansion:', error);
+                            resolve(false); // Still resolve the parent promise, but with failure status
+                        });
+                })
+                .catch(error => {
+                    console.error('Error finding path:', error);
+                    
+                    // If both attempts failed, try a direct search in the visible tree as fallback
+                    console.log('Falling back to direct tree search for:', query);
+                    const searchMatches = searchVisibleTreeNodes(query);
+                    
+                    // If still no matches, try expanding some common parent categories
+                    if (searchMatches.length === 0 && window.lastSearchResults && window.lastSearchResults.length > 0) {
+                        console.log('No direct matches found. Trying to expand common categories');
+                        expandCommonCategories();
+                    }
+                    
+                    resolve(searchMatches.length > 0); // Resolve with success status based on if matches were found
+                });
+        });
+    }
+    
+    // Promise-based version of expandPathSequentially that returns a Promise
+    function expandPathSequentiallyWithPromise(path, currentIndex, query, attempts = 0) {
+        return new Promise((resolve, reject) => {
+            // Limit the number of attempts to avoid infinite loops
+            const MAX_ATTEMPTS = 5;
+            
+            if (currentIndex >= path.length) {
+                console.log('Finished expanding path');
+                resolve(true); // Successfully completed expansion
+                return;
+            }
+            
+            // If we've tried too many times, give up on this node and move to the next one
+            if (attempts >= MAX_ATTEMPTS) {
+                console.log(`Too many attempts (${attempts}) to find node at index ${currentIndex}, skipping to next node`);
+                expandPathSequentiallyWithPromise(path, currentIndex + 1, query, 0)
+                    .then(resolve)
+                    .catch(reject);
+                return;
+            }
+            
+            const nodeInfo = path[currentIndex];
+            const nodeId = nodeInfo.iri;
+            const nodeIdPart = extractIdFromIri(nodeId);
+            
+            // Try to find the node in the current tree
+            const nodeElement = document.querySelector(`.tree-node[data-id="${nodeId}"]`) || 
+                                document.querySelector(`.tree-node[data-id="${nodeIdPart}"]`);
+            
+            if (nodeElement) {
+                console.log('Found node in path:', nodeInfo.label);
+                
+                // If this is not the last node in the path, expand it
+                if (currentIndex < path.length - 1) {
+                    // Only expand if it's collapsed
+                    if (nodeElement.classList.contains('collapsed')) {
+                        const expandIcon = nodeElement.querySelector('.expand-icon');
+                        if (expandIcon) {
+                            console.log('Expanding node:', nodeInfo.label);
+                            expandIcon.click();
+                            
+                            // Wait a bit for the children to load, then continue with next node
+                            setTimeout(() => {
+                                expandPathSequentiallyWithPromise(path, currentIndex + 1, query, 0)
+                                    .then(resolve)
+                                    .catch(reject);
+                            }, 300);
+                        } else {
+                            // No expand icon, move to next node
+                            expandPathSequentiallyWithPromise(path, currentIndex + 1, query, 0)
+                                .then(resolve)
+                                .catch(reject);
+                        }
+                    } else {
+                        // Already expanded, continue with next node
+                        expandPathSequentiallyWithPromise(path, currentIndex + 1, query, 0)
+                            .then(resolve)
+                            .catch(reject);
+                    }
+                } else {
+                    // This is the target node (last in path), highlight it
+                    console.log('Reached target node:', nodeInfo.label);
+                    highlightAndExpandToNode(nodeElement, query);
+                    
+                    // Load the class details for this node
+                    loadClassDetails(nodeId);
+                    
+                    // Resolve the promise as we've successfully reached the target
+                    resolve(true);
+                }
+            } else {
+                console.log('Node not found in visible tree:', nodeInfo.label);
+                
+                // If it's the root node, we might need to retry a few times
+                if (currentIndex === 0 && attempts < MAX_ATTEMPTS) {
+                    console.log(`Root node "${nodeInfo.label}" not found, retry attempt ${attempts + 1}/${MAX_ATTEMPTS}`);
+                    
+                    // If this is the first attempt, try initializing the tree
+                    if (attempts === 0) {
+                        console.log('Attempting to initialize tree first');
+                        initializeTree();
+                    }
+                    
+                    // Wait a bit and try again
+                    setTimeout(() => {
+                        expandPathSequentiallyWithPromise(path, currentIndex, query, attempts + 1)
+                            .then(resolve)
+                            .catch(reject);
+                    }, 500);
+                } else {
+                    // Either not a root node or we've tried too many times
+                    console.log(`Giving up on finding node "${nodeInfo.label}", moving to next node`);
+                    expandPathSequentiallyWithPromise(path, currentIndex + 1, query, 0)
+                        .then(resolve)
+                        .catch(reject);
+                }
+            }
+        });
+    }
+    
+    // Ensure tree is properly initialized with root nodes loaded
+    function ensureTreeInitialized() {
+        return new Promise((resolve, reject) => {
+            const rootList = document.querySelector('.taxonomy-root-list');
+            
+            // If we already have root nodes, resolve immediately
+            if (rootList && rootList.children.length > 0) {
+                console.log('Tree already initialized with', rootList.children.length, 'root nodes');
+                resolve();
+                return;
+            }
+            
+            // Otherwise try initializing the tree
+            console.log('Tree not initialized or empty, initializing now');
+            initializeTree();
+            
+            // Check if initialization succeeded after a short delay
+            setTimeout(() => {
+                const rootListAfter = document.querySelector('.taxonomy-root-list');
+                if (rootListAfter && rootListAfter.children.length > 0) {
+                    console.log('Tree initialization successful');
+                    resolve();
+                } else {
+                    console.warn('Tree initialization failed or still in progress');
+                    // Resolve anyway to continue with best effort
+                    resolve();
+                }
+            }, 1000);
+        });
+    }
+    
+    // Try to expand common top-level categories that might contain our search results
+    function expandCommonCategories() {
+        // Common top-level categories that often contain search results
+        const commonCategories = [
+            'Asset', 'Legal Entity', 'Industry', 'Legal Authorities', 
+            'Area of Law', 'Actor', 'Document'
+        ];
+        
+        // Find and expand these categories if they exist
+        let expanded = 0;
+        commonCategories.forEach(category => {
+            document.querySelectorAll('.node-label').forEach(label => {
+                if (label.textContent.includes(category)) {
+                    const node = label.closest('.tree-node');
+                    if (node && node.classList.contains('collapsed')) {
+                        console.log('Expanding common category:', label.textContent);
+                        const expandIcon = node.querySelector('.expand-icon');
+                        if (expandIcon) {
+                            expandIcon.click();
+                            expanded++;
+                        }
+                    }
+                }
+            });
+        });
+        
+        console.log('Expanded', expanded, 'common categories');
+    }
+    
+    // Expand nodes in the path one by one
+    function expandPathSequentially(path, currentIndex, query, attempts = 0) {
+        // Limit the number of attempts to avoid infinite loops
+        const MAX_ATTEMPTS = 5;
+        
+        if (currentIndex >= path.length) {
+            console.log('Finished expanding path');
+            return;
+        }
+        
+        // If we've tried too many times, give up on this node and move to the next one
+        if (attempts >= MAX_ATTEMPTS) {
+            console.log(`Too many attempts (${attempts}) to find node at index ${currentIndex}, skipping to next node`);
+            return expandPathSequentially(path, currentIndex + 1, query, 0);
+        }
+        
+        const nodeInfo = path[currentIndex];
+        const nodeId = nodeInfo.iri;
+        const nodeIdPart = extractIdFromIri(nodeId);
+        
+        // Try to find the node in the current tree
+        const nodeElement = document.querySelector(`.tree-node[data-id="${nodeId}"]`) || 
+                            document.querySelector(`.tree-node[data-id="${nodeIdPart}"]`);
+        
+        if (nodeElement) {
+            console.log('Found node in path:', nodeInfo.label);
+            
+            // If this is not the last node in the path, expand it
+            if (currentIndex < path.length - 1) {
+                // Only expand if it's collapsed
+                if (nodeElement.classList.contains('collapsed')) {
+                    const expandIcon = nodeElement.querySelector('.expand-icon');
+                    if (expandIcon) {
+                        console.log('Expanding node:', nodeInfo.label);
+                        expandIcon.click();
+                        
+                        // Wait a bit for the children to load
+                        setTimeout(() => {
+                            expandPathSequentially(path, currentIndex + 1, query, 0);
+                        }, 300);
+                    } else {
+                        // No expand icon, move to next node
+                        expandPathSequentially(path, currentIndex + 1, query, 0);
+                    }
+                } else {
+                    // Already expanded, continue with next node
+                    expandPathSequentially(path, currentIndex + 1, query, 0);
+                }
+            } else {
+                // This is the target node (last in path), highlight it
+                console.log('Reached target node:', nodeInfo.label);
+                highlightAndExpandToNode(nodeElement, query);
+                
+                // Load the class details for this node
+                loadClassDetails(nodeId);
+            }
+        } else {
+            console.log('Node not found in visible tree:', nodeInfo.label);
+            
+            // If it's the root node, we might need to retry a few times
+            if (currentIndex === 0 && attempts < MAX_ATTEMPTS) {
+                console.log(`Root node "${nodeInfo.label}" not found, retry attempt ${attempts + 1}/${MAX_ATTEMPTS}`);
+                
+                // If this is the first attempt, try initializing the tree
+                if (attempts === 0) {
+                    console.log('Attempting to initialize tree first');
+                    initializeTree();
+                }
+                
+                // Wait a bit and try again
+                setTimeout(() => {
+                    expandPathSequentially(path, currentIndex, query, attempts + 1);
+                }, 500);
+            } else {
+                // Either not a root node or we've tried too many times
+                console.log(`Giving up on finding node "${nodeInfo.label}", moving to next node`);
+                expandPathSequentially(path, currentIndex + 1, query, 0);
+            }
+        }
+    }
+    
+    // Helper function to extract ID from IRI
+    function extractIdFromIri(iri) {
+        if (!iri || !iri.startsWith('http')) return iri;
+        
+        // Split by "/" and get the last non-empty part
+        const parts = iri.split('/').filter(p => p.trim().length > 0);
+        if (parts.length > 0) {
+            return parts[parts.length - 1];
+        }
+        return iri;
+    }
+    
+    function resetTreeSearch() {
+        console.log('Resetting tree search');
+        
+        // Check if we're in filter mode
+        const isFilterMode = document.getElementById('filter-mode-controls') !== null;
+        
+        if (isFilterMode) {
+            // If we're in filter mode, use clearFilterMode which is more comprehensive
+            clearFilterMode();
+        } else {
+            // Simple reset - just remove highlighting
+            document.querySelectorAll('.tree-node-highlighted').forEach(node => {
+                node.classList.remove('tree-node-highlighted');
+                const label = node.querySelector('.node-label');
+                if (label) label.textContent = label.textContent;
+            });
+            
+            // We don't reset URL parameters here because:
+            // 1. The selected node (if any) is still visible and relevant
+            // 2. Clearing search highlighting shouldn't change the selected class
+            // 3. Preserves direct links and navigation history
+        }
+    }
+    
+    function highlightText(text, query) {
+        const regex = new RegExp('(' + escapeRegEx(query) + ')', 'gi');
+        return text.replace(regex, '<span class="bg-yellow-200">$1</span>');
+    }
+    
+    function escapeRegEx(string) {
+        return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+</script>
+{% endblock %}
