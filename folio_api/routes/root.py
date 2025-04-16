@@ -290,6 +290,11 @@ async def get_class_html(request: Request, iri: str) -> Response:
     owl_class = folio[iri]
     nodes, edges = get_node_neighbors(owl_class, folio)
 
+    # Import JavaScript for typeahead search
+    from pathlib import Path
+    typeahead_js_path = Path(__file__).parent.parent / "static" / "js" / "typeahead_search.js"
+    typeahead_js_source = typeahead_js_path.read_text(encoding="utf-8")
+
     # Render using Jinja2 template
     return request.app.state.templates.TemplateResponse(
         "taxonomy/class_detail.html",
@@ -300,5 +305,6 @@ async def get_class_html(request: Request, iri: str) -> Response:
             "nodes": nodes,
             "edges": edges,
             "config": request.app.state.config,
+            "typeahead_js_source": typeahead_js_source,
         },
     )
