@@ -3,6 +3,56 @@
  */
 
 // Initialize the tree on document ready
+// Initialize a cache for node data to prevent redundant requests
+const nodeDataCache = new Map();
+
+// Maximum cache size to prevent memory issues
+const MAX_CACHE_SIZE = 100;
+
+// Flag to prevent multiple tree loading attempts occurring simultaneously
+let isLoadingTree = false;
+
+// For rate-limiting API requests
+const REQUEST_DELAY = 100; // milliseconds between API requests
+
+// Function to get node data with caching
+async function getNodeData(nodeId) {
+    // Check cache first
+    if (nodeDataCache.has(nodeId)) {
+        return nodeDataCache.get(nodeId);
+    }
+    
+    // Extract ID if it's a full IRI
+    const extractedId = extractIdFromIri(nodeId);
+    
+    try {
+        // Fetch from server
+        const response = await fetch(`/taxonomy/tree/node/${encodeURIComponent(extractedId)}`);
+        if (!response.ok) throw new Error(`Failed to fetch node data: ${response.status}`);
+        
+        const data = await response.json();
+        
+        // Add to cache
+        nodeDataCache.set(nodeId, data);
+        nodeDataCache.set(extractedId, data);
+        
+        // Prune cache if it gets too large
+        if (nodeDataCache.size > MAX_CACHE_SIZE) {
+            // Remove oldest entries (first 20% of entries)
+            const keys = [...nodeDataCache.keys()];
+            const deleteCount = Math.ceil(MAX_CACHE_SIZE * 0.2);
+            for (let i = 0; i < deleteCount; i++) {
+                nodeDataCache.delete(keys[i]);
+            }
+        }
+        
+        return data;
+    } catch (error) {
+        console.error('Error fetching node data:', error);
+        throw error;
+    }
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     if (typeof $ === 'undefined') {
         showFallbackMessage('JavaScript libraries needed for the taxonomy tree are not available');
@@ -541,6 +591,14 @@ function setupHistoryNavigation() {
  * @param {boolean} updateUrl - Whether to update the URL
  */
 function loadAndSelectNode(nodeId, updateUrl = true) {
+    // First check if the request is already in progress
+    if (isLoadingTree) {
+        console.log('Tree loading already in progress, queueing request');
+        // Wait for the current operation to complete before trying again
+        setTimeout(() => loadAndSelectNode(nodeId, updateUrl), 500);
+        return;
+    }
+    
     // Find the node if it's already in the DOM
     const node = $(`.tree-node[data-id="${nodeId}"]`);
     
@@ -548,16 +606,55 @@ function loadAndSelectNode(nodeId, updateUrl = true) {
         // Node exists in the DOM, select it
         selectNode(node, updateUrl);
     } else {
+        // Set the loading flag
+        isLoadingTree = true;
+        console.log(`Starting tree loading for node: ${nodeId}`);
+        
+        // Show loading indicator
+        const detailsContainer = document.getElementById('class-details');
+        if (detailsContainer) {
+            detailsContainer.innerHTML = `
+                <div class="flex justify-center items-center h-64">
+                    <div class="flex flex-col items-center">
+                        <div class="spinner-border animate-spin inline-block w-8 h-8 border-4 rounded-full text-blue-600 mb-4" role="status">
+                            <span class="sr-only">Loading...</span>
+                        </div>
+                        <p class="text-gray-600">Finding and loading node...</p>
+                    </div>
+                </div>
+            `;
+        }
+        
         // Node doesn't exist yet, we need to find its parents and load them first
-        findNodePath(nodeId).then(path => {
-            loadNodePath(path).then(() => {
+        findNodePath(nodeId)
+            .then(path => {
+                console.log(`Found path with ${path.length} nodes, loading now...`);
+                return loadNodePath(path);
+            })
+            .then(() => {
                 // Now the node should be in the DOM
                 const loadedNode = $(`.tree-node[data-id="${nodeId}"]`);
                 if (loadedNode.length > 0) {
+                    console.log(`Node found in DOM after path loading, selecting...`);
                     selectNode(loadedNode, updateUrl);
+                } else {
+                    console.warn(`Node not found in DOM after path loading: ${nodeId}`);
+                    
+                    // Try a direct load of the node details even if we can't find it in the tree
+                    loadClassDetails(nodeId, updateUrl);
                 }
+            })
+            .catch(err => {
+                console.error('Error loading node:', err);
+                
+                // Still try to load the details
+                loadClassDetails(nodeId, updateUrl);
+            })
+            .finally(() => {
+                // Clear the loading flag
+                isLoadingTree = false;
+                console.log('Tree loading complete');
             });
-        });
     }
 }
 
@@ -583,34 +680,63 @@ function extractIdFromIri(iri) {
  * @returns {Promise<Array>} - A promise that resolves to an array of node IDs
  */
 async function findNodePath(nodeId) {
-    // This is a simplified implementation - in a real app, you'd likely have a dedicated API endpoint
+    // Add caching and rate limiting to prevent excessive calls
     
     // Extract the ID part from the full IRI
     const extractedId = extractIdFromIri(nodeId);
     
     // Try loading the node data to get its parent(s)
     try {
-        const response = await fetch(`/taxonomy/tree/node/${encodeURIComponent(extractedId)}`);
-        if (!response.ok) throw new Error('Network response was not ok');
-        
-        const data = await response.json();
+        // Use cached data function instead of direct fetch
+        const data = await getNodeData(nodeId);
         const path = [];
         
         // Add parents in order (root first)
         if (data.parents && data.parents.length > 0) {
-            // Find the top-level parent recursively
+            console.log(`Finding path to node ${nodeId} with ${data.parents.length} parents`);
+            
+            // Find the top-level parent recursively (but limit depth)
             const topParent = await findTopLevelParent(data.parents[0].iri);
+            console.log(`Found top parent: ${topParent}`);
             
             // Build path from top to current node
             const fullPath = await buildPathToNode(topParent, nodeId);
-            path.push(...fullPath);
+            
+            // Only add the path if it's valid and contains more than just the starting node
+            if (fullPath && fullPath.length > 1) {
+                path.push(...fullPath);
+                console.log(`Built path with ${fullPath.length} nodes`);
+            } else {
+                // If we couldn't build a proper path, just use the parent chain
+                console.log(`Using direct parent chain instead of path search`);
+                let currentNode = data.parents[0].iri;
+                const parentChain = [currentNode];
+                
+                // Add parent chain in reverse (from immediate parent to root)
+                try {
+                    for (let i = 0; i < 5; i++) { // Limit to 5 levels to prevent excessive calls
+                        const parentData = await getNodeData(currentNode);
+                        if (!parentData.parents || parentData.parents.length === 0) break;
+                        
+                        currentNode = parentData.parents[0].iri;
+                        parentChain.unshift(currentNode); // Add parent to beginning of chain
+                    }
+                } catch (error) {
+                    console.warn('Error building parent chain:', error);
+                }
+                
+                path.push(...parentChain);
+            }
         }
         
-        // Add the node itself
-        path.push(nodeId);
+        // Only add the node itself if it's not already the last item in the path
+        if (path.length === 0 || path[path.length - 1] !== nodeId) {
+            path.push(nodeId);
+        }
         
         return path;
-    } catch (_) {
+    } catch (error) {
+        console.error('Error finding node path:', error);
         return [nodeId]; // Return just the node ID if we can't find its path
     }
 }
@@ -625,10 +751,8 @@ async function findTopLevelParent(nodeId) {
     const extractedId = extractIdFromIri(nodeId);
     
     try {
-        const response = await fetch(`/taxonomy/tree/node/${encodeURIComponent(extractedId)}`);
-        if (!response.ok) throw new Error('Network response was not ok');
-        
-        const data = await response.json();
+        // Use the cached data function instead of direct fetch
+        const data = await getNodeData(nodeId);
         
         // If node has no parents or is a direct child of owl:Thing, it's a top-level node
         if (!data.parents || data.parents.length === 0 || 
@@ -638,7 +762,8 @@ async function findTopLevelParent(nodeId) {
         
         // Recursively find the parent of this node's parent
         return findTopLevelParent(data.parents[0].iri);
-    } catch (_) {
+    } catch (error) {
+        console.warn('Error finding top-level parent:', error);
         // Silently return the node ID if we can't find its parent
         return nodeId;
     }
@@ -651,40 +776,91 @@ async function findTopLevelParent(nodeId) {
  * @returns {Promise<Array>} - A promise that resolves to an array of node IDs
  */
 async function buildPathToNode(startId, targetId) {
+    // Early termination for identical nodes
     if (startId === targetId) return [startId];
     
-    // Extract the ID parts from the full IRIs
+    // Also check for matches with extracted IDs
     const extractedStartId = extractIdFromIri(startId);
     const extractedTargetId = extractIdFromIri(targetId);
+    if (extractedStartId === extractedTargetId) return [startId];
+    
+    console.log(`Building path from ${startId} to ${targetId}`);
+    
+    // Set to keep track of visited nodes to prevent cycles
+    const visited = new Set();
+    visited.add(startId);
+    visited.add(extractedStartId);
+    
+    // Queue for breadth-first search with path tracking
+    // Each entry is [nodeId, pathSoFar]
+    const queue = [[startId, [startId]]];
+    
+    // Maximum depth to search to prevent excessive API calls
+    const MAX_DEPTH = 3;
     
     try {
-        const response = await fetch(`/taxonomy/tree/node/${encodeURIComponent(extractedStartId)}`);
-        if (!response.ok) throw new Error('Network response was not ok');
-        
-        const data = await response.json();
-        const path = [startId];
-        
-        // Check if any children are the target or lead to the target
-        if (data.children && data.children.length > 0) {
-            for (const child of data.children) {
-                const childId = extractIdFromIri(child.iri);
-                if (childId === extractedTargetId || child.iri === targetId) {
-                    // Direct child
-                    return [...path, child.iri];
-                }
+        // Process queue with breadth-first search (shorter paths first)
+        while (queue.length > 0) {
+            const [currentId, currentPath] = queue.shift();
+            
+            // Stop if we've reached maximum depth
+            if (currentPath.length > MAX_DEPTH) {
+                console.log(`Maximum search depth (${MAX_DEPTH}) reached, stopping path search`);
+                return [startId]; // Return just the start node
+            }
+            
+            // Get the extracted ID
+            const extractedCurrentId = extractIdFromIri(currentId);
+            
+            try {
+                // Fetch node data using cache
+                const data = await getNodeData(currentId);
                 
-                // Check if this child might lead to the target
-                const childPath = await buildPathToNode(child.iri, targetId);
-                if (childPath.some(id => extractIdFromIri(id) === extractedTargetId)) {
-                    return [...path, ...childPath];
+                // Check children (if any)
+                if (data.children && data.children.length > 0) {
+                    // Sort children by label to help find more meaningful paths
+                    const sortedChildren = [...data.children].sort((a, b) => {
+                        return (a.label || "").localeCompare(b.label || "");
+                    });
+                    
+                    for (const child of sortedChildren) {
+                        const childId = child.iri;
+                        const extractedChildId = extractIdFromIri(childId);
+                        
+                        // Skip if we've already visited this node
+                        if (visited.has(childId) || visited.has(extractedChildId)) {
+                            continue;
+                        }
+                        
+                        // Mark as visited
+                        visited.add(childId);
+                        visited.add(extractedChildId);
+                        
+                        // Check if this is our target
+                        if (childId === targetId || extractedChildId === extractedTargetId) {
+                            console.log(`Found target node at depth ${currentPath.length}`);
+                            return [...currentPath, childId];
+                        }
+                        
+                        // Add to queue with updated path (but only if we're not too deep)
+                        if (currentPath.length < MAX_DEPTH) {
+                            queue.push([childId, [...currentPath, childId]]);
+                        }
+                    }
                 }
+            } catch (error) {
+                console.warn(`Error processing node ${currentId}:`, error);
+                // Continue to next node in queue
+                continue;
             }
         }
         
-        return path;
-    } catch (_) {
-        // Silently return just the start ID if we can't build the path
+        // If we exhausted the queue without finding the target, return just the start node
+        console.log('Could not find path to target node, queue exhausted');
         return [startId];
+    } catch (error) {
+        console.error('Error in buildPathToNode:', error);
+        return [startId]; // Return just the start ID if we can't build the path
     }
 }
 
