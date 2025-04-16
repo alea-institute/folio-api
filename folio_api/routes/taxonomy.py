@@ -12,7 +12,7 @@ from starlette.responses import Response, JSONResponse
 
 # project
 from folio_api.models import OWLClassList
-from basic_html import get_node_neighbors
+from folio_api.rendering import get_node_neighbors
 
 # API router
 router = APIRouter(prefix="/taxonomy", tags=["taxonomy"])

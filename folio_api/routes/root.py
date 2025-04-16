@@ -11,7 +11,7 @@ from folio import FOLIO, OWLClass
 from starlette.responses import JSONResponse, Response
 
 # project
-from basic_html import get_node_neighbors
+from folio_api.rendering import get_node_neighbors
 
 # API router
 router = APIRouter(prefix="", tags=["ontology"])
