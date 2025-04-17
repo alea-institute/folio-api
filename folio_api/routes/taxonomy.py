@@ -675,6 +675,36 @@ async def get_node_data(request: Request, iri: str) -> JSONResponse:
     if hasattr(owl_class, "translations") and owl_class.translations:
         translations = owl_class.translations
 
+    # Build see_also list with resolved labels
+    see_also_items = []
+    if hasattr(owl_class, "see_also") and owl_class.see_also:
+        for see_also_iri in owl_class.see_also:
+            if see_also_iri.startswith("http"):
+                # Try to find the label for this IRI
+                see_also_class = folio[see_also_iri]
+                if see_also_class:
+                    see_also_items.append(
+                        {
+                            "iri": see_also_iri,
+                            "label": see_also_class.label or see_also_iri,
+                            "is_external": False,
+                        }
+                    )
+                else:
+                    # External link or IRI not found in our ontology
+                    see_also_items.append(
+                        {
+                            "iri": see_also_iri,
+                            "label": see_also_iri,
+                            "is_external": True,
+                        }
+                    )
+            else:
+                # Not a URL, just a string
+                see_also_items.append(
+                    {"iri": see_also_iri, "label": see_also_iri, "is_external": False}
+                )
+
     result = {
         "iri": owl_class.iri,
         "label": owl_class.label or "Unnamed Class",
@@ -688,10 +718,21 @@ async def get_node_data(request: Request, iri: str) -> JSONResponse:
         "notes": owl_class.notes,
         "parents": parents,
         "children": children,
-        "see_also": owl_class.see_also,
+        "see_also": owl_class.see_also,  # Keep original for backward compatibility
+        "see_also_items": see_also_items,  # Add the new detailed list
         "is_defined_by": owl_class.is_defined_by,
         "deprecated": owl_class.deprecated,
         "translations": translations,
+        # Add the new fields
+        "history_note": owl_class.history_note
+        if hasattr(owl_class, "history_note")
+        else None,
+        "editorial_note": owl_class.editorial_note
+        if hasattr(owl_class, "editorial_note")
+        else None,
+        "in_scheme": owl_class.in_scheme if hasattr(owl_class, "in_scheme") else None,
+        "source": owl_class.source if hasattr(owl_class, "source") else None,
+        "country": owl_class.country if hasattr(owl_class, "country") else None,
         "nodes": nodes,
         "edges": edges,
     }
@@ -1096,12 +1137,42 @@ async def get_class_details_html(request: Request, iri: str) -> Response:
         "is_defined_by": owl_class.is_defined_by,
         "deprecated": owl_class.deprecated,
         "translations": translations,
+        # Add the new fields
+        "history_note": owl_class.history_note
+        if hasattr(owl_class, "history_note")
+        else None,
+        "editorial_note": owl_class.editorial_note
+        if hasattr(owl_class, "editorial_note")
+        else None,
+        "in_scheme": owl_class.in_scheme if hasattr(owl_class, "in_scheme") else None,
+        "source": owl_class.source if hasattr(owl_class, "source") else None,
+        "country": owl_class.country if hasattr(owl_class, "country") else None,
         "nodes": nodes,
         "edges": edges,
     }
 
+    # Create a simplified version of folio_graph to pass to the template
+    # This will allow the template to look up labels for "see also" IRIs
+    simplified_folio_graph = {}
+
+    # For each see_also item, try to get its label from the folio graph
+    if hasattr(owl_class, "see_also") and owl_class.see_also:
+        for see_also_iri in owl_class.see_also:
+            if see_also_iri.startswith("http"):
+                see_also_class = folio[see_also_iri]
+                if see_also_class:
+                    simplified_folio_graph[see_also_iri] = {
+                        "label": see_also_class.label or see_also_iri,
+                        "iri": see_also_iri,
+                    }
+
     return request.app.state.templates.TemplateResponse(
-        "components/class_details.html", {"request": request, "class_data": class_data}
+        "components/class_details.html",
+        {
+            "request": request,
+            "class_data": class_data,
+            "folio_graph": simplified_folio_graph,
+        },
     )
 
 

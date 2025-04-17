@@ -59,11 +59,24 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
     }
 
-    initializeTree();
-    // setupSearchHandlers(); - Removed to avoid interference with typeahead_search.js
-    setupTreeControls();
+    // Check if we have a node ID in the URL first
+    const urlParams = new URLSearchParams(window.location.search);
+    const nodeId = urlParams.get('node');
+    
+    if (nodeId) {
+        // If we have a node ID, we'll initialize the tree as part of loadAndSelectNode
+        setupTreeControls();
+        setupKeyboardNavigation();
+        loadAndSelectNode(nodeId, false);
+    } else {
+        // Otherwise, initialize the tree normally
+        initializeTree();
+        setupTreeControls();
+        setupKeyboardNavigation();
+    }
+    
+    // Set up history navigation in either case
     setupHistoryNavigation();
-    setupKeyboardNavigation();
 });
 
 /**
@@ -91,6 +104,13 @@ function initializeTree() {
  * @param {jQuery} container - The container to append nodes to
  */
 function loadTreeNodes(nodeId, container) {
+    // Check if container already has nodes (other than loading indicators)
+    const existingNodes = container.children('.tree-node');
+    if (existingNodes.length > 0) {
+        console.log(`Container already has ${existingNodes.length} nodes, skipping load for ${nodeId}`);
+        return;
+    }
+    
     // Show loading indicator
     container.append('<li class="loading-indicator"><span>Loading...</span></li>');
     
@@ -106,15 +126,23 @@ function loadTreeNodes(nodeId, container) {
             // Remove loading indicator
             container.find('.loading-indicator').remove();
             
+            // Remove any existing nodes to prevent duplicates
+            container.children('.tree-node').remove();
+            
             // Render each node
             data.forEach(node => {
-                renderTreeNode(node, container);
+                // Check if this node already exists in this container
+                const existingNode = container.children(`.tree-node[data-id="${node.id}"]`);
+                if (existingNode.length === 0) {
+                    renderTreeNode(node, container);
+                }
             });
             
             // Set up click handlers
             setupNodeClickHandlers();
         })
-        .catch(() => {
+        .catch((error) => {
+            console.error('Error loading tree nodes:', error);
             container.find('.loading-indicator').html('<span class="text-red-500">Error loading. Try again.</span>');
         });
 }
@@ -196,9 +224,13 @@ function toggleNode(li) {
         expandIcon.html('▾');
         childrenContainer.slideDown(200);
         
-        // Load children if not already loaded
-        if (childrenContainer.children().length === 0) {
+        // Load children if not already loaded - only if there are no tree nodes
+        // Loading indicators don't count as children for this check
+        if (childrenContainer.children('.tree-node').length === 0) {
+            console.log(`Loading children for node ${nodeId} in toggleNode`);
             loadTreeNodes(nodeId, childrenContainer);
+        } else {
+            console.log(`Node ${nodeId} already has ${childrenContainer.children('.tree-node').length} children loaded, skipping`);
         }
         
         // Ensure child nodes have correct styling
@@ -612,19 +644,44 @@ function resetUrlParameters() {
  * Set up browser history navigation
  */
 function setupHistoryNavigation() {
-    // Check if we have a node ID in the URL
-    const urlParams = new URLSearchParams(window.location.search);
-    const nodeId = urlParams.get('node');
-    
-    if (nodeId) {
-        // Load and select the node
-        loadAndSelectNode(nodeId, false);
-    }
+    // We no longer need to check for node ID here as it's handled in the DOMContentLoaded event
+    // This function now only sets up the popstate event listener
     
     // Listen for popstate events (back/forward navigation)
     window.addEventListener('popstate', function(event) {
         if (event.state && event.state.nodeId) {
             loadAndSelectNode(event.state.nodeId, false);
+        } else {
+            // If no state, check URL parameters
+            const urlParams = new URLSearchParams(window.location.search);
+            const nodeId = urlParams.get('node');
+            
+            if (nodeId) {
+                loadAndSelectNode(nodeId, false);
+            } else {
+                // No node in state or URL, possibly went back to initial state
+                // Reset the view if needed
+                const selectedNode = $('.tree-node.selected');
+                if (selectedNode.length > 0) {
+                    selectedNode.removeClass('selected');
+                }
+                
+                // Clear the details panel
+                const detailsContainer = document.getElementById('class-details');
+                if (detailsContainer) {
+                    detailsContainer.innerHTML = `
+                        <div class="flex items-center justify-center h-full text-gray-500">
+                            <div class="text-center">
+                                <svg class="w-16 h-16 mx-auto text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                                </svg>
+                                <h3 class="mt-2 text-xl font-medium">Select a class</h3>
+                                <p class="mt-1">Choose a class from the tree to view its details</p>
+                            </div>
+                        </div>
+                    `;
+                }
+            }
         }
     });
 }
@@ -668,6 +725,21 @@ function loadAndSelectNode(nodeId, updateUrl = true) {
         return;
     }
     
+    // Check if we need to initialize the tree first
+    const treeContainer = $('#taxonomy-tree');
+    const needsInitialization = treeContainer.find('.taxonomy-root-list').length === 0;
+    
+    if (needsInitialization) {
+        // Create root container if it doesn't exist
+        treeContainer.html('<ul class="taxonomy-root-list"></ul>');
+        
+        // Style the tree
+        applyTreeStyles();
+        
+        // Apply global styles for arrows to ensure consistency
+        applyArrowStyles();
+    }
+    
     // Find the node if it's already in the DOM
     const node = $(`.tree-node[data-id="${nodeId}"]`);
     
@@ -705,6 +777,14 @@ function loadAndSelectNode(nodeId, updateUrl = true) {
                 const loadedNode = $(`.tree-node[data-id="${nodeId}"]`);
                 if (loadedNode.length > 0) {
                     console.log(`Node found in DOM after path loading, selecting...`);
+                    // Make sure we always select the node after loading it
+                    $('.tree-node.selected').removeClass('selected');
+                    loadedNode.addClass('selected');
+                    
+                    // Scroll to make the node visible
+                    loadedNode[0].scrollIntoView({ block: 'center', behavior: 'smooth' });
+                    
+                    // Properly call selectNode to update URL and load details
                     selectNode(loadedNode, updateUrl);
                 } else {
                     console.warn(`Node not found in DOM after path loading: ${nodeId}`);
@@ -716,13 +796,38 @@ function loadAndSelectNode(nodeId, updateUrl = true) {
             .catch(err => {
                 console.error('Error loading node:', err);
                 
-                // Still try to load the details
-                loadClassDetails(nodeId, updateUrl);
+                // Double-check one more time if the node is in the DOM before falling back
+                const finalCheckNode = $(`.tree-node[data-id="${nodeId}"]`);
+                if (finalCheckNode.length > 0) {
+                    console.log(`Node found in final check, selecting...`);
+                    // Make sure we always select the node
+                    $('.tree-node.selected').removeClass('selected');
+                    finalCheckNode.addClass('selected');
+                    
+                    // Scroll to make the node visible
+                    finalCheckNode[0].scrollIntoView({ block: 'center', behavior: 'smooth' });
+                    
+                    // Properly call selectNode to update URL and load details
+                    selectNode(finalCheckNode, updateUrl);
+                } else {
+                    // Still try to load the details
+                    loadClassDetails(nodeId, updateUrl);
+                }
             })
             .finally(() => {
-                // Clear the loading flag
-                isLoadingTree = false;
-                console.log('Tree loading complete');
+                // Final check to ensure the node is selected
+                setTimeout(() => {
+                    const finalNode = $(`.tree-node[data-id="${nodeId}"]`);
+                    if (finalNode.length > 0 && !finalNode.hasClass('selected')) {
+                        console.log('Final selection check - ensuring node is selected');
+                        $('.tree-node.selected').removeClass('selected');
+                        finalNode.addClass('selected');
+                    }
+                    
+                    // Clear the loading flag
+                    isLoadingTree = false;
+                    console.log('Tree loading complete');
+                }, 200);
             });
     }
 }
@@ -941,44 +1046,120 @@ async function buildPathToNode(startId, targetId) {
 async function loadNodePath(path) {
     if (!path || path.length === 0) return;
     
-    // Start from the root
-    let container = $('.taxonomy-root-list');
+    console.log('Loading path:', path);
     
-    // Skip the last node (we'll select it after loading)
-    for (let i = 0; i < path.length - 1; i++) {
+    // Check if we need to load the root level first
+    const rootList = $('.taxonomy-root-list');
+    let needsRootLoading = rootList.children('.tree-node').length === 0;
+    
+    // Start from the root
+    let container = rootList;
+    
+    // Load root level if needed
+    if (needsRootLoading) {
+        console.log('Loading root level nodes');
+        await new Promise(resolve => {
+            loadTreeNodes('#', container);
+            
+            // Wait for loading to complete
+            const checkLoaded = setInterval(() => {
+                if (!container.find('.loading-indicator').length) {
+                    clearInterval(checkLoaded);
+                    resolve();
+                }
+            }, 100);
+        });
+    }
+    
+    // Process the path node by node, keeping track of the current container
+    let currentContainer = rootList;
+    let currentLevel = 0;
+    
+    // Skip OWL:Thing if it's the first node, as it's not in our tree
+    const startIndex = path[0] === "http://www.w3.org/2002/07/owl#Thing" ? 1 : 0;
+    
+    for (let i = startIndex; i < path.length; i++) {
         const nodeId = path[i];
+        const isLastNode = (i === path.length - 1);
         
-        // Check if the node already exists
-        const node = $(`.tree-node[data-id="${nodeId}"]`);
+        console.log(`Processing path node ${i}: ${nodeId}, isLast: ${isLastNode}`);
+        
+        // Find the node in the current container or globally
+        let node = currentContainer.children(`.tree-node[data-id="${nodeId}"]`);
+        
+        // If not found in the current container, try a global search
+        if (node.length === 0) {
+            node = $(`.tree-node[data-id="${nodeId}"]`);
+        }
         
         if (node.length > 0) {
-            // Node exists, expand it if needed
-            if (node.hasClass('collapsed')) {
+            console.log(`Node ${nodeId} found in DOM`);
+            
+            // If it's not the last node, expand it if collapsed
+            if (!isLastNode && node.hasClass('collapsed')) {
+                console.log(`Expanding node ${nodeId}`);
                 toggleNode(node);
             }
             
-            // Update container for next iteration
-            container = node.find('> .children-container');
+            // Update current container for next iteration
+            if (!isLastNode) {
+                currentContainer = node.find('> .children-container');
+                // Check if the container exists, if not create it
+                if (currentContainer.length === 0) {
+                    node.append('<ul class="children-container" style="display:block;"></ul>');
+                    currentContainer = node.find('> .children-container');
+                }
+            }
         } else {
-            // Node doesn't exist, load its level
+            console.log(`Node ${nodeId} not found, loading its parent level`);
+            
+            // Get the parent node ID
+            const parentNodeId = i > startIndex ? path[i - 1] : '#';
+            
+            // Load the children of the parent
             await new Promise(resolve => {
-                loadTreeNodes(nodeId === path[0] ? '#' : nodeId, container);
+                // Check if the current container already has children other than loading indicators
+                if (currentContainer.children('.tree-node').length > 0) {
+                    console.log(`Current container already has nodes, skipping load for ${parentNodeId}`);
+                    resolve();
+                    return;
+                }
+                
+                loadTreeNodes(parentNodeId, currentContainer);
                 
                 // Wait for loading to complete
                 const checkLoaded = setInterval(() => {
-                    if (!container.find('.loading-indicator').length) {
+                    if (!currentContainer.find('> .loading-indicator').length) {
                         clearInterval(checkLoaded);
                         
-                        // Find the node now that it's loaded
-                        const loadedNode = $(`.tree-node[data-id="${nodeId}"]`);
-                        if (loadedNode.length > 0) {
-                            // Expand it
-                            if (loadedNode.hasClass('collapsed')) {
-                                toggleNode(loadedNode);
+                        // Find the node now that its parent level is loaded
+                        node = currentContainer.children(`.tree-node[data-id="${nodeId}"]`);
+                        
+                        if (node.length === 0) {
+                            // Try a global search as a fallback
+                            node = $(`.tree-node[data-id="${nodeId}"]`);
+                        }
+                        
+                        if (node.length > 0) {
+                            console.log(`Node ${nodeId} found after loading parent level`);
+                            
+                            // If not the last node, expand it
+                            if (!isLastNode && node.hasClass('collapsed')) {
+                                console.log(`Expanding loaded node ${nodeId}`);
+                                toggleNode(node);
                             }
                             
                             // Update container for next iteration
-                            container = loadedNode.find('> .children-container');
+                            if (!isLastNode) {
+                                currentContainer = node.find('> .children-container');
+                                // Check if the container exists, if not create it
+                                if (currentContainer.length === 0) {
+                                    node.append('<ul class="children-container" style="display:block;"></ul>');
+                                    currentContainer = node.find('> .children-container');
+                                }
+                            }
+                        } else {
+                            console.warn(`Node ${nodeId} not found after loading parent level`);
                         }
                         
                         resolve();
@@ -986,6 +1167,18 @@ async function loadNodePath(path) {
                 }, 100);
             });
         }
+    }
+    
+    // By this point, all nodes in the path should be loaded and expanded
+    // Make sure the last node is visible in the viewport
+    const targetNodeId = path[path.length - 1];
+    const targetNode = $(`.tree-node[data-id="${targetNodeId}"]`);
+    if (targetNode.length > 0) {
+        console.log(`Target node ${targetNodeId} found, scrolling to it`);
+        // Scroll to make the target node visible
+        targetNode[0].scrollIntoView({ block: 'center', behavior: 'smooth' });
+    } else {
+        console.warn(`Target node ${targetNodeId} not found in final check`);
     }
 }
 
@@ -1114,17 +1307,35 @@ function fallbackRenderClassDetails(data, container) {
     if (data.parents && data.parents.length > 0) {
         parentsHtml = `
             <section class="card animate-fade-in mb-6">
-                <h4 class="text-lg font-medium text-[--color-primary] mb-3">Parent Classes</h4>
-                <ul class="list-disc pl-5 space-y-1">
-                    ${data.parents.map(parent => 
-                        `<li>
-                            <a href="#" class="text-blue-600 hover:underline" 
-                               onclick="selectNodeByIri('${parent.iri}'); return false;">
-                               ${parent.label}
-                            </a> - ${parent.definition}
-                        </li>`
-                    ).join('')}
-                </ul>
+                <h4 class="text-lg font-medium text-[--color-primary] mb-3 flex items-center">
+                    <svg class="w-4 h-4 mr-2 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                    </svg>
+                    Parent Classes
+                </h4>
+                <div class="max-h-[200px] overflow-y-auto pr-1">
+                    <ul class="space-y-2">
+                        ${data.parents.map(parent => 
+                            `<li class="group p-1.5 -ml-1.5 rounded-md hover:bg-blue-50 transition-colors duration-150">
+                                <div class="flex items-start">
+                                    <svg class="w-4 h-4 mt-1 mr-2 text-blue-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11l5-5m0 0l5 5m-5-5v12" />
+                                    </svg>
+                                    <div>
+                                        <a href="#" 
+                                           class="font-medium text-blue-600 hover:text-blue-800 transition-colors duration-150 group-hover:underline" 
+                                           onclick="selectNodeByIri('${parent.iri}'); return false;">
+                                           ${parent.label}
+                                        </a>
+                                        <p class="text-sm text-gray-600 mt-0.5 line-clamp-2">
+                                            ${parent.definition}
+                                        </p>
+                                    </div>
+                                </div>
+                            </li>`
+                        ).join('')}
+                    </ul>
+                </div>
             </section>
         `;
     }
@@ -1134,17 +1345,34 @@ function fallbackRenderClassDetails(data, container) {
     if (data.children && data.children.length > 0) {
         childrenHtml = `
             <section class="card animate-fade-in mb-6">
-                <h4 class="text-lg font-medium text-[--color-primary] mb-3">
-                    Child Classes <span class="text-gray-500">(${data.children.length})</span>
+                <h4 class="text-lg font-medium text-[--color-primary] mb-3 flex items-center">
+                    <svg class="w-4 h-4 mr-2 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                    </svg>
+                    Child Classes 
+                    <span class="ml-2 px-1.5 py-0.5 text-xs font-semibold bg-blue-100 text-blue-800 rounded-full">
+                        ${data.children.length}
+                    </span>
                 </h4>
-                <div class="max-h-60 overflow-y-auto">
-                    <ul class="list-disc pl-5 space-y-1">
+                <div class="max-h-[300px] overflow-y-auto pr-1">
+                    <ul class="space-y-2">
                         ${data.children.map(child => 
-                            `<li>
-                                <a href="#" class="text-blue-600 hover:underline" 
-                                   onclick="selectNodeByIri('${child.iri}'); return false;">
-                                   ${child.label}
-                                </a> - ${child.definition}
+                            `<li class="group p-1.5 -ml-1.5 rounded-md hover:bg-blue-50 transition-colors duration-150">
+                                <div class="flex items-start">
+                                    <svg class="w-4 h-4 mt-1 mr-2 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 13l-5 5m0 0l-5-5m5 5V6" />
+                                    </svg>
+                                    <div>
+                                        <a href="#" 
+                                           class="font-medium text-blue-600 hover:text-blue-800 transition-colors duration-150 group-hover:underline" 
+                                           onclick="selectNodeByIri('${child.iri}'); return false;">
+                                           ${child.label}
+                                        </a>
+                                        <p class="text-sm text-gray-600 mt-0.5 line-clamp-2">
+                                            ${child.definition}
+                                        </p>
+                                    </div>
+                                </div>
                             </li>`
                         ).join('')}
                     </ul>
@@ -1156,34 +1384,161 @@ function fallbackRenderClassDetails(data, container) {
     // Build examples section if available
     const examplesHtml = data.examples && data.examples.length > 0 ? 
         `<section class="card animate-fade-in mb-6">
-            <h4 class="text-lg font-medium text-[--color-primary] mb-3">Examples</h4>
-            <ul class="list-disc pl-5 space-y-1">
-                ${data.examples.map(example => `<li>${example}</li>`).join('')}
-            </ul>
+            <h4 class="text-lg font-medium text-[--color-primary] mb-3 flex items-center">
+                <svg class="w-4 h-4 mr-2 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
+                </svg>
+                Examples
+            </h4>
+            <div class="max-h-[200px] overflow-y-auto pr-1">
+                <div class="bg-green-50 border border-green-100 rounded-md p-2">
+                    <ul class="space-y-2.5">
+                        ${data.examples.map(example => `
+                            <li class="flex items-start">
+                                <svg class="w-5 h-5 mr-2 text-green-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <span class="text-gray-800">${example}</span>
+                            </li>
+                        `).join('')}
+                    </ul>
+                </div>
+            </div>
         </section>` : '';
     
     // Build notes section if available
     const notesHtml = data.notes && data.notes.length > 0 ? 
         `<section class="card animate-fade-in mb-6">
-            <h4 class="text-lg font-medium text-[--color-primary] mb-3">Notes</h4>
-            <ul class="list-disc pl-5 space-y-1">
-                ${data.notes.map(note => `<li>${note}</li>`).join('')}
-            </ul>
+            <h4 class="text-lg font-medium text-[--color-primary] mb-3 flex items-center">
+                <svg class="w-4 h-4 mr-2 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+                Notes
+            </h4>
+            <div class="max-h-[200px] overflow-y-auto pr-1">
+                <div class="bg-amber-50 border border-amber-100 rounded-md p-2">
+                    <ul class="space-y-2.5">
+                        ${data.notes.map(note => `
+                            <li class="flex items-start">
+                                <svg class="w-5 h-5 mr-2 text-amber-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                </svg>
+                                <span class="text-gray-800">${note}</span>
+                            </li>
+                        `).join('')}
+                    </ul>
+                </div>
+            </div>
         </section>` : '';
     
     // Build see also section if available
-    const seeAlsoHtml = data.see_also && data.see_also.length > 0 ? 
+    const hasSeeAlso = (data.see_also_items && data.see_also_items.length > 0) || (data.see_also && data.see_also.length > 0);
+    
+    const seeAlsoHtml = hasSeeAlso ?
         `<section class="card animate-fade-in mb-6">
-            <h4 class="text-lg font-medium text-[--color-primary] mb-3">See Also</h4>
-            <ul class="list-disc pl-5 space-y-1">
-                ${data.see_also.map(see => 
-                    `<li>
-                        <a href="${see}" class="text-blue-600 hover:underline" target="_blank">
-                            ${see}
-                        </a>
-                    </li>`
-                ).join('')}
-            </ul>
+            <h4 class="text-lg font-medium text-[--color-primary] mb-3 flex items-center">
+                <svg class="w-4 h-4 mr-2 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+                See Also
+            </h4>
+            <div class="max-h-[200px] overflow-y-auto pr-1">
+                <ul class="list-disc pl-5 space-y-1.5">
+                    ${data.see_also_items ? 
+                      // Use the enhanced see_also_items if available
+                      data.see_also_items.map(item => {
+                          if (item.iri.startsWith('http')) {
+                              if (!item.is_external) {
+                                  return `<li class="group">
+                                      <a href="${item.iri}/html" 
+                                         class="inline-flex items-center text-blue-600 hover:text-blue-800 transition-colors duration-150 font-medium">
+                                          <span class="group-hover:underline">${item.label}</span>
+                                      </a>
+                                  </li>`;
+                              } else {
+                                  return `<li class="group">
+                                      <a href="${item.iri}" 
+                                         class="inline-flex items-center text-blue-600 hover:text-blue-800 transition-colors duration-150 font-medium" 
+                                         target="_blank"
+                                         title="Open in new tab">
+                                          <span class="truncate max-w-[250px] group-hover:underline">
+                                              ${item.label.length > 60 ? item.label.substring(0, 60) + 'WTF' : item.label}
+                                          </span>
+                                          <svg class="inline-block ml-1 w-3.5 h-3.5 text-blue-400 group-hover:text-blue-600 transition-colors duration-150" 
+                                               viewBox="0 0 20 20" 
+                                               fill="currentColor"
+                                               aria-hidden="true">
+                                              <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" />
+                                              <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" />
+                                          </svg>
+                                      </a>
+                                  </li>`;
+                              }
+                          } else {
+                              return `<li class="text-gray-700">${item.label}</li>`;
+                          }
+                      }).join('') :
+                      
+                      // Fallback to the original see_also if see_also_items is not available
+                      data.see_also.map(see => {
+                          // Check if the IRI exists in folio_data if available
+                          let displayText = see;
+                          
+                          // First, look in data.folio_graph if available
+                          if (data.folio_graph && data.folio_graph[see] && data.folio_graph[see].label) {
+                              displayText = data.folio_graph[see].label;
+                          } 
+                          // Second, check in nodes if available
+                          else if (data.nodes && data.nodes.find(node => node.id === see)) {
+                              const matchingNode = data.nodes.find(node => node.id === see);
+                              displayText = matchingNode.label;
+                          }
+                          // Third, try to find in data.related_nodes if available
+                          else if (data.related_nodes && data.related_nodes.find(node => node.iri === see)) {
+                              const matchingNode = data.related_nodes.find(node => node.iri === see);
+                              displayText = matchingNode.label;
+                          }
+                          
+                          // Determine if this is an internal or external link
+                          const isInternalLink = 
+                              (data.folio_graph && data.folio_graph[see]) ||
+                              (data.nodes && data.nodes.find(node => node.id === see)) ||
+                              (data.related_nodes && data.related_nodes.find(node => node.iri === see)) ||
+                              see.includes('folio.openlegalstandard.org');
+                          
+                          if (see.startsWith('http')) {
+                              if (isInternalLink) {
+                                  return `<li class="group">
+                                      <a href="${see}/html" 
+                                         class="inline-flex items-center text-blue-600 hover:text-blue-800 transition-colors duration-150 font-medium">
+                                          <span class="group-hover:underline">${displayText}</span>
+                                      </a>
+                                  </li>`;
+                              } else {
+                                  return `<li class="group">
+                                      <a href="${see}" 
+                                         class="inline-flex items-center text-blue-600 hover:text-blue-800 transition-colors duration-150 font-medium" 
+                                         target="_blank"
+                                         title="Open in new tab">
+                                          <span class="truncate max-w-[250px] group-hover:underline">
+                                              ${displayText !== see ? displayText : (see.length > 60 ? see.substring(0, 60) + '...' : see)}</span>
+                                          <svg class="inline-block ml-1 w-3.5 h-3.5 text-blue-400 group-hover:text-blue-600 transition-colors duration-150" 
+                                               viewBox="0 0 20 20" 
+                                               fill="currentColor"
+                                               aria-hidden="true">
+                                              <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" />
+                                              <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" />
+                                          </svg>
+                                      </a>
+                                  </li>`;
+                              }
+                          } else {
+                              return `<li class="text-gray-700">${displayText}</li>`;
+                          }
+                      }).join('')
+                    }
+                </ul>
+            </div>
         </section>` : '';
     
     // Build additional metadata HTML
@@ -1257,47 +1612,111 @@ function fallbackRenderClassDetails(data, container) {
     if (data.translations && Object.keys(data.translations).length > 0) {
         let translationItems = '';
         
+        // Language code to flag mapping for full locale codes
+        const languageFlags = {
+            // English variants
+            "en": "🇬🇧", "en-gb": "🇬🇧", "en-us": "🇺🇸", "en-ca": "🇨🇦", "en-au": "🇦🇺", "en-nz": "🇳🇿", 
+            // European languages
+            "de": "🇩🇪", "de-de": "🇩🇪", "de-at": "🇦🇹", "de-ch": "🇨🇭",
+            "fr": "🇫🇷", "fr-fr": "🇫🇷", "fr-ca": "🇨🇦", "fr-ch": "🇨🇭", "fr-be": "🇧🇪",
+            "es": "🇪🇸", "es-es": "🇪🇸", "es-mx": "🇲🇽", "es-ar": "🇦🇷", "es-co": "🇨🇴",
+            "it": "🇮🇹", "it-it": "🇮🇹", "it-ch": "🇨🇭",
+            "pt": "🇵🇹", "pt-pt": "🇵🇹", "pt-br": "🇧🇷",
+            "nl": "🇳🇱", "nl-nl": "🇳🇱", "nl-be": "🇧🇪",
+            "ru": "🇷🇺", "ru-ru": "🇷🇺",
+            "pl": "🇵🇱", "sv": "🇸🇪", "no": "🇳🇴", "fi": "🇫🇮", "da": "🇩🇰", "el": "🇬🇷",
+            // Asian languages
+            "zh": "🇨🇳", "zh-cn": "🇨🇳", "zh-tw": "🇹🇼", "zh-hk": "🇭🇰", "zh-sg": "🇸🇬",
+            "ja": "🇯🇵", "ja-jp": "🇯🇵",
+            "ko": "🇰🇷", "ko-kr": "🇰🇷",
+            "hi": "🇮🇳", "hi-in": "🇮🇳",
+            "ar": "🇸🇦", "ar-sa": "🇸🇦", "ar-eg": "🇪🇬", "ar-dz": "🇩🇿",
+            "he": "🇮🇱", "he-il": "🇮🇱", 
+            "th": "🇹🇭", "vi": "🇻🇳"
+        };
+        
         for (const [lang, translation] of Object.entries(data.translations)) {
+            const langLower = lang.toLowerCase();
+            const flag = languageFlags[langLower] || "🌐";
+            
             translationItems += `
-                <div class="border-b pb-2">
-                    <p class="text-gray-500 text-sm font-medium">${lang}</p>
-                    <p class="mt-1">${translation}</p>
+                <div class="bg-gray-50 rounded p-3 border-l-2 border-blue-300">
+                    <div class="flex items-center mb-2">
+                        <span class="text-lg mr-2">${flag}</span>
+                        <p class="text-gray-700 font-medium">${lang}</p>
+                    </div>
+                    <p class="text-gray-800 italic">${translation}</p>
                 </div>
             `;
         }
         
         translationsHtml = `
             <section class="card animate-fade-in mb-6">
-                <h4 class="text-lg font-medium text-[--color-primary] mb-3">Translations</h4>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    ${translationItems}
+                <h4 class="text-lg font-medium text-[--color-primary] mb-3 flex items-center">
+                    <svg class="w-4 h-4 mr-2 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
+                    </svg>
+                    Translations
+                </h4>
+                <div class="max-h-[200px] overflow-y-auto pr-1">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        ${translationItems}
+                    </div>
                 </div>
             </section>
         `;
     }
 
     const html = `
-        <section class="card animate-fade-in mb-6">
-            <h3 class="text-2xl font-semibold mb-2 text-[--color-primary]">${data.label}</h3>
-            <p class="text-gray-500 text-sm mb-4 truncate" title="${data.iri}">
-                IRI: ${data.iri} 
-                <button onclick="navigator.clipboard.writeText('${data.iri}')" 
-                        class="py-1 px-2 rounded text-sm" 
-                        aria-label="Copy IRI to clipboard">📋</button>
-            </p>
-            <div class="prose max-w-none">
-                <p>${data.definition}</p>
+        <section class="card animate-fade-in mb-6 border-t-4 border-[--color-primary]">
+            <div class="flex justify-between items-start">
+                <div>
+                    <h3 class="text-2xl font-semibold mb-2 text-[--color-primary]">${data.label}</h3>
+                    <div class="flex items-center text-gray-500 text-sm mb-4">
+                        <span class="font-medium mr-1.5">IRI:</span>
+                        <span class="font-mono truncate max-w-[450px]" id="iri-value" title="${data.iri}">
+                            ${data.iri}
+                        </span>
+                        <button onclick="navigator.clipboard.writeText('${data.iri}')" 
+                                class="ml-2 py-1 px-2 rounded text-blue-600 hover:bg-blue-50 transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                                aria-label="Copy IRI to clipboard">
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                
+                ${data.deprecated ? `
+                <div class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                    <svg class="w-3.5 h-3.5 mr-1.5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    Deprecated
+                </div>
+                ` : ''}
+            </div>
+            
+            <div class="prose max-w-none mt-2 bg-gray-50 p-3 rounded-md border-l-4 border-blue-200">
+                <p class="text-gray-800">${data.definition}</p>
             </div>
         </section>
         
-        <div class="space-y-6">
-            ${parentsHtml}
-            ${childrenHtml}
-            ${examplesHtml}
-            ${notesHtml}
-            ${seeAlsoHtml}
-            ${metadataHtml}
-            ${translationsHtml}
+        <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 w-full" style="width: 100%; max-width: 100%;" id="detail-grid">
+            <!-- Column 1 -->
+            <div>
+                ${parentsHtml}
+                ${translationsHtml}
+                ${seeAlsoHtml}
+            </div>
+            
+            <!-- Column 2 -->
+            <div>
+                ${childrenHtml}
+                ${examplesHtml}
+                ${notesHtml}
+                ${metadataHtml}
+            </div>
         </div>
     `;
     

@@ -5,7 +5,6 @@ user-friendly format.  Don't do this at home.
 
 # imports
 import json
-from pathlib import Path
 from typing import Dict, List, Tuple
 
 # packages
@@ -70,13 +69,17 @@ def get_node_neighbors(
     nodes = {}
     edges = []
 
-    # add self
+    # add self with additional fields
     nodes[owl_class.iri] = {
         "id": owl_class.iri,
         "label": owl_class.label,
         "description": format_description(owl_class),
         "color": "#000000",
         "relationship": "self",
+        # Add the enhanced fields
+        "country": owl_class.country if hasattr(owl_class, "country") else None,
+        "source": owl_class.source if hasattr(owl_class, "source") else None,
+        "in_scheme": owl_class.in_scheme if hasattr(owl_class, "in_scheme") else None,
     }
 
     # add sub_class_of parents
@@ -89,7 +92,7 @@ def get_node_neighbors(
             else:
                 label = folio_graph[sub_class].label
                 description = format_description(folio_graph[sub_class])
-            
+
             nodes[sub_class] = {
                 "id": sub_class,
                 "label": label,
@@ -105,9 +108,14 @@ def get_node_neighbors(
     for parent_class in owl_class.parent_class_of:
         if folio_graph[parent_class]:
             # Get label and description with fallbacks
-            label = folio_graph[parent_class].label or parent_class.split("#")[-1] or parent_class.split("/")[-1] or "Unnamed"
+            label = (
+                folio_graph[parent_class].label
+                or parent_class.split("#")[-1]
+                or parent_class.split("/")[-1]
+                or "Unnamed"
+            )
             description = format_description(folio_graph[parent_class])
-            
+
             nodes[parent_class] = {
                 "id": parent_class,
                 "label": label,
@@ -123,32 +131,85 @@ def get_node_neighbors(
                 }
             )
 
-    # add see_also
+    # add see_also relationships - now with better IRI support
     for see_also in owl_class.see_also:
-        if folio_graph[see_also]:
-            # Get label and description with fallbacks
-            label = folio_graph[see_also].label or see_also.split("#")[-1] or see_also.split("/")[-1] or "Unnamed"
-            description = format_description(folio_graph[see_also])
-            
-            nodes[see_also] = {
-                "id": see_also,
-                "label": label,
-                "description": description,
-                "color": "#000000",
-                "relationship": "see_also",
-            }
-            edges.append(
-                {"source": owl_class.iri, "target": see_also, "type": "see_also"}
-            )
+        # Check if it's a proper IRI with http prefixes that could be found in our graph
+        if see_also.startswith("http"):
+            # Only add to graph if we can find it in our FOLIO graph
+            if folio_graph[see_also]:
+                # Get label and description with fallbacks
+                label = (
+                    folio_graph[see_also].label
+                    or see_also.split("#")[-1]
+                    or see_also.split("/")[-1]
+                    or "Unnamed"
+                )
+                description = format_description(folio_graph[see_also])
+
+                # Add additional properties if available
+                country = (
+                    folio_graph[see_also].country
+                    if hasattr(folio_graph[see_also], "country")
+                    else None
+                )
+                source = (
+                    folio_graph[see_also].source
+                    if hasattr(folio_graph[see_also], "source")
+                    else None
+                )
+                in_scheme = (
+                    folio_graph[see_also].in_scheme
+                    if hasattr(folio_graph[see_also], "in_scheme")
+                    else None
+                )
+
+                nodes[see_also] = {
+                    "id": see_also,
+                    "label": label,
+                    "description": description,
+                    "color": "#000000",
+                    "relationship": "see_also",
+                    "country": country,
+                    "source": source,
+                    "in_scheme": in_scheme,
+                    "is_external": False,
+                }
+                edges.append(
+                    {"source": owl_class.iri, "target": see_also, "type": "see_also"}
+                )
+            else:
+                # This is an external link we don't have in our ontology
+                # Still add it to the visualization but mark it as external
+                label = see_also.split("/")[-1] or "External Resource"
+                nodes[see_also] = {
+                    "id": see_also,
+                    "label": label,
+                    "description": "External reference",
+                    "color": "#FFC107",  # Use a distinctive color for external references
+                    "relationship": "see_also",
+                    "is_external": True,
+                    "url": see_also,
+                }
+                edges.append(
+                    {"source": owl_class.iri, "target": see_also, "type": "see_also"}
+                )
+        else:
+            # For plain text see_also references, no need to add to graph
+            continue
 
     # add is_defined_by
     if owl_class.is_defined_by:
         if folio_graph[owl_class.is_defined_by]:
             # Get label and description with fallbacks
             is_defined_by = owl_class.is_defined_by
-            label = folio_graph[is_defined_by].label or is_defined_by.split("#")[-1] or is_defined_by.split("/")[-1] or "Unnamed"
+            label = (
+                folio_graph[is_defined_by].label
+                or is_defined_by.split("#")[-1]
+                or is_defined_by.split("/")[-1]
+                or "Unnamed"
+            )
             description = format_description(folio_graph[is_defined_by])
-            
+
             nodes[is_defined_by] = {
                 "id": is_defined_by,
                 "label": label,
@@ -299,15 +360,9 @@ def render_tailwind_html(
         <div class="bg-white border-b">
             <div class="container mx-auto px-4 py-4">
                 <div class="flex flex-wrap gap-2">
-                    <a href="{
-        owl_class.iri
-    }" class="btn btn-primary">JSON</a>
-                    <a href="{
-        owl_class.iri
-    }/jsonld" class="btn btn-primary">JSON-LD</a>
-                    <a href="{
-        owl_class.iri
-    }/xml" class="btn btn-primary">OWL XML</a>
+                    <a href="{owl_class.iri}" class="btn btn-primary">JSON</a>
+                    <a href="{owl_class.iri}/jsonld" class="btn btn-primary">JSON-LD</a>
+                    <a href="{owl_class.iri}/xml" class="btn btn-primary">OWL XML</a>
                     <a href="{
         owl_class.iri
     }/markdown" class="btn btn-primary">Markdown</a>
@@ -431,7 +486,7 @@ def render_tailwind_html(
                     f'<div class="border-b pb-2">'
                     f'<p class="text-gray-500 text-sm font-medium">{language}</p>'
                     f'<p class="mt-1">{translation}</p>'
-                    f'</div>'
+                    f"</div>"
                     for language, translation in owl_class.translations.items()
                 ]
             )

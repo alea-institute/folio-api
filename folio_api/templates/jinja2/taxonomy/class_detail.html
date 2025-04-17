@@ -19,105 +19,267 @@
 {% endblock %}
 
 {% block navigation_buttons %}
-<a href="/taxonomy/browse" class="btn btn-secondary">Back to Browse</a>
-<a href="/taxonomy/tree" class="btn btn-secondary">Taxonomy Tree</a>
-<a href="{{ owl_class.iri }}" class="btn btn-primary">JSON</a>
-<a href="{{ owl_class.iri }}/jsonld" class="btn btn-primary">JSON-LD</a>
-<a href="{{ owl_class.iri }}/xml" class="btn btn-primary">OWL XML</a>
-<a href="{{ owl_class.iri }}/markdown" class="btn btn-primary">Markdown</a>
+<div class="space-x-2 flex flex-wrap gap-2">
+    <a href="/taxonomy/browse" class="btn btn-secondary flex items-center">
+        <svg class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+        </svg>
+        Browse
+    </a>
+    <a href="/taxonomy/tree" class="btn btn-secondary flex items-center">
+        <svg class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
+        </svg>
+        Taxonomy Tree
+    </a>
+    
+    <div class="ml-auto flex flex-wrap gap-2">
+        <span class="text-gray-500 text-sm self-center mr-1">Download as:</span>
+        <a href="{{ owl_class.iri }}" class="btn btn-primary flex items-center">
+            <svg class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+            </svg>
+            JSON
+        </a>
+        <a href="{{ owl_class.iri }}/jsonld" class="btn btn-primary flex items-center">
+            <svg class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+            </svg>
+            JSON-LD
+        </a>
+        <a href="{{ owl_class.iri }}/xml" class="btn btn-primary flex items-center">
+            <svg class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+            </svg>
+            OWL XML
+        </a>
+        <a href="{{ owl_class.iri }}/markdown" class="btn btn-primary flex items-center">
+            <svg class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Markdown
+        </a>
+    </div>
+</div>
 {% endblock %}
 
 {% block content %}
 <div class="max-w-4xl mx-auto space-y-6">
     <!-- Identification -->
-    <section class="card animate-fade-in">
-        <h3 class="text-xl font-semibold mb-4 text-[--color-primary]">Identification</h3>
-        <div class="space-y-4">
+    <section class="card animate-fade-in border-t-4 border-[--color-primary]">
+        <div class="flex justify-between items-start">
             <div>
-                <p class="text-gray-500 text-sm mb-1">IRI <button onclick="copyIRI()" class="copy-button py-1 px-2 rounded text-sm" aria-label="Copy IRI to clipboard">📋</button></p>
-                <p id="iri-value" class="truncate font-mono text-sm" title="{{ owl_class.iri }}">{{ owl_class.iri }}</p>
+                <h3 class="text-xl font-semibold mb-2 text-[--color-primary]">Identification</h3>
+                <div class="flex items-center text-gray-500 text-sm mb-4">
+                    <span class="font-medium mr-1.5">IRI:</span>
+                    <span class="font-mono truncate max-w-[450px]" id="iri-value" title="{{ owl_class.iri }}">
+                        {{ owl_class.iri }}
+                    </span>
+                    <button onclick="copyIRI()" 
+                            class="ml-2 py-1 px-2 rounded text-blue-600 hover:bg-blue-50 transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                            aria-label="Copy IRI to clipboard">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                        </svg>
+                    </button>
+                </div>
             </div>
             
+            {% if owl_class.deprecated %}
+            <div class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                <svg class="w-3.5 h-3.5 mr-1.5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                Deprecated
+            </div>
+            {% endif %}
+        </div>
+        
+        <div class="bg-gray-50 rounded-lg p-4 mt-4">
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                    <p class="text-gray-500 text-sm mb-1">Label</p>
-                    <p class="font-medium">{{ owl_class.label or "N/A" }}</p>
+                <div class="flex flex-col">
+                    <span class="text-gray-500 text-xs font-medium uppercase tracking-wide mb-1">Label</span>
+                    <span class="text-gray-800 font-medium">{{ owl_class.label or "N/A" }}</span>
                 </div>
                 
-                <div>
-                    <p class="text-gray-500 text-sm mb-1">Preferred Label</p>
-                    <p>{{ owl_class.preferred_label or "N/A" }}</p>
+                <div class="flex flex-col">
+                    <span class="text-gray-500 text-xs font-medium uppercase tracking-wide mb-1">Preferred Label</span>
+                    <span class="text-gray-800">{{ owl_class.preferred_label or "N/A" }}</span>
                 </div>
                 
-                <div>
-                    <p class="text-gray-500 text-sm mb-1">Identifier</p>
-                    <p>{{ owl_class.identifier or "N/A" }}</p>
+                <div class="flex flex-col">
+                    <span class="text-gray-500 text-xs font-medium uppercase tracking-wide mb-1">Identifier</span>
+                    <span class="text-gray-800 font-mono text-sm">{{ owl_class.identifier or "N/A" }}</span>
                 </div>
-            </div>
-            
-            <div>
-                <p class="text-gray-500 text-sm mb-1">Alternative Labels</p>
-                <p>{{ owl_class.alternative_labels|join(", ") if owl_class.alternative_labels else "None" }}</p>
+                
+                <div class="md:col-span-3">
+                    <span class="text-gray-500 text-xs font-medium uppercase tracking-wide mb-1">Alternative Labels</span>
+                    {% if owl_class.alternative_labels %}
+                    <div class="flex flex-wrap gap-1 mt-1">
+                        {% for label in owl_class.alternative_labels %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">
+                            {{ label }}
+                        </span>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="text-gray-700">None</p>
+                    {% endif %}
+                </div>
             </div>
         </div>
     </section>
     
     <!-- Definition and Examples -->
-    <section class="card animate-fade-in">
-        <h3 class="text-xl font-semibold mb-4 text-[--color-primary]">Definition</h3>
-        <p class="text-gray-700 mb-6">{{ owl_class.definition or "No definition available." }}</p>
+    <section class="card animate-fade-in border-t-4 border-emerald-500">
+        <div class="flex items-start mb-4">
+            <svg class="w-5 h-5 mt-1 mr-2 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h10M7 16h10" />
+            </svg>
+            <h3 class="text-xl font-semibold text-[--color-primary]">Definition</h3>
+        </div>
+        <div class="bg-gradient-to-r from-emerald-50 to-transparent p-4 rounded-lg mb-6">
+            <p class="text-gray-700">{{ owl_class.definition or "No definition available." }}</p>
+        </div>
         
         {% if owl_class.examples %}
-        <h4 class="text-lg font-medium mb-3 text-[--color-primary]">Examples</h4>
-        <ul class="list-disc pl-5 space-y-2 mb-4">
-            {% for example in owl_class.examples %}
-            <li>{{ example }}</li>
-            {% endfor %}
-        </ul>
+        <div class="flex items-start mb-3">
+            <svg class="w-4 h-4 mt-1 mr-2 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+            </svg>
+            <h4 class="text-lg font-medium text-[--color-primary]">Examples</h4>
+        </div>
+        <div class="bg-gray-50 rounded-lg p-4">
+            <ul class="list-none space-y-2">
+                {% for example in owl_class.examples %}
+                <li class="flex">
+                    <span class="text-emerald-500 mr-2">•</span>
+                    <span>{{ example }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
         {% endif %}
     </section>
     
     <!-- Class Relationships -->
-    <section class="card animate-fade-in">
-        <h3 class="text-xl font-semibold mb-4 text-[--color-primary]">Class Relationships</h3>
+    <section class="card animate-fade-in border-t-4 border-blue-500">
+        <div class="flex items-start mb-4">
+            <svg class="w-5 h-5 mt-1 mr-2 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16l-4-4m0 0l4-4m-4 4h18" />
+            </svg>
+            <h3 class="text-xl font-semibold text-[--color-primary]">Class Relationships</h3>
+        </div>
         
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-                <p class="text-gray-500 text-sm mb-2">Sub Class Of</p>
-                <ul class="list-disc pl-5 space-y-1">
+            <div class="bg-blue-50 rounded-lg p-4">
+                <div class="flex items-center mb-3">
+                    <svg class="w-4 h-4 mr-2 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                    </svg>
+                    <p class="text-gray-700 text-sm font-medium uppercase tracking-wide">Sub Class Of</p>
+                </div>
+                <ul class="list-none space-y-2">
                     {% if owl_class.sub_class_of %}
                         {% for sub_class in owl_class.sub_class_of %}
                             {% if folio_graph[sub_class] %}
-                            <li><a class="text-blue-500 hover:text-blue-700 hover:underline" href="{{ sub_class }}/html">{{ folio_graph[sub_class].label }}</a></li>
+                            <li class="flex items-center">
+                                <span class="text-blue-500 mr-2">•</span>
+                                <a class="text-blue-700 hover:text-blue-900 hover:underline transition-colors duration-150" href="{{ sub_class }}/html">
+                                    {{ folio_graph[sub_class].label }}
+                                </a>
+                            </li>
                             {% endif %}
                         {% endfor %}
                     {% else %}
-                    <li>None</li>
+                    <li class="flex items-center">
+                        <span class="text-gray-400 mr-2">•</span>
+                        <span class="text-gray-500 italic">None</span>
+                    </li>
                     {% endif %}
                 </ul>
             </div>
             
-            <div>
-                <p class="text-gray-500 text-sm mb-2">Is Defined By</p>
-                <p>{{ owl_class.is_defined_by or "N/A" }}</p>
+            <div class="bg-gray-50 rounded-lg p-4">
+                <div class="flex items-center mb-3">
+                    <svg class="w-4 h-4 mr-2 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <p class="text-gray-700 text-sm font-medium uppercase tracking-wide">Is Defined By</p>
+                </div>
+                <p class="text-gray-800 ml-6">{{ owl_class.is_defined_by or "N/A" }}</p>
                 
-                <p class="text-gray-500 text-sm mt-4 mb-2">See Also</p>
-                <p>{{ owl_class.see_also|join(", ") if owl_class.see_also else "None" }}</p>
+                <div class="flex items-center mb-3 mt-4">
+                    <svg class="w-4 h-4 mr-2 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                    </svg>
+                    <p class="text-gray-700 text-sm font-medium uppercase tracking-wide">See Also</p>
+                </div>
+                {% if owl_class.see_also %}
+                <ul class="list-none space-y-2 ml-6">
+                    {% for see in owl_class.see_also %}
+                        {% if see.startswith('http') %}
+                            <li class="flex items-center">
+                                <span class="text-amber-500 mr-2">•</span>
+                                {% if folio_graph[see] %}
+                                    <a href="{{ see }}/html" class="text-amber-700 hover:text-amber-900 hover:underline transition-colors duration-150">
+                                        {{ folio_graph[see].label }}
+                                    </a>
+                                {% else %}
+                                    <a href="{{ see }}" class="text-amber-700 hover:text-amber-900 hover:underline transition-colors duration-150 group" target="_blank">
+                                        {{ see }}
+                                        <span class="inline-flex items-center ml-1 text-gray-400 text-xs group-hover:text-gray-600">
+                                            <svg class="w-3 h-3 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                            </svg>
+                                        </span>
+                                    </a>
+                                {% endif %}
+                            </li>
+                        {% else %}
+                            <li class="flex items-center">
+                                <span class="text-amber-500 mr-2">•</span>
+                                <span>{{ see }}</span>
+                            </li>
+                        {% endif %}
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-gray-500 italic ml-6">None</p>
+                {% endif %}
             </div>
         </div>
         
         <div class="mt-6">
-            <p class="text-gray-500 text-sm mb-2">Parent Class Of ({{ owl_class.parent_class_of|length if owl_class.parent_class_of else 0 }})</p>
-            <div class="max-h-60 overflow-y-auto border border-gray-200 rounded p-2 bg-gray-50">
-                <ul class="list-disc pl-5 space-y-1">
+            <div class="flex items-center mb-3">
+                <svg class="w-4 h-4 mr-2 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                </svg>
+                <p class="text-gray-700 text-sm font-medium uppercase tracking-wide">
+                    Parent Class Of 
+                    <span class="inline-flex items-center justify-center ml-2 bg-green-100 text-green-800 px-2 py-0.5 rounded-full text-xs">
+                        {{ owl_class.parent_class_of|length if owl_class.parent_class_of else 0 }}
+                    </span>
+                </p>
+            </div>
+            <div class="max-h-60 overflow-y-auto border border-green-100 rounded-lg p-4 bg-green-50">
+                <ul class="list-none space-y-2">
                     {% if owl_class.parent_class_of %}
                         {% for parent_class in owl_class.parent_class_of %}
                             {% if folio_graph[parent_class] %}
-                            <li><a class="text-blue-500 hover:text-blue-700 hover:underline" href="{{ parent_class }}/html">{{ folio_graph[parent_class].label }}</a></li>
+                            <li class="flex items-center">
+                                <span class="text-green-500 mr-2">•</span>
+                                <a class="text-green-700 hover:text-green-900 hover:underline transition-colors duration-150" href="{{ parent_class }}/html">
+                                    {{ folio_graph[parent_class].label }}
+                                </a>
+                            </li>
                             {% endif %}
                         {% endfor %}
                     {% else %}
-                    <li>None</li>
+                    <li class="flex items-center">
+                        <span class="text-gray-400 mr-2">•</span>
+                        <span class="text-gray-500 italic">None</span>
+                    </li>
                     {% endif %}
                 </ul>
             </div>
@@ -126,13 +288,43 @@
     
     <!-- Translations -->
     {% if owl_class.translations %}
-    <section class="card animate-fade-in">
-        <h3 class="text-xl font-semibold mb-4 text-[--color-primary]">Translations</h3>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <section class="card animate-fade-in border-t-4 border-indigo-500">
+        <div class="flex items-start mb-4">
+            <svg class="w-5 h-5 mt-1 mr-2 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
+            </svg>
+            <h3 class="text-xl font-semibold text-[--color-primary]">Translations</h3>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             {% for language, translation in owl_class.translations.items() %}
-            <div class="border-b pb-2">
-                <p class="text-gray-500 text-sm font-medium">{{ language }}</p>
-                <p class="mt-1">{{ translation }}</p>
+            <div class="bg-indigo-50 p-4 rounded-lg">
+                <div class="flex items-center mb-2">
+                    {% set language_lower = language|lower %}
+                    {% set language_code = language_lower[:2] %}
+                    {% set lang_flags = {
+                        "en": "🇬🇧", "en-gb": "🇬🇧", "en-us": "🇺🇸", "en-ca": "🇨🇦", "en-au": "🇦🇺", "en-nz": "🇳🇿", 
+                        "de": "🇩🇪", "de-de": "🇩🇪", "de-at": "🇦🇹", "de-ch": "🇨🇭",
+                        "fr": "🇫🇷", "fr-fr": "🇫🇷", "fr-ca": "🇨🇦", "fr-ch": "🇨🇭", "fr-be": "🇧🇪",
+                        "es": "🇪🇸", "es-es": "🇪🇸", "es-mx": "🇲🇽", "es-ar": "🇦🇷", "es-co": "🇨🇴",
+                        "it": "🇮🇹", "it-it": "🇮🇹", "it-ch": "🇨🇭",
+                        "pt": "🇵🇹", "pt-pt": "🇵🇹", "pt-br": "🇧🇷",
+                        "nl": "🇳🇱", "nl-nl": "🇳🇱", "nl-be": "🇧🇪",
+                        "ru": "🇷🇺", "ru-ru": "🇷🇺",
+                        "pl": "🇵🇱", "sv": "🇸🇪", "no": "🇳🇴", "fi": "🇫🇮", "da": "🇩🇰", "el": "🇬🇷",
+                        "zh": "🇨🇳", "zh-cn": "🇨🇳", "zh-tw": "🇹🇼", "zh-hk": "🇭🇰", "zh-sg": "🇸🇬",
+                        "ja": "🇯🇵", "ja-jp": "🇯🇵",
+                        "ko": "🇰🇷", "ko-kr": "🇰🇷",
+                        "hi": "🇮🇳", "hi-in": "🇮🇳",
+                        "ar": "🇸🇦", "ar-sa": "🇸🇦", "ar-eg": "🇪🇬", "ar-dz": "🇩🇿",
+                        "he": "🇮🇱", "he-il": "🇮🇱", 
+                        "th": "🇹🇭", "vi": "🇻🇳"
+                    } %}
+                    <span class="inline-block mr-2 text-xl" title="{{ language }}">
+                        {{ lang_flags.get(language_lower, lang_flags.get(language_code, "🌐")) }}
+                    </span>
+                    <p class="text-indigo-700 text-sm font-medium uppercase tracking-wide">{{ language }}</p>
+                </div>
+                <p class="mt-1 text-gray-700">{{ translation }}</p>
             </div>
             {% endfor %}
         </div>
@@ -140,11 +332,19 @@
     {% endif %}
     
     <!-- Graph Visualization -->
-    <section class="card animate-fade-in">
-        <h3 class="text-xl font-semibold mb-4 text-[--color-primary]">
-            Class Hierarchy Visualization
-        </h3>
-        <div id="hierarchy-container" class="h-96 w-full border border-gray-200 rounded-lg relative">
+    <section class="card animate-fade-in border-t-4 border-purple-500">
+        <div class="flex items-start mb-4">
+            <svg class="w-5 h-5 mt-1 mr-2 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2 1m2-1l-2-1m2 1v2.5M14 4l-2-1-2 1M4 7l2-1M4 7l2 1M4 7v2.5M12 21l-2-1m2 1l2-1m-2 1v-2.5M6 18l-2-1v-2.5M18 18l2-1v-2.5" />
+            </svg>
+            <h3 class="text-xl font-semibold text-[--color-primary]">
+                Class Hierarchy Visualization
+            </h3>
+        </div>
+        <p class="text-gray-600 mb-4 text-sm italic">
+            Interactive graph showing class relationships - click on any node to navigate to that class
+        </p>
+        <div id="hierarchy-container" class="h-96 w-full border border-purple-200 rounded-lg relative shadow-inner bg-gradient-to-br from-purple-50 to-white">
             <!-- Progressive enhancement: Non-JS fallback for visualization -->
             <noscript>
                 <div class="absolute inset-0 flex items-center justify-center bg-gray-50 p-4 text-center">
@@ -163,52 +363,160 @@
     </section>
     
     <!-- Additional Information -->
-    <section class="card animate-fade-in">
-        <h3 class="text-xl font-semibold mb-4 text-[--color-primary]">Additional Information</h3>
+    <section class="card animate-fade-in border-t-4 border-gray-500">
+        <div class="flex items-start mb-4">
+            <svg class="w-5 h-5 mt-1 mr-2 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <h3 class="text-xl font-semibold text-[--color-primary]">Additional Information</h3>
+        </div>
         
         <div class="space-y-6">
-            <div>
-                <h4 class="text-lg font-medium mb-2 text-[--color-primary]">Metadata</h4>
-                <div class="space-y-3">
-                    <div>
-                        <p class="text-gray-500 text-sm">Comment</p>
-                        <p>{{ owl_class.comment or "None" }}</p>
+            <div class="bg-gray-50 rounded-lg p-4">
+                <div class="flex items-center mb-3">
+                    <svg class="w-4 h-4 mr-2 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <h4 class="text-lg font-medium text-[--color-primary]">Metadata</h4>
+                </div>
+                <div class="space-y-4">
+                    <div class="p-3 bg-white rounded border border-gray-100">
+                        <p class="text-gray-700 text-xs font-medium uppercase tracking-wide mb-1">Comment</p>
+                        <p class="text-gray-800">{{ owl_class.comment or "None" }}</p>
                     </div>
-                    <div>
-                        <p class="text-gray-500 text-sm">Description</p>
-                        <p>{{ owl_class.description or "None" }}</p>
+                    <div class="p-3 bg-white rounded border border-gray-100">
+                        <p class="text-gray-700 text-xs font-medium uppercase tracking-wide mb-1">Description</p>
+                        <p class="text-gray-800">{{ owl_class.description or "None" }}</p>
                     </div>
-                    <div>
-                        <p class="text-gray-500 text-sm">Notes</p>
-                        <ul class="list-disc pl-5">
+                    <div class="p-3 bg-white rounded border border-gray-100">
+                        <p class="text-gray-700 text-xs font-medium uppercase tracking-wide mb-1">Notes</p>
+                        <ul class="list-none space-y-1">
                             {% if owl_class.notes %}
                                 {% for note in owl_class.notes %}
-                                <li>{{ note }}</li>
+                                <li class="flex">
+                                    <span class="text-gray-500 mr-2">•</span>
+                                    <span class="text-gray-800">{{ note }}</span>
+                                </li>
                                 {% endfor %}
                             {% else %}
-                            <li>None</li>
+                            <li class="flex">
+                                <span class="text-gray-400 mr-2">•</span>
+                                <span class="text-gray-500 italic">None</span>
+                            </li>
                             {% endif %}
                         </ul>
                     </div>
                 </div>
             </div>
             
-            <div>
-                <h4 class="text-lg font-medium mb-2 text-[--color-primary]">Editorial Information</h4>
+            <div class="bg-gray-50 rounded-lg p-4">
+                <div class="flex items-center mb-3">
+                    <svg class="w-4 h-4 mr-2 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                    <h4 class="text-lg font-medium text-[--color-primary]">Editorial Information</h4>
+                </div>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                        <p class="text-gray-500 text-sm">History Note</p>
-                        <p>{{ owl_class.history_note or "None" }}</p>
+                    <div class="p-3 bg-white rounded border border-gray-100">
+                        <p class="text-gray-700 text-xs font-medium uppercase tracking-wide mb-1">History Note</p>
+                        <p class="text-gray-800">{{ owl_class.history_note or "None" }}</p>
                     </div>
-                    <div>
-                        <p class="text-gray-500 text-sm">Editorial Note</p>
-                        <p>{{ owl_class.editorial_note or "None" }}</p>
+                    <div class="p-3 bg-white rounded border border-gray-100">
+                        <p class="text-gray-700 text-xs font-medium uppercase tracking-wide mb-1">Editorial Note</p>
+                        <p class="text-gray-800">{{ owl_class.editorial_note or "None" }}</p>
                     </div>
-                    <div>
-                        <p class="text-gray-500 text-sm">Deprecated</p>
-                        <p>{{ owl_class.deprecated }}</p>
+                    <div class="p-3 bg-white rounded border border-gray-100">
+                        <p class="text-gray-700 text-xs font-medium uppercase tracking-wide mb-1">Deprecated</p>
+                        <p class="flex items-center">
+                            {% if owl_class.deprecated %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 mr-2">
+                                <svg class="w-3 h-3 mr-1 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                </svg>
+                                Yes
+                            </span>
+                            {% else %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 mr-2">
+                                <svg class="w-3 h-3 mr-1 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                </svg>
+                                No
+                            </span>
+                            {% endif %}
+                        </p>
                     </div>
                 </div>
+            </div>
+        </div>
+    </section>
+    
+    <!-- Source and Origin Information -->
+    <section class="card animate-fade-in border-t-4 border-amber-500">
+        <div class="flex items-start mb-4">
+            <svg class="w-5 h-5 mt-1 mr-2 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+            </svg>
+            <h3 class="text-xl font-semibold text-[--color-primary]">Source and Origin</h3>
+        </div>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="bg-amber-50 rounded-lg p-4">
+                {% if owl_class.in_scheme %}
+                <div class="mb-4">
+                    <div class="flex items-center mb-2">
+                        <svg class="w-4 h-4 mr-2 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
+                        </svg>
+                        <p class="text-gray-700 text-xs font-medium uppercase tracking-wide">In Scheme</p>
+                    </div>
+                    <p class="text-gray-800 font-medium ml-6">{{ owl_class.in_scheme }}</p>
+                </div>
+                {% endif %}
+                
+                {% if owl_class.source %}
+                <div class="mb-4">
+                    <div class="flex items-center mb-2">
+                        <svg class="w-4 h-4 mr-2 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                        </svg>
+                        <p class="text-gray-700 text-xs font-medium uppercase tracking-wide">Source</p>
+                    </div>
+                    <p class="text-gray-800 ml-6">{{ owl_class.source }}</p>
+                </div>
+                {% endif %}
+            </div>
+            
+            <div class="bg-amber-50 rounded-lg p-4">
+                {% if owl_class.country %}
+                <div class="mb-4">
+                    <div class="flex items-center mb-2">
+                        <svg class="w-4 h-4 mr-2 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9" />
+                        </svg>
+                        <p class="text-gray-700 text-xs font-medium uppercase tracking-wide">Country</p>
+                    </div>
+                    <div class="flex items-center ml-6">
+                        {% set country_code = owl_class.country|lower if owl_class.country|length == 2 else owl_class.country[:2]|lower %}
+                        {% set country_flags = {
+                            "us": "🇺🇸", "gb": "🇬🇧", "ca": "🇨🇦", "au": "🇦🇺", 
+                            "eu": "🇪🇺", "de": "🇩🇪", "fr": "🇫🇷", "jp": "🇯🇵", 
+                            "cn": "🇨🇳", "in": "🇮🇳", "br": "🇧🇷", "za": "🇿🇦",
+                            "es": "🇪🇸", "it": "🇮🇹", "mx": "🇲🇽", "kr": "🇰🇷",
+                            "nl": "🇳🇱", "ru": "🇷🇺", "ch": "🇨🇭", "se": "🇸🇪"
+                        } %}
+                        <span class="inline-block mr-3 text-3xl" title="{{ owl_class.country }}">
+                            {{ country_flags.get(country_code, "🌐") }}
+                        </span>
+                        <span class="text-gray-800 font-medium">{{ owl_class.country }}</span>
+                    </div>
+                </div>
+                {% endif %}
+                
+                {% if not owl_class.country and not owl_class.source and not owl_class.in_scheme %}
+                <div class="flex items-center justify-center h-full">
+                    <p class="text-gray-500 italic">No source or origin information available</p>
+                </div>
+                {% endif %}
             </div>
         </div>
     </section>
@@ -257,6 +565,9 @@
                         label: node.label,
                         description: node.description,
                         relationship: node.relationship,
+                        country: node.country || null,
+                        source: node.source || null,
+                        inScheme: node.in_scheme || null,
                     }
                 })),
                 ...edges.map(edge => ({
@@ -330,6 +641,16 @@
                         'target-arrow-color': '#FFC107',
                         'line-style': 'dashed'
                     }
+                },
+                {
+                    selector: 'node[?is_external]',
+                    style: {
+                        'background-color': '#fff8e1', // Light amber color
+                        'border-color': '#FFC107',
+                        'border-width': 2,
+                        'border-style': 'dashed',
+                        'color': '#B45309' // Amber text color
+                    }
                 }
             ],
             layout: {
@@ -360,8 +681,17 @@
         cy.on('tap', 'node', function(evt) {
             const node = evt.target;
             const nodeId = node.id();
+            const isExternal = node.data('is_external');
+            const url = node.data('url');
             
-            // Only proceed if the node has a valid IRI as ID
+            // Check if this is an external link first
+            if (isExternal && url) {
+                // Open external links in a new tab
+                window.open(url, '_blank');
+                return;
+            }
+            
+            // For internal FOLIO nodes, navigate to the HTML view
             if (nodeId && (nodeId.startsWith('http') || nodeId.includes(':'))) {
                 // Navigate to the HTML view of the class
                 window.location.href = nodeId + '/html';
@@ -376,12 +706,41 @@
                 // Get the node's data, with fallbacks for missing properties
                 const nodeLabel = node.data('label') || node.id() || 'Unnamed';
                 const nodeDesc = node.data('description') || 'No description available';
+                const nodeCountry = node.data('country');
+                const nodeSource = node.data('source');
+                const nodeInScheme = node.data('inScheme');
                 
                 const content = document.createElement('div');
-                content.innerHTML = `<div class="bg-white p-2 rounded shadow-lg border border-gray-200">
-                    <div class="font-bold">${nodeLabel}</div>
-                    <div class="text-sm">${nodeDesc}</div>
-                </div>`;
+                
+                // Create tooltip content with additional information if available
+                let tooltipHTML = `<div class="bg-white p-3 rounded shadow-lg border border-gray-200 max-w-xs">
+                    <div class="font-bold text-blue-700 mb-1">${nodeLabel}</div>
+                    <div class="text-sm mb-2">${nodeDesc}</div>`;
+                
+                // Add country with flag if available
+                if (nodeCountry) {
+                    const countryCode = nodeCountry.toLowerCase().substring(0, 2);
+                    const countryFlags = {
+                        "us": "🇺🇸", "gb": "🇬🇧", "ca": "🇨🇦", "au": "🇦🇺", 
+                        "eu": "🇪🇺", "de": "🇩🇪", "fr": "🇫🇷", "jp": "🇯🇵", 
+                        "cn": "🇨🇳", "in": "🇮🇳", "br": "🇧🇷", "za": "🇿🇦"
+                    };
+                    const flag = countryFlags[countryCode] || "🌐";
+                    tooltipHTML += `<div class="text-xs flex items-center mt-1"><span class="font-medium text-gray-500 mr-1">Country:</span> ${flag} ${nodeCountry}</div>`;
+                }
+                
+                // Add source if available
+                if (nodeSource) {
+                    tooltipHTML += `<div class="text-xs mt-1"><span class="font-medium text-gray-500 mr-1">Source:</span> ${nodeSource}</div>`;
+                }
+                
+                // Add scheme if available
+                if (nodeInScheme) {
+                    tooltipHTML += `<div class="text-xs mt-1"><span class="font-medium text-gray-500 mr-1">Scheme:</span> ${nodeInScheme}</div>`;
+                }
+                
+                tooltipHTML += `</div>`;
+                content.innerHTML = tooltipHTML;
                 
                 // Create the popper reference
                 const popper = node.popper({
@@ -472,6 +831,10 @@
           <div style="display: flex; align-items: center; margin-bottom: 3px;">
             <div style="width: 12px; height: 12px; background-color: #fff; border: 1px solid #FFC107; border-radius: 3px; margin-right: 5px;"></div>
             <div>See Also</div>
+          </div>
+          <div style="display: flex; align-items: center; margin-bottom: 3px;">
+            <div style="width: 12px; height: 12px; background-color: #fff8e1; border: 1px dashed #FFC107; border-radius: 3px; margin-right: 5px;"></div>
+            <div>External Link</div>
           </div>
         `;
         

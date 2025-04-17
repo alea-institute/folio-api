@@ -185,7 +185,6 @@ def get_app() -> FastAPI:
     # Mount static files with appropriate cache headers
     static_dir = Path(__file__).parent / "static"
 
-
     # Check if the directory exists
     if not static_dir.exists():
         # Create the directory if it doesn't exist
@@ -193,7 +192,7 @@ def get_app() -> FastAPI:
             static_dir.mkdir(parents=True, exist_ok=True)
         except Exception as e:
             raise RuntimeError(
-                f"Failed to create static directory: %s" % static_dir
+                "Failed to create static directory: %s" % static_dir
             ) from e
 
     app_instance.mount("/static", StaticFiles(directory=static_dir), name="static")
@@ -207,7 +206,7 @@ def get_app() -> FastAPI:
             templates_dir.mkdir(parents=True, exist_ok=True)
         except Exception as e:
             raise RuntimeError(
-                f"Failed to create templates directory: %s" % templates_dir
+                "Failed to create templates directory: %s" % templates_dir
             ) from e
 
     # Store templates instance in app state
