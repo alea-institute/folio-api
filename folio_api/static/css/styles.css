@@ -118,6 +118,7 @@
     border-radius: 0.375rem;
     transition: all 0.2s;
     cursor: pointer;
+    white-space: nowrap;
 }
 
 .btn-primary {
@@ -137,6 +138,14 @@
 
 .btn-secondary:hover {
     background-color: rgba(24, 70, 120, 0.1);
+}
+
+/* Responsive button sizes */
+@media (max-width: 640px) {
+    .btn {
+        padding: 0.375rem 0.75rem;
+        font-size: 0.875rem;
+    }
 }
 
 /* Card Styles */
