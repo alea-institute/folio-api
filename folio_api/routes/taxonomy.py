@@ -552,6 +552,9 @@ async def get_tree_data(
                     },
                 }
             )
+            
+        # Sort root level nodes alphabetically by label
+        result.sort(key=lambda x: x["text"].lower())
 
         return JSONResponse(content=result)
 
@@ -581,6 +584,9 @@ async def get_tree_data(
                         },
                     }
                 )
+                
+        # Sort child nodes alphabetically by label
+        children.sort(key=lambda x: x["text"].lower())
 
         return JSONResponse(content=children)
 
@@ -655,6 +661,9 @@ async def get_node_data(request: Request, iri: str) -> JSONResponse:
                         "definition": parent.definition or "No definition available",
                     }
                 )
+        
+        # Sort parents alphabetically by label
+        parents.sort(key=lambda x: x["label"].lower())
 
     # Build children list
     children = []
@@ -669,6 +678,9 @@ async def get_node_data(request: Request, iri: str) -> JSONResponse:
                         "definition": child.definition or "No definition available",
                     }
                 )
+        
+        # Sort children alphabetically by label
+        children.sort(key=lambda x: x["label"].lower())
 
     # Check if translations are available
     translations = {}
@@ -1026,6 +1038,36 @@ async def search_taxonomy_tree(request: Request, query: str) -> JSONResponse:
         if is_top_level:
             tree["root_nodes"].append(node_iri)
 
+    # Sort matches alphabetically by label
+    matches.sort(key=lambda x: x["label"].lower())
+    
+    # Sort children arrays alphabetically by label
+    for node_iri in tree["nodes"]:
+        if tree["nodes"][node_iri]["children"]:
+            # Need to sort by label, but we have IRIs
+            children_with_labels = []
+            for child_iri in tree["nodes"][node_iri]["children"]:
+                child_label = tree["nodes"][child_iri]["label"] if child_iri in tree["nodes"] else ""
+                children_with_labels.append((child_iri, child_label))
+                
+            # Sort by label
+            children_with_labels.sort(key=lambda x: x[1].lower())
+            
+            # Update the children array with sorted IRIs
+            tree["nodes"][node_iri]["children"] = [x[0] for x in children_with_labels]
+    
+    # Sort root_nodes alphabetically by label
+    root_nodes_with_labels = []
+    for node_iri in tree["root_nodes"]:
+        node_label = tree["nodes"][node_iri]["label"] if node_iri in tree["nodes"] else ""
+        root_nodes_with_labels.append((node_iri, node_label))
+        
+    # Sort by label
+    root_nodes_with_labels.sort(key=lambda x: x[1].lower())
+    
+    # Update root_nodes with sorted IRIs
+    tree["root_nodes"] = [x[0] for x in root_nodes_with_labels]
+    
     # Return the search matches and filtered tree structure
     return JSONResponse(content={"matches": matches, "tree": tree})
 
@@ -1100,6 +1142,9 @@ async def get_class_details_html(request: Request, iri: str) -> Response:
                         "definition": parent.definition or "No definition available",
                     }
                 )
+        
+        # Sort parents alphabetically by label
+        parents.sort(key=lambda x: x["label"].lower())
 
     # Build children list
     children = []
@@ -1114,6 +1159,9 @@ async def get_class_details_html(request: Request, iri: str) -> Response:
                         "definition": child.definition or "No definition available",
                     }
                 )
+        
+        # Sort children alphabetically by label
+        children.sort(key=lambda x: x["label"].lower())
 
     # Check if translations are available
     translations = {}
@@ -1265,6 +1313,9 @@ async def browse_top_level_classes(request: Request) -> Response:
                 and owl_class.sub_class_of[0] == OWL_THING
             ):
                 root_classes.append(owl_class)
+    
+    # Sort root classes alphabetically by label
+    root_classes.sort(key=lambda x: x.label.lower() if x.label else "")
 
     # Import JavaScript for typeahead search
     typeahead_js_path = (

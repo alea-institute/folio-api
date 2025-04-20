@@ -37,6 +37,41 @@
 
 <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 w-full" style="width: 100%; max-width: 100%;" id="detail-grid">
     <!-- COLUMN 1 -->
+    <!-- Labels section - Added at the top -->
+    {% if class_data.preferred_label or class_data.alternative_labels %}
+    <section class="card animate-fade-in">
+        <h4 class="text-lg font-medium text-[--color-primary] mb-3 flex items-center">
+            <svg class="w-4 h-4 mr-2 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+            </svg>
+            Labels & Synonyms
+        </h4>
+        <div class="max-h-[200px] overflow-y-auto pr-1">
+            <div class="bg-purple-50 rounded-lg p-4 border-l-3 border-purple-200">
+                {% if class_data.preferred_label %}
+                <div class="mb-3">
+                    <span class="text-gray-500 text-xs font-medium uppercase tracking-wide mb-1 block">Preferred Label</span>
+                    <span class="text-gray-800 font-medium text-lg block">{{ class_data.preferred_label }}</span>
+                </div>
+                {% endif %}
+                
+                {% if class_data.alternative_labels %}
+                <div>
+                    <span class="text-gray-500 text-xs font-medium uppercase tracking-wide mb-2 block">Alternative Labels</span>
+                    <div class="flex flex-wrap gap-1">
+                        {% for label in class_data.alternative_labels %}
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium bg-purple-100 text-purple-800">
+                            {{ label }}
+                        </span>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </section>
+    {% endif %}
+    
     <!-- Parents section -->
     {% if class_data.parents %}
     <section class="card animate-fade-in">
@@ -163,25 +198,7 @@
             <!-- Metadata grouped in a visually pleasing card -->
             <div class="bg-gray-50 rounded-lg p-4">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {% if class_data.preferred_label %}
-                    <div class="flex flex-col">
-                        <span class="text-gray-500 text-xs font-medium uppercase tracking-wide mb-1">Preferred Label</span>
-                        <span class="text-gray-800 font-medium">{{ class_data.preferred_label }}</span>
-                    </div>
-                    {% endif %}
-                    
-                    {% if class_data.alternative_labels %}
-                    <div class="flex flex-col">
-                        <span class="text-gray-500 text-xs font-medium uppercase tracking-wide mb-1">Alternative Labels</span>
-                        <div class="flex flex-wrap gap-1">
-                            {% for label in class_data.alternative_labels %}
-                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">
-                                {{ label }}
-                            </span>
-                            {% endfor %}
-                        </div>
-                    </div>
-                    {% endif %}
+                    <!-- Preferred Label and Alternative Labels removed from here -->
                     
                     {% if class_data.identifier %}
                     <div class="flex flex-col">

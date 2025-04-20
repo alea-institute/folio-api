@@ -312,7 +312,7 @@ function applyTreeStyles() {
         .node-content {
             display: flex;
             align-items: center;
-            padding: 3px 8px;
+            padding: 2px 6px;
             border-radius: 3px;
             cursor: pointer;
             word-break: break-word;
