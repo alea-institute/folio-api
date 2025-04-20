@@ -1,6 +1,30 @@
-<footer class="bg-[--color-primary] text-white py-4 mt-2 fixed bottom-0 w-full">
-    <div class="container mx-auto px-4 text-center">
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
+<footer class="bg-[--color-primary] text-white py-2 md:py-4 mt-4 md:mt-auto w-full">
+    <div class="container mx-auto px-2 md:px-4 text-center">
+        <!-- Mobile footer (enhanced) -->
+        <div class="md:hidden">
+            <div class="flex justify-between items-center">
+                <a href="https://openlegalstandard.org/" target="_blank" class="inline-block">
+                    <img src="https://openlegalstandard.org/assets/images/folio-3x1-accent.svg" alt="FOLIO Logo" class="w-16 inline-block">
+                </a>
+                <p class="text-xs">&copy; 2024-2025</p>
+            </div>
+            <div class="mt-2">
+                <div class="flex flex-wrap justify-between text-xs">
+                    <a href="https://openlegalstandard.org/" class="text-[--color-secondary] hover:text-white mb-1 mr-2">FOLIO Website</a>
+                    <a href="https://openlegalstandard.org/education/" class="text-[--color-secondary] hover:text-white mb-1 mr-2">Education</a>
+                    <a href="https://openlegalstandard.org/resources/folio-python-library/" class="text-[--color-secondary] hover:text-white mb-1 mr-2">Python Lib</a>
+                    <a href="https://github.com/alea-institute/folio-api" class="text-[--color-secondary] hover:text-white mb-1">GitHub</a>
+                </div>
+                <div class="flex justify-between text-xs mt-1">
+                    <p>FOLIO: CC-BY 4.0</p>
+                    <p>Software: MIT</p>
+                </div>
+                <p class="text-xs mt-1">Version: <span class="font-mono">{{ config.folio.branch }}</span></p>
+            </div>
+        </div>
+
+        <!-- Desktop footer (full content) -->
+        <div class="hidden md:grid md:grid-cols-3 gap-4 items-center">
             <div class="flex-shrink-0 text-center md:text-left">
                 <a href="https://openlegalstandard.org/" target="_blank" class="inline-block">
                     <img src="https://openlegalstandard.org/assets/images/folio-3x1-accent.svg" alt="FOLIO Logo" class="w-24 inline-block">
@@ -30,5 +54,4 @@
     </div>
 </footer>
 
-<!-- Spacer element to prevent content from being hidden behind fixed footer -->
-<div class="h-28 md:h-24"></div>
+<!-- No need for spacer since footer is not fixed position anymore -->

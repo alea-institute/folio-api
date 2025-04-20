@@ -48,7 +48,7 @@ async function getNodeData(nodeId) {
         
         return data;
     } catch (error) {
-        console.error('Error fetching node data:', error);
+        // Error silently handled
         throw error;
     }
 }
@@ -107,7 +107,6 @@ function loadTreeNodes(nodeId, container) {
     // Check if container already has nodes (other than loading indicators)
     const existingNodes = container.children('.tree-node');
     if (existingNodes.length > 0) {
-        console.log(`Container already has ${existingNodes.length} nodes, skipping load for ${nodeId}`);
         return;
     }
     
@@ -141,8 +140,7 @@ function loadTreeNodes(nodeId, container) {
             // Set up click handlers
             setupNodeClickHandlers();
         })
-        .catch((error) => {
-            console.error('Error loading tree nodes:', error);
+        .catch(() => {
             container.find('.loading-indicator').html('<span class="text-red-500">Error loading. Try again.</span>');
         });
 }
@@ -227,10 +225,7 @@ function toggleNode(li) {
         // Load children if not already loaded - only if there are no tree nodes
         // Loading indicators don't count as children for this check
         if (childrenContainer.children('.tree-node').length === 0) {
-            console.log(`Loading children for node ${nodeId} in toggleNode`);
             loadTreeNodes(nodeId, childrenContainer);
-        } else {
-            console.log(`Node ${nodeId} already has ${childrenContainer.children('.tree-node').length} children loaded, skipping`);
         }
         
         // Ensure child nodes have correct styling
@@ -719,7 +714,6 @@ function setupKeyboardNavigation() {
 function loadAndSelectNode(nodeId, updateUrl = true) {
     // First check if the request is already in progress
     if (isLoadingTree) {
-        console.log('Tree loading already in progress, queueing request');
         // Wait for the current operation to complete before trying again
         setTimeout(() => loadAndSelectNode(nodeId, updateUrl), 500);
         return;
@@ -749,7 +743,6 @@ function loadAndSelectNode(nodeId, updateUrl = true) {
     } else {
         // Set the loading flag
         isLoadingTree = true;
-        console.log(`Starting tree loading for node: ${nodeId}`);
         
         // Show loading indicator
         const detailsContainer = document.getElementById('class-details');
@@ -769,14 +762,12 @@ function loadAndSelectNode(nodeId, updateUrl = true) {
         // Node doesn't exist yet, we need to find its parents and load them first
         findNodePath(nodeId)
             .then(path => {
-                console.log(`Found path with ${path.length} nodes, loading now...`);
                 return loadNodePath(path);
             })
             .then(() => {
                 // Now the node should be in the DOM
                 const loadedNode = $(`.tree-node[data-id="${nodeId}"]`);
                 if (loadedNode.length > 0) {
-                    console.log(`Node found in DOM after path loading, selecting...`);
                     // Make sure we always select the node after loading it
                     $('.tree-node.selected').removeClass('selected');
                     loadedNode.addClass('selected');
@@ -787,19 +778,18 @@ function loadAndSelectNode(nodeId, updateUrl = true) {
                     // Properly call selectNode to update URL and load details
                     selectNode(loadedNode, updateUrl);
                 } else {
-                    console.warn(`Node not found in DOM after path loading: ${nodeId}`);
+                    // Node not found in DOM
                     
                     // Try a direct load of the node details even if we can't find it in the tree
                     loadClassDetails(nodeId, updateUrl);
                 }
             })
             .catch(err => {
-                console.error('Error loading node:', err);
+                // Error handled silently
                 
                 // Double-check one more time if the node is in the DOM before falling back
                 const finalCheckNode = $(`.tree-node[data-id="${nodeId}"]`);
                 if (finalCheckNode.length > 0) {
-                    console.log(`Node found in final check, selecting...`);
                     // Make sure we always select the node
                     $('.tree-node.selected').removeClass('selected');
                     finalCheckNode.addClass('selected');
@@ -819,14 +809,12 @@ function loadAndSelectNode(nodeId, updateUrl = true) {
                 setTimeout(() => {
                     const finalNode = $(`.tree-node[data-id="${nodeId}"]`);
                     if (finalNode.length > 0 && !finalNode.hasClass('selected')) {
-                        console.log('Final selection check - ensuring node is selected');
                         $('.tree-node.selected').removeClass('selected');
                         finalNode.addClass('selected');
                     }
                     
                     // Clear the loading flag
                     isLoadingTree = false;
-                    console.log('Tree loading complete');
                 }, 200);
             });
     }
@@ -867,11 +855,8 @@ async function findNodePath(nodeId) {
         
         // Add parents in order (root first)
         if (data.parents && data.parents.length > 0) {
-            console.log(`Finding path to node ${nodeId} with ${data.parents.length} parents`);
-            
             // Find the top-level parent recursively (but limit depth)
             const topParent = await findTopLevelParent(data.parents[0].iri);
-            console.log(`Found top parent: ${topParent}`);
             
             // Build path from top to current node
             const fullPath = await buildPathToNode(topParent, nodeId);
@@ -879,10 +864,8 @@ async function findNodePath(nodeId) {
             // Only add the path if it's valid and contains more than just the starting node
             if (fullPath && fullPath.length > 1) {
                 path.push(...fullPath);
-                console.log(`Built path with ${fullPath.length} nodes`);
             } else {
                 // If we couldn't build a proper path, just use the parent chain
-                console.log(`Using direct parent chain instead of path search`);
                 let currentNode = data.parents[0].iri;
                 const parentChain = [currentNode];
                 
@@ -896,7 +879,7 @@ async function findNodePath(nodeId) {
                         parentChain.unshift(currentNode); // Add parent to beginning of chain
                     }
                 } catch (error) {
-                    console.warn('Error building parent chain:', error);
+                    // Error handled silently
                 }
                 
                 path.push(...parentChain);
@@ -910,7 +893,7 @@ async function findNodePath(nodeId) {
         
         return path;
     } catch (error) {
-        console.error('Error finding node path:', error);
+        // Error handled silently
         return [nodeId]; // Return just the node ID if we can't find its path
     }
 }
@@ -937,7 +920,7 @@ async function findTopLevelParent(nodeId) {
         // Recursively find the parent of this node's parent
         return findTopLevelParent(data.parents[0].iri);
     } catch (error) {
-        console.warn('Error finding top-level parent:', error);
+        // Error handled silently
         // Silently return the node ID if we can't find its parent
         return nodeId;
     }
@@ -958,7 +941,6 @@ async function buildPathToNode(startId, targetId) {
     const extractedTargetId = extractIdFromIri(targetId);
     if (extractedStartId === extractedTargetId) return [startId];
     
-    console.log(`Building path from ${startId} to ${targetId}`);
     
     // Set to keep track of visited nodes to prevent cycles
     const visited = new Set();
@@ -979,7 +961,6 @@ async function buildPathToNode(startId, targetId) {
             
             // Stop if we've reached maximum depth
             if (currentPath.length > MAX_DEPTH) {
-                console.log(`Maximum search depth (${MAX_DEPTH}) reached, stopping path search`);
                 return [startId]; // Return just the start node
             }
             
@@ -1012,7 +993,6 @@ async function buildPathToNode(startId, targetId) {
                         
                         // Check if this is our target
                         if (childId === targetId || extractedChildId === extractedTargetId) {
-                            console.log(`Found target node at depth ${currentPath.length}`);
                             return [...currentPath, childId];
                         }
                         
@@ -1023,17 +1003,16 @@ async function buildPathToNode(startId, targetId) {
                     }
                 }
             } catch (error) {
-                console.warn(`Error processing node ${currentId}:`, error);
+                // Error handled silently
                 // Continue to next node in queue
                 continue;
             }
         }
         
         // If we exhausted the queue without finding the target, return just the start node
-        console.log('Could not find path to target node, queue exhausted');
         return [startId];
     } catch (error) {
-        console.error('Error in buildPathToNode:', error);
+        // Error handled silently
         return [startId]; // Return just the start ID if we can't build the path
     }
 }
@@ -1046,7 +1025,6 @@ async function buildPathToNode(startId, targetId) {
 async function loadNodePath(path) {
     if (!path || path.length === 0) return;
     
-    console.log('Loading path:', path);
     
     // Check if we need to load the root level first
     const rootList = $('.taxonomy-root-list');
@@ -1057,7 +1035,6 @@ async function loadNodePath(path) {
     
     // Load root level if needed
     if (needsRootLoading) {
-        console.log('Loading root level nodes');
         await new Promise(resolve => {
             loadTreeNodes('#', container);
             
@@ -1082,7 +1059,6 @@ async function loadNodePath(path) {
         const nodeId = path[i];
         const isLastNode = (i === path.length - 1);
         
-        console.log(`Processing path node ${i}: ${nodeId}, isLast: ${isLastNode}`);
         
         // Find the node in the current container or globally
         let node = currentContainer.children(`.tree-node[data-id="${nodeId}"]`);
@@ -1093,11 +1069,8 @@ async function loadNodePath(path) {
         }
         
         if (node.length > 0) {
-            console.log(`Node ${nodeId} found in DOM`);
-            
             // If it's not the last node, expand it if collapsed
             if (!isLastNode && node.hasClass('collapsed')) {
-                console.log(`Expanding node ${nodeId}`);
                 toggleNode(node);
             }
             
@@ -1111,8 +1084,6 @@ async function loadNodePath(path) {
                 }
             }
         } else {
-            console.log(`Node ${nodeId} not found, loading its parent level`);
-            
             // Get the parent node ID
             const parentNodeId = i > startIndex ? path[i - 1] : '#';
             
@@ -1120,7 +1091,6 @@ async function loadNodePath(path) {
             await new Promise(resolve => {
                 // Check if the current container already has children other than loading indicators
                 if (currentContainer.children('.tree-node').length > 0) {
-                    console.log(`Current container already has nodes, skipping load for ${parentNodeId}`);
                     resolve();
                     return;
                 }
@@ -1141,11 +1111,8 @@ async function loadNodePath(path) {
                         }
                         
                         if (node.length > 0) {
-                            console.log(`Node ${nodeId} found after loading parent level`);
-                            
                             // If not the last node, expand it
                             if (!isLastNode && node.hasClass('collapsed')) {
-                                console.log(`Expanding loaded node ${nodeId}`);
                                 toggleNode(node);
                             }
                             
@@ -1159,7 +1126,7 @@ async function loadNodePath(path) {
                                 }
                             }
                         } else {
-                            console.warn(`Node ${nodeId} not found after loading parent level`);
+                            // Node not found
                         }
                         
                         resolve();
@@ -1174,11 +1141,10 @@ async function loadNodePath(path) {
     const targetNodeId = path[path.length - 1];
     const targetNode = $(`.tree-node[data-id="${targetNodeId}"]`);
     if (targetNode.length > 0) {
-        console.log(`Target node ${targetNodeId} found, scrolling to it`);
         // Scroll to make the target node visible
         targetNode[0].scrollIntoView({ block: 'center', behavior: 'smooth' });
     } else {
-        console.warn(`Target node ${targetNodeId} not found in final check`);
+        // Target node not found
     }
 }
 

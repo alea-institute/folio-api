@@ -1,6 +1,10 @@
 /* FOLIO API CSS Variables */
 @import url('https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,100..900;1,100..900&display=swap');
 
+html, body {
+    height: 100%;
+}
+
 :root {
     --font-sans: 'Public Sans Variable';
     --font-serif: 'Public Sans Variable';

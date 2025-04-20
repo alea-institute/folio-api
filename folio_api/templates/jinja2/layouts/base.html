@@ -33,7 +33,7 @@
     
     {% block page_styles %}{% endblock %}
 </head>
-<body class="font-['Public_Sans'] bg-gray-100 min-h-screen">
+<body class="font-['Public_Sans'] bg-gray-100 min-h-screen flex flex-col">
     <!-- Progressive Enhancement: Support for browsers without JavaScript -->
     <noscript>
         <div style="background-color: #fff3cd; color: #856404; padding: 1rem; margin-bottom: 1rem; border: 1px solid #ffeeba; border-radius: 0.25rem;">
@@ -56,7 +56,7 @@
     </div>
     {% endblock %}
     
-    <main class="container mx-auto px-4 py-4 max-w-[1600px]">
+    <main class="container mx-auto px-4 py-4 max-w-[1600px] flex-grow">
         {% block content %}{% endblock %}
     </main>
     
