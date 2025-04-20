@@ -88,7 +88,7 @@ def initialize_folio(folio_config: Dict[str, Any], llm_config: Dict[str, Any]) -
     """
     # initialize an llm
     llm_engine = llm_config.get("type", "openai").lower().strip()
-    llm_model = llm_config.get("model", "gpt-4o").lower().strip()
+    llm_model = llm_config.get("model", "gpt-4.1-mini-2025-04-14").lower().strip()
     llm_endpoint = llm_config.get("endpoint", None)
     llm_api_key = llm_config.get("api_key", os.getenv("OPENAI_API_KEY"))
 
