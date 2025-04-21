@@ -685,21 +685,90 @@ function setupHistoryNavigation() {
  * Setup keyboard navigation for the tree
  */
 function setupKeyboardNavigation() {
-    // Add keydown event listener to handle spacebar
+    // Add keydown event listener to handle spacebar and arrow keys
     document.addEventListener('keydown', function(event) {
-        // Only proceed if space bar is pressed and we're not in an input field
-        if (event.key === ' ' && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
-            // Prevent default scroll behavior of space bar
-            event.preventDefault();
-            
-            // Find the selected node
+        // Only proceed if we're not in an input field or textarea
+        if (document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
             const selectedNode = document.querySelector('.tree-node.selected');
-            if (selectedNode && selectedNode.classList.contains('has-children')) {
-                // Get the expand icon
-                const expandIcon = selectedNode.querySelector('.expand-icon');
-                if (expandIcon) {
-                    // Directly trigger a click on the expand icon
-                    expandIcon.click();
+            
+            if (selectedNode) {
+                // Handle spacebar - toggle expand/collapse
+                if (event.key === ' ') {
+                    // Prevent default scroll behavior of space bar
+                    event.preventDefault();
+                    
+                    if (selectedNode.classList.contains('has-children')) {
+                        // Get the expand icon
+                        const expandIcon = selectedNode.querySelector('.expand-icon');
+                        if (expandIcon) {
+                            // Directly trigger a click on the expand icon
+                            expandIcon.click();
+                        }
+                    }
+                }
+                // Handle right arrow - expand node
+                else if (event.key === 'ArrowRight') {
+                    event.preventDefault();
+                    
+                    if (selectedNode.classList.contains('has-children') && selectedNode.classList.contains('collapsed')) {
+                        const expandIcon = selectedNode.querySelector('.expand-icon');
+                        if (expandIcon) {
+                            expandIcon.click();
+                        }
+                    }
+                }
+                // Handle left arrow - collapse node
+                else if (event.key === 'ArrowLeft') {
+                    event.preventDefault();
+                    
+                    if (selectedNode.classList.contains('has-children') && selectedNode.classList.contains('expanded')) {
+                        const expandIcon = selectedNode.querySelector('.expand-icon');
+                        if (expandIcon) {
+                            expandIcon.click();
+                        }
+                    }
+                }
+                // Handle down arrow - navigate to next visible node
+                else if (event.key === 'ArrowDown') {
+                    event.preventDefault();
+                    
+                    // Find all visible tree nodes
+                    const visibleNodes = Array.from(document.querySelectorAll('.tree-node')).filter(node => {
+                        return window.getComputedStyle(node).display !== 'none';
+                    });
+                    
+                    // Find index of current selected node
+                    const currentIndex = visibleNodes.indexOf(selectedNode);
+                    
+                    // Select next node if available
+                    if (currentIndex < visibleNodes.length - 1) {
+                        const nextNode = visibleNodes[currentIndex + 1];
+                        const nodeContent = nextNode.querySelector('.node-content');
+                        if (nodeContent) {
+                            nodeContent.click();
+                        }
+                    }
+                }
+                // Handle up arrow - navigate to previous visible node
+                else if (event.key === 'ArrowUp') {
+                    event.preventDefault();
+                    
+                    // Find all visible tree nodes
+                    const visibleNodes = Array.from(document.querySelectorAll('.tree-node')).filter(node => {
+                        return window.getComputedStyle(node).display !== 'none';
+                    });
+                    
+                    // Find index of current selected node
+                    const currentIndex = visibleNodes.indexOf(selectedNode);
+                    
+                    // Select previous node if available
+                    if (currentIndex > 0) {
+                        const prevNode = visibleNodes[currentIndex - 1];
+                        const nodeContent = prevNode.querySelector('.node-content');
+                        if (nodeContent) {
+                            nodeContent.click();
+                        }
+                    }
                 }
             }
         }
