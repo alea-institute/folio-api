@@ -19,51 +19,59 @@
 {% endblock %}
 
 {% block navigation_buttons %}
-<div class="flex flex-col md:flex-row md:items-center space-y-3 md:space-y-0 md:space-x-2">
-    <!-- Navigation buttons - stacked on mobile, horizontal on larger screens -->
-    <div class="flex space-x-2">
-        <a href="/taxonomy/browse" class="btn btn-secondary flex items-center text-sm">
-            <svg class="w-3.5 h-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            Browse
-        </a>
-        <a href="/taxonomy/tree" class="btn btn-secondary flex items-center text-sm">
-            <svg class="w-3.5 h-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
-            </svg>
-            Tree
-        </a>
-    </div>
-    
-    <!-- Download section - stacked on mobile, right-aligned on larger screens -->
-    <div class="md:ml-auto">
-        <p class="text-gray-500 text-xs font-medium mb-1 md:mb-0 md:inline-block md:mr-2">Download as:</p>
-        <div class="flex flex-wrap gap-1.5">
-            <a href="{{ owl_class.iri }}" class="btn btn-primary flex items-center py-1 px-2 text-xs">
-                <svg class="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-                </svg>
-                JSON
-            </a>
-            <a href="{{ owl_class.iri }}/jsonld" class="btn btn-primary flex items-center py-1 px-2 text-xs">
-                <svg class="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-                </svg>
-                JSON-LD
-            </a>
-            <a href="{{ owl_class.iri }}/xml" class="btn btn-primary flex items-center py-1 px-2 text-xs">
-                <svg class="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
-                </svg>
-                XML
-            </a>
-            <a href="{{ owl_class.iri }}/markdown" class="btn btn-primary flex items-center py-1 px-2 text-xs">
-                <svg class="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                MD
-            </a>
+<div class="bg-gray-50 border border-gray-100 rounded-lg p-3 mb-4 shadow-sm">
+    <div class="flex flex-col md:flex-row md:items-center space-y-4 md:space-y-0">
+        <!-- Navigation buttons section -->
+        <div class="flex flex-col md:flex-row md:items-center space-y-2 md:space-y-0">
+            <h3 class="text-[--color-primary] font-medium text-sm mb-2 md:mb-0 md:mr-3">Navigation:</h3>
+            <div class="flex space-x-2">
+                <a href="/taxonomy/browse" class="btn btn-secondary flex items-center text-sm hover:bg-[--color-primary] hover:text-white transition-colors">
+                    <svg class="w-3.5 h-3.5 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                    </svg>
+                    Browse
+                </a>
+                <a href="/taxonomy/tree" class="btn btn-secondary flex items-center text-sm hover:bg-[--color-primary] hover:text-white transition-colors">
+                    <svg class="w-3.5 h-3.5 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
+                    </svg>
+                    Tree
+                </a>
+            </div>
+        </div>
+        
+        <!-- Divider - only visible on desktop -->
+        <div class="hidden md:block md:mx-4 md:h-8 md:w-px md:bg-gray-200"></div>
+        
+        <!-- Download section -->
+        <div class="md:ml-auto">
+            <h3 class="text-[--color-primary] font-medium text-sm mb-2 md:mb-0 md:mr-3 md:inline-block">Download as:</h3>
+            <div class="flex flex-wrap gap-1.5">
+                <a href="{{ owl_class.iri }}" class="btn btn-primary flex items-center py-1 px-3 text-xs bg-white border-[--color-primary] text-[--color-primary] hover:bg-[--color-primary] hover:text-white transition-colors">
+                    <svg class="w-3 h-3 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                    </svg>
+                    JSON
+                </a>
+                <a href="{{ owl_class.iri }}/jsonld" class="btn btn-primary flex items-center py-1 px-3 text-xs bg-white border-[--color-primary] text-[--color-primary] hover:bg-[--color-primary] hover:text-white transition-colors">
+                    <svg class="w-3 h-3 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                    </svg>
+                    JSON-LD
+                </a>
+                <a href="{{ owl_class.iri }}/xml" class="btn btn-primary flex items-center py-1 px-3 text-xs bg-white border-[--color-primary] text-[--color-primary] hover:bg-[--color-primary] hover:text-white transition-colors">
+                    <svg class="w-3 h-3 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                    </svg>
+                    XML
+                </a>
+                <a href="{{ owl_class.iri }}/markdown" class="btn btn-primary flex items-center py-1 px-3 text-xs bg-white border-[--color-primary] text-[--color-primary] hover:bg-[--color-primary] hover:text-white transition-colors">
+                    <svg class="w-3 h-3 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    MD
+                </a>
+            </div>
         </div>
     </div>
 </div>
