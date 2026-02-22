@@ -8,7 +8,20 @@ import json
 from typing import Dict, List, Tuple
 
 # packages
-from folio import FOLIO, OWLClass
+from folio import FOLIO, OWLClass, OWLObjectProperty
+
+
+def strip_folio_prefix(label: str) -> str:
+    """Strip the 'folio:' prefix from property labels for human-readable display.
+
+    INTERIM FIX: Remove this function once https://github.com/alea-institute/FOLIO/pull/5
+    is merged and folio-python is updated with human-readable rdfs:label values.
+    At that point, also remove the Jinja2 filter registration in api.py and all
+    template usages of |strip_folio_prefix.
+    """
+    if label and label.startswith("folio:"):
+        return label[6:]
+    return label or ""
 
 
 def format_label(owl_class: OWLClass) -> str:
@@ -223,6 +236,171 @@ def get_node_neighbors(
                     "target": owl_class.is_defined_by,
                     "type": "is_defined_by",
                 }
+            )
+
+    return list(nodes.values()), edges
+
+
+def format_property_label(prop: OWLObjectProperty) -> str:
+    """
+    Format the label of an object property for display in HTML.
+
+    Args:
+        prop (OWLObjectProperty): FOLIO OWLObjectProperty object
+
+    Returns:
+        str: Formatted label
+    """
+    # INTERIM: strip_folio_prefix calls can be removed once FOLIO PR #5 is merged
+    if prop.preferred_label:
+        return strip_folio_prefix(prop.preferred_label)
+    elif prop.label:
+        return strip_folio_prefix(prop.label)
+    elif prop.alternative_labels:
+        return strip_folio_prefix(prop.alternative_labels[0])
+    else:
+        return prop.iri
+
+
+def format_property_description(prop: OWLObjectProperty) -> str:
+    """
+    Format the description of an object property for display in HTML.
+
+    Args:
+        prop (OWLObjectProperty): FOLIO OWLObjectProperty object
+
+    Returns:
+        str: Formatted description
+    """
+    # INTERIM: strip_folio_prefix calls can be removed once FOLIO PR #5 is merged
+    label = strip_folio_prefix(prop.label) if prop.label else None
+    if label and prop.definition:
+        return label + " - " + prop.definition
+    elif label:
+        return label
+    elif prop.definition:
+        return prop.definition
+    else:
+        return "No description available."
+
+
+def get_property_neighbors(
+    prop: OWLObjectProperty,
+    folio_graph: FOLIO,
+    property_children: Dict[str, List[OWLObjectProperty]] = None,
+) -> Tuple[List[Dict], List[Dict]]:
+    """
+    Get the neighbors of an object property for Cytoscape visualization.
+
+    Args:
+        prop (OWLObjectProperty): FOLIO OWLObjectProperty object
+        folio_graph (FOLIO): FOLIO graph object
+        property_children (Dict): Pre-computed reverse index of parent->children
+
+    Returns:
+        Tuple[List[Dict], List[Dict]]: Tuple with lists of nodes and edges
+    """
+    nodes = {}
+    edges = []
+
+    # Add self
+    # INTERIM: strip_folio_prefix calls in this function can be removed once FOLIO PR #5 is merged
+    nodes[prop.iri] = {
+        "id": prop.iri,
+        "label": strip_folio_prefix(prop.label or prop.iri),
+        "description": format_property_description(prop),
+        "color": "#000000",
+        "relationship": "self",
+        "entity_type": "property",
+    }
+
+    # Add parent properties (via sub_property_of)
+    for parent_iri in prop.sub_property_of:
+        if parent_iri == "http://www.w3.org/2002/07/owl#topObjectProperty":
+            continue
+        parent = folio_graph.get_property(parent_iri)
+        if parent:
+            nodes[parent_iri] = {
+                "id": parent_iri,
+                "label": strip_folio_prefix(parent.label or parent_iri.split("/")[-1]),
+                "description": format_property_description(parent),
+                "color": "#000000",
+                "relationship": "sub_property_of",
+                "entity_type": "property",
+            }
+            edges.append(
+                {"source": parent_iri, "target": prop.iri, "type": "sub_property_of"}
+            )
+
+    # Add child properties (reverse lookup)
+    children = []
+    if property_children is not None:
+        children = property_children.get(prop.iri, [])
+    else:
+        # Fallback: scan all properties
+        for p in folio_graph.object_properties:
+            if prop.iri in p.sub_property_of:
+                children.append(p)
+
+    for child in children:
+        nodes[child.iri] = {
+            "id": child.iri,
+            "label": strip_folio_prefix(child.label or child.iri.split("/")[-1]),
+            "description": format_property_description(child),
+            "color": "#000000",
+            "relationship": "child_property",
+            "entity_type": "property",
+        }
+        edges.append(
+            {"source": prop.iri, "target": child.iri, "type": "child_property"}
+        )
+
+    # Add domain classes
+    for domain_iri in prop.domain:
+        domain_class = folio_graph[domain_iri]
+        if domain_class:
+            nodes[domain_iri] = {
+                "id": domain_iri,
+                "label": domain_class.label or domain_iri.split("/")[-1],
+                "description": format_description(domain_class),
+                "color": "#0D9488",
+                "relationship": "domain",
+                "entity_type": "class",
+            }
+            edges.append(
+                {"source": domain_iri, "target": prop.iri, "type": "domain"}
+            )
+
+    # Add range classes
+    for range_iri in prop.range:
+        range_class = folio_graph[range_iri]
+        if range_class:
+            nodes[range_iri] = {
+                "id": range_iri,
+                "label": range_class.label or range_iri.split("/")[-1],
+                "description": format_description(range_class),
+                "color": "#EA580C",
+                "relationship": "range",
+                "entity_type": "class",
+            }
+            edges.append(
+                {"source": prop.iri, "target": range_iri, "type": "range"}
+            )
+
+    # Add inverse property
+    if prop.inverse_of:
+        inverse = folio_graph.get_property(prop.inverse_of)
+        if inverse:
+            nodes[prop.inverse_of] = {
+                "id": prop.inverse_of,
+                "label": strip_folio_prefix(inverse.label or prop.inverse_of.split("/")[-1]),
+                "description": format_property_description(inverse),
+                "color": "#7C3AED",
+                "relationship": "inverse_of",
+                "entity_type": "property",
+            }
+            edges.append(
+                {"source": prop.iri, "target": prop.inverse_of, "type": "inverse_of"}
             )
 
     return list(nodes.values()), edges

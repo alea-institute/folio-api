@@ -93,6 +93,7 @@ async def health(request: Request) -> HealthResponse:
         status="healthy",
         folio_graph=FOLIOGraphInfo(
             num_classes=len(folio),
+            num_properties=len(folio.object_properties),
             title=folio.title,
             description=folio.description,
             source_type=folio.source_type,

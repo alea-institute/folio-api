@@ -48,6 +48,12 @@ class FOLIOGraphInfo(BaseModel):
         description="Total number of ontology classes in the graph", example=1025, gt=0
     )
 
+    num_properties: int = Field(
+        description="Total number of OWL object properties in the graph",
+        example=175,
+        ge=0,
+    )
+
     title: str = Field(
         description="Title of the FOLIO ontology", example="FOLIO Ontology"
     )

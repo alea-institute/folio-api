@@ -420,6 +420,49 @@
         </div>
     </section>
     {% endif %}
+
+    <!-- Related Object Properties -->
+    {% if domain_properties or range_properties %}
+    <section class="card animate-fade-in xl:col-span-2">
+        <h4 class="text-lg font-medium text-[--color-primary] mb-3 flex items-center">
+            <svg class="w-4 h-4 mr-2 text-teal-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+            </svg>
+            Related Object Properties
+        </h4>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {% if domain_properties %}
+            <div class="bg-teal-50 rounded-lg p-3">
+                <p class="text-gray-700 text-xs font-medium uppercase tracking-wide mb-2">Properties with this class as Domain</p>
+                <div class="max-h-[200px] overflow-y-auto">
+                    <ul class="space-y-1">
+                        {# INTERIM: strip_folio_prefix can be removed once FOLIO PR #5 is merged #}
+                        {% for prop in domain_properties %}
+                        <li>
+                            <a href="/{{ prop.iri }}/html" class="text-teal-700 hover:text-teal-900 hover:underline text-sm">{{ prop.label|strip_folio_prefix }}</a>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+            {% endif %}
+            {% if range_properties %}
+            <div class="bg-orange-50 rounded-lg p-3">
+                <p class="text-gray-700 text-xs font-medium uppercase tracking-wide mb-2">Properties with this class as Range</p>
+                <div class="max-h-[200px] overflow-y-auto">
+                    <ul class="space-y-1">
+                        {% for prop in range_properties %}
+                        <li>
+                            <a href="/{{ prop.iri }}/html" class="text-orange-700 hover:text-orange-900 hover:underline text-sm">{{ prop.label|strip_folio_prefix }}</a>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </section>
+    {% endif %}
 </div>
 {% else %}
 <div class="flex items-center justify-center h-full text-gray-500">

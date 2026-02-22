@@ -1,0 +1,361 @@
+{% extends "layouts/base.html" %}
+
+{# INTERIM: strip_folio_prefix usages below can be removed once FOLIO PR #5 is merged #}
+{% block title %}{{ (prop.label or "Unnamed Property")|strip_folio_prefix }} - FOLIO Ontology{% endblock %}
+
+{% block meta_description %}{{ prop.definition or "No definition available" }}{% endblock %}
+{% block meta_keywords %}legal, ontology, standard, open, information, property, {{ (prop.label or "")|strip_folio_prefix }}{% endblock %}
+
+{% block header_title %}{{ (prop.label or "Unnamed Property")|strip_folio_prefix }}{% endblock %}
+{% block header_subtitle %}{{ prop.definition or "No definition available" }}{% endblock %}
+
+{% block extra_head %}
+<script src="/static/js/vendor/cytoscape.min.js"></script>
+<script src="/static/js/vendor/dagre.min.js"></script>
+<script src="/static/js/vendor/cytoscape-dagre.min.js"></script>
+<script src="/static/js/vendor/popper.min.js"></script>
+<script src="/static/js/vendor/cytoscape-popper.min.js"></script>
+<script src="/static/js/vendor/tippy.umd.min.js"></script>
+{% endblock %}
+
+{% block navigation_buttons %}
+<div class="bg-gray-50 border border-gray-100 rounded-lg p-3 mb-4 shadow-sm">
+    <div class="flex flex-col md:flex-row md:items-center space-y-4 md:space-y-0">
+        <div class="flex flex-col md:flex-row md:items-center space-y-2 md:space-y-0">
+            <h3 class="text-[--color-primary] font-medium text-sm mb-2 md:mb-0 md:mr-3">Navigation:</h3>
+            <div class="flex space-x-2">
+                <a href="/properties/browse" class="btn btn-secondary flex items-center text-sm hover:bg-[--color-primary] hover:text-white transition-colors">
+                    <svg class="w-3.5 h-3.5 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                    </svg>
+                    Browse Properties
+                </a>
+                <a href="/properties/tree" class="btn btn-secondary flex items-center text-sm hover:bg-[--color-primary] hover:text-white transition-colors">
+                    <svg class="w-3.5 h-3.5 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
+                    </svg>
+                    Property Tree
+                </a>
+                <a href="/taxonomy/browse" class="btn btn-secondary flex items-center text-sm hover:bg-[--color-primary] hover:text-white transition-colors">
+                    <svg class="w-3.5 h-3.5 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                    </svg>
+                    Browse Classes
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-6">
+    <!-- Identification -->
+    <section class="card animate-fade-in border-t-4 border-[--color-primary]">
+        <div class="flex justify-between items-start">
+            <div>
+                <div class="flex items-center mb-2">
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800 mr-2">Object Property</span>
+                    <h3 class="text-xl font-semibold text-[--color-primary]">Identification</h3>
+                </div>
+                <div class="flex flex-col sm:flex-row sm:items-center text-gray-500 text-sm mb-4">
+                    <span class="font-medium mb-1 sm:mb-0 sm:mr-1.5 flex-shrink-0">IRI:</span>
+                    <div class="overflow-hidden flex-1 min-w-0 mb-1 sm:mb-0 sm:mr-2">
+                        <span class="font-mono break-all block w-full" id="iri-value" title="{{ prop.iri }}">{{ prop.iri }}</span>
+                    </div>
+                    <button onclick="copyIRI()" class="self-end sm:self-auto sm:ml-auto py-1 px-2 rounded text-blue-600 hover:bg-blue-50 transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-blue-500 flex-shrink-0" aria-label="Copy IRI to clipboard">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="bg-gray-50 rounded-lg p-4 mt-4">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="flex flex-col">
+                    <span class="text-gray-500 text-xs font-medium uppercase tracking-wide mb-1">Label</span>
+                    <span class="text-gray-800 font-medium">{{ (prop.label or "N/A")|strip_folio_prefix }}</span>
+                </div>
+                <div class="flex flex-col">
+                    <span class="text-gray-500 text-xs font-medium uppercase tracking-wide mb-1">Preferred Label</span>
+                    <span class="text-gray-800">{{ (prop.preferred_label or "N/A")|strip_folio_prefix }}</span>
+                </div>
+                <div class="flex flex-col">
+                    <span class="text-gray-500 text-xs font-medium uppercase tracking-wide mb-1">Inverse Of</span>
+                    {% if inverse_data %}
+                    <a href="/properties/tree?node={{ inverse_data.iri }}" class="text-blue-600 hover:underline">{{ inverse_data.label }}</a>
+                    {% else %}
+                    <span class="text-gray-800">N/A</span>
+                    {% endif %}
+                </div>
+                <div class="md:col-span-3">
+                    <span class="text-gray-500 text-xs font-medium uppercase tracking-wide mb-1">Alternative Labels</span>
+                    {% if prop.alternative_labels %}
+                    <div class="flex flex-wrap gap-1 mt-1">
+                        {% for label in prop.alternative_labels %}
+                        {# INTERIM: strip_folio_prefix can be removed once FOLIO PR #5 is merged #}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">{{ label|strip_folio_prefix }}</span>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="text-gray-700">None</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </section>
+    
+    <!-- Definition and Examples -->
+    <section class="card animate-fade-in border-t-4 border-emerald-500">
+        <div class="flex items-start mb-4">
+            <svg class="w-5 h-5 mt-1 mr-2 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h10M7 16h10" />
+            </svg>
+            <h3 class="text-xl font-semibold text-[--color-primary]">Definition</h3>
+        </div>
+        <div class="bg-gradient-to-r from-emerald-50 to-transparent p-4 rounded-lg mb-6">
+            <p class="text-gray-700">{{ prop.definition or "No definition available." }}</p>
+        </div>
+        {% if prop.examples %}
+        <div class="flex items-start mb-3">
+            <svg class="w-4 h-4 mt-1 mr-2 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+            </svg>
+            <h4 class="text-lg font-medium text-[--color-primary]">Examples</h4>
+        </div>
+        <div class="bg-gray-50 rounded-lg p-4">
+            <ul class="list-none space-y-2">
+                {% for example in prop.examples %}
+                <li class="flex">
+                    <span class="text-emerald-500 mr-2">&bull;</span>
+                    <span>{{ example }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+    </section>
+    
+    <!-- Property Relationships -->
+    <section class="card animate-fade-in border-t-4 border-blue-500">
+        <div class="flex items-start mb-4">
+            <svg class="w-5 h-5 mt-1 mr-2 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+            </svg>
+            <h3 class="text-xl font-semibold text-[--color-primary]">Property Relationships</h3>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="bg-blue-50 rounded-lg p-4">
+                <div class="flex items-center mb-3">
+                    <svg class="w-4 h-4 mr-2 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                    </svg>
+                    <p class="text-gray-700 text-sm font-medium uppercase tracking-wide">Parent Properties</p>
+                </div>
+                <ul class="list-none space-y-2">
+                    {% if parents %}
+                        {% for parent in parents %}
+                        <li class="flex items-center">
+                            <span class="text-blue-500 mr-2">&bull;</span>
+                            <a class="text-blue-700 hover:text-blue-900 hover:underline" href="/properties/tree?node={{ parent.iri }}">{{ parent.label }}</a>
+                        </li>
+                        {% endfor %}
+                    {% else %}
+                    <li class="flex items-center">
+                        <span class="text-gray-400 mr-2">&bull;</span>
+                        <span class="text-gray-500 italic">None (root property)</span>
+                    </li>
+                    {% endif %}
+                </ul>
+            </div>
+            <div class="bg-green-50 rounded-lg p-4">
+                <div class="flex items-center mb-3">
+                    <svg class="w-4 h-4 mr-2 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                    </svg>
+                    <p class="text-gray-700 text-sm font-medium uppercase tracking-wide">
+                        Child Properties
+                        <span class="inline-flex items-center justify-center ml-2 bg-green-100 text-green-800 px-2 py-0.5 rounded-full text-xs">{{ children|length }}</span>
+                    </p>
+                </div>
+                <div class="max-h-60 overflow-y-auto">
+                    <ul class="list-none space-y-2">
+                        {% if children %}
+                            {% for child in children %}
+                            <li class="flex items-center">
+                                <span class="text-green-500 mr-2">&bull;</span>
+                                <a class="text-green-700 hover:text-green-900 hover:underline" href="/properties/tree?node={{ child.iri }}">{{ child.label }}</a>
+                            </li>
+                            {% endfor %}
+                        {% else %}
+                        <li class="flex items-center">
+                            <span class="text-gray-400 mr-2">&bull;</span>
+                            <span class="text-gray-500 italic">None</span>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+        {% if inverse_data %}
+        <div class="mt-4 bg-purple-50 rounded-lg p-4">
+            <div class="flex items-center mb-2">
+                <svg class="w-4 h-4 mr-2 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                </svg>
+                <p class="text-gray-700 text-sm font-medium uppercase tracking-wide">Inverse Property</p>
+            </div>
+            <a class="text-purple-700 hover:text-purple-900 hover:underline font-medium" href="/properties/tree?node={{ inverse_data.iri }}">{{ inverse_data.label }}</a>
+        </div>
+        {% endif %}
+    </section>
+    
+    <!-- Domain & Range -->
+    <section class="card animate-fade-in border-t-4 border-teal-500">
+        <div class="flex items-start mb-4">
+            <svg class="w-5 h-5 mt-1 mr-2 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            <h3 class="text-xl font-semibold text-[--color-primary]">Domain & Range</h3>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="bg-teal-50 rounded-lg p-4">
+                <div class="flex items-center mb-3">
+                    <p class="text-gray-700 text-sm font-medium uppercase tracking-wide">Domain (Subject Classes)</p>
+                </div>
+                <ul class="list-none space-y-2">
+                    {% if domain_classes %}
+                        {% for cls in domain_classes %}
+                        <li class="flex items-center">
+                            <span class="text-teal-500 mr-2">&bull;</span>
+                            <a class="text-teal-700 hover:text-teal-900 hover:underline" href="{{ cls.iri }}/html">{{ cls.label }}</a>
+                        </li>
+                        {% endfor %}
+                    {% else %}
+                    <li class="text-gray-500 italic">No domain specified</li>
+                    {% endif %}
+                </ul>
+            </div>
+            <div class="bg-orange-50 rounded-lg p-4">
+                <div class="flex items-center mb-3">
+                    <p class="text-gray-700 text-sm font-medium uppercase tracking-wide">Range (Object Classes)</p>
+                </div>
+                <ul class="list-none space-y-2">
+                    {% if range_classes %}
+                        {% for cls in range_classes %}
+                        <li class="flex items-center">
+                            <span class="text-orange-500 mr-2">&bull;</span>
+                            <a class="text-orange-700 hover:text-orange-900 hover:underline" href="{{ cls.iri }}/html">{{ cls.label }}</a>
+                        </li>
+                        {% endfor %}
+                    {% else %}
+                    <li class="text-gray-500 italic">No range specified</li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </section>
+    
+    <!-- Graph Visualization -->
+    <section class="card animate-fade-in border-t-4 border-purple-500">
+        <div class="flex items-start mb-4">
+            <svg class="w-5 h-5 mt-1 mr-2 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2 1m2-1l-2-1m2 1v2.5M14 4l-2-1-2 1M4 7l2-1M4 7l2 1M4 7v2.5M12 21l-2-1m2 1l2-1m-2 1v-2.5M6 18l-2-1v-2.5M18 18l2-1v-2.5" />
+            </svg>
+            <h3 class="text-xl font-semibold text-[--color-primary]">Property Relationship Visualization</h3>
+        </div>
+        <p class="text-gray-600 mb-4 text-sm italic">Interactive graph showing property relationships - click on any node to navigate</p>
+        <div id="hierarchy-container" class="h-96 w-full border border-purple-200 rounded-lg relative shadow-inner bg-gradient-to-br from-purple-50 to-white">
+            <noscript>
+                <div class="absolute inset-0 flex items-center justify-center bg-gray-50 p-4 text-center">
+                    <div>
+                        <h4 class="mt-2 text-lg font-medium">Interactive visualization requires JavaScript</h4>
+                    </div>
+                </div>
+            </noscript>
+        </div>
+    </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    {{ typeahead_js_source|safe }}
+    
+    var nodes = {{ nodes|tojson|safe }};
+    var edges = {{ edges|tojson|safe }};
+    
+    function copyIRI() {
+        const iriElement = document.getElementById('iri-value');
+        if (iriElement) {
+            const iri = iriElement.getAttribute('title') || iriElement.textContent.trim();
+            navigator.clipboard.writeText(iri).then(() => { alert('IRI copied to clipboard'); }).catch(err => { console.error('Failed to copy', err); });
+        }
+    }
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        if (typeof cytoscape === 'undefined') {
+            const container = document.getElementById('hierarchy-container');
+            if (container) container.innerHTML = '<div class="p-4 text-center"><p class="text-lg font-medium text-gray-700">Interactive visualization unavailable.</p></div>';
+            return;
+        }
+        
+        const cy = cytoscape({
+            container: document.getElementById('hierarchy-container'),
+            elements: [
+                ...nodes.map(node => ({ data: { id: node.id, label: node.label, description: node.description, relationship: node.relationship } })),
+                ...edges.map(edge => ({ data: { source: edge.source, target: edge.target, type: edge.type } }))
+            ],
+            style: [
+                { selector: 'node', style: { 'label': function(ele) { return ele.data('label') || ele.id() || 'Unnamed'; }, 'text-valign': 'center', 'text-halign': 'center', 'background-color': '#fff', 'border-width': 2, 'border-color': '#184678', 'width': '120px', 'height': '50px', 'text-wrap': 'wrap', 'text-max-width': '100px', 'font-size': '10px', 'color': '#184678', 'padding': '5px', 'shape': 'roundrectangle', 'cursor': 'pointer' } },
+                { selector: 'node[relationship="self"]', style: { 'background-color': '#184678', 'color': '#fff', 'border-color': '#184678', 'border-width': 3 } },
+                { selector: 'node[relationship="domain"]', style: { 'border-color': '#0d9488', 'background-color': '#f0fdfa' } },
+                { selector: 'node[relationship="range"]', style: { 'border-color': '#ea580c', 'background-color': '#fff7ed' } },
+                { selector: 'node[relationship="inverse"]', style: { 'border-color': '#9333ea', 'background-color': '#faf5ff' } },
+                { selector: 'edge', style: { 'width': 2, 'line-color': '#ccc', 'target-arrow-color': '#ccc', 'target-arrow-shape': 'triangle', 'curve-style': 'bezier' } },
+                { selector: 'edge[type="sub_property_of"]', style: { 'line-color': '#184678', 'target-arrow-color': '#184678' } },
+                { selector: 'edge[type="child_property"]', style: { 'line-color': '#29A35A', 'target-arrow-color': '#29A35A' } },
+                { selector: 'edge[type="domain"]', style: { 'line-color': '#0d9488', 'target-arrow-color': '#0d9488', 'line-style': 'dashed' } },
+                { selector: 'edge[type="range"]', style: { 'line-color': '#ea580c', 'target-arrow-color': '#ea580c', 'line-style': 'dashed' } },
+                { selector: 'edge[type="inverse_of"]', style: { 'line-color': '#9333ea', 'target-arrow-color': '#9333ea', 'line-style': 'dotted' } }
+            ],
+            layout: { name: 'grid' }
+        });
+        
+        try {
+            cy.layout({ name: 'dagre', rankDir: 'TB', rankSep: 75, nodeSep: 50, padding: 30, animate: true, animationDuration: 500 }).run();
+        } catch (error) {
+            cy.layout({ name: 'grid' }).run();
+        }
+        
+        cy.on('tap', 'node', function(evt) {
+            const node = evt.target;
+            const nodeId = node.id();
+            if (nodeId && (nodeId.startsWith('http') || nodeId.includes(':'))) {
+                window.location.href = nodeId + '/html';
+            }
+        });
+        
+        createLegend('hierarchy-container');
+        cy.fit();
+        cy.center();
+    });
+    
+    function createLegend(containerId) {
+        const container = document.getElementById(containerId);
+        const legend = document.createElement('div');
+        legend.style.cssText = 'position:absolute;top:10px;right:10px;background:rgba(255,255,255,0.9);padding:8px;border-radius:4px;border:1px solid #ccc;font-size:11px;z-index:10';
+        legend.setAttribute('role', 'region');
+        legend.setAttribute('aria-label', 'Graph legend');
+        legend.innerHTML = '<div style="font-weight:bold;margin-bottom:5px">Legend</div>' +
+            '<div style="display:flex;align-items:center;margin-bottom:3px"><div style="width:12px;height:12px;background:#184678;border-radius:3px;margin-right:5px"></div><div>Current Property</div></div>' +
+            '<div style="display:flex;align-items:center;margin-bottom:3px"><div style="width:12px;height:12px;background:#fff;border:1px solid #184678;border-radius:3px;margin-right:5px"></div><div>Parent Properties</div></div>' +
+            '<div style="display:flex;align-items:center;margin-bottom:3px"><div style="width:12px;height:12px;background:#fff;border:1px solid #29A35A;border-radius:3px;margin-right:5px"></div><div>Child Properties</div></div>' +
+            '<div style="display:flex;align-items:center;margin-bottom:3px"><div style="width:12px;height:12px;background:#f0fdfa;border:1px solid #0d9488;border-radius:3px;margin-right:5px"></div><div>Domain Classes</div></div>' +
+            '<div style="display:flex;align-items:center;margin-bottom:3px"><div style="width:12px;height:12px;background:#fff7ed;border:1px solid #ea580c;border-radius:3px;margin-right:5px"></div><div>Range Classes</div></div>' +
+            '<div style="display:flex;align-items:center;margin-bottom:3px"><div style="width:12px;height:12px;background:#faf5ff;border:1px solid #9333ea;border-radius:3px;margin-right:5px"></div><div>Inverse Property</div></div>';
+        container.appendChild(legend);
+    }
+</script>
+{% endblock %}

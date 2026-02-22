@@ -12,7 +12,7 @@ from starlette.responses import Response, JSONResponse
 
 # project
 from folio_api.models import OWLClassList
-from folio_api.rendering import get_node_neighbors
+from folio_api.rendering import get_node_neighbors, strip_folio_prefix
 
 # API router
 router = APIRouter(prefix="/taxonomy", tags=["taxonomy"])
@@ -1214,12 +1214,27 @@ async def get_class_details_html(request: Request, iri: str) -> Response:
                         "iri": see_also_iri,
                     }
 
+    # Cross-linking: properties with this class as domain or range
+    domain_properties = []
+    range_properties = []
+    for p in folio.object_properties:
+        if owl_class.iri in p.domain:
+            # INTERIM: strip_folio_prefix can be removed once FOLIO PR #5 is merged
+            domain_properties.append({"iri": p.iri, "label": strip_folio_prefix(p.label or p.iri)})
+        if owl_class.iri in p.range:
+            # INTERIM: strip_folio_prefix can be removed once FOLIO PR #5 is merged
+            range_properties.append({"iri": p.iri, "label": strip_folio_prefix(p.label or p.iri)})
+    domain_properties.sort(key=lambda x: x["label"].lower())
+    range_properties.sort(key=lambda x: x["label"].lower())
+
     return request.app.state.templates.TemplateResponse(
         "components/class_details.html",
         {
             "request": request,
             "class_data": class_data,
             "folio_graph": simplified_folio_graph,
+            "domain_properties": domain_properties,
+            "range_properties": range_properties,
         },
     )
 

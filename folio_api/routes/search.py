@@ -9,7 +9,7 @@ from fastapi import APIRouter, Request, HTTPException, status
 from folio import FOLIO
 
 # project
-from folio_api.models import OWLClassList, OWLSearchResults
+from folio_api.models import OWLClassList, OWLSearchResults, OWLObjectPropertyList
 
 # API router
 router = APIRouter(prefix="/search", tags=["search"])
@@ -195,8 +195,30 @@ async def search_prefix(request: Request, query: str) -> OWLClassList:
     # Combine results, with prefix matches first
     results = prefix_results + label_results
 
+    # Also search properties
+    property_results = []
+    for prop in folio.object_properties:
+        label_match = False
+        if prop.label and (
+            query in prop.label
+            or query_lower in prop.label.lower()
+            or query_title in prop.label
+        ):
+            label_match = True
+        if not label_match and prop.alternative_labels:
+            for alt in prop.alternative_labels:
+                if alt and (
+                    query in alt
+                    or query_lower in alt.lower()
+                    or query_title in alt
+                ):
+                    label_match = True
+                    break
+        if label_match:
+            property_results.append(prop)
+
     # Return 200 OK with results (empty array if no matches)
-    return OWLClassList(classes=results)
+    return OWLClassList(classes=results, properties=property_results)
 
 
 @router.get(
