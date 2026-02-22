@@ -75,7 +75,7 @@
     <!-- Parents section -->
     {% if class_data.parents %}
     <section class="card animate-fade-in">
-        <h4 class="text-lg font-medium text-[--color-primary] mb-3">Parent Classes</h4>
+        <h4 class="text-lg font-medium text-[--color-primary] mb-3">Parent(s)</h4>
         <div class="max-h-[200px] overflow-y-auto pr-1">
             <ul class="space-y-2">
                 {% for parent in class_data.parents %}
@@ -107,7 +107,7 @@
     {% if class_data.children %}
     <section class="card animate-fade-in">
         <h4 class="text-lg font-medium text-[--color-primary] mb-3 flex items-center">
-            Child Classes 
+            Children
             <span class="ml-2 px-1.5 py-0.5 text-xs font-semibold bg-blue-100 text-blue-800 rounded-full">
                 {{ class_data.children|length }}
             </span>

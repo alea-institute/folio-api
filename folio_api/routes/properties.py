@@ -8,7 +8,7 @@ from pathlib import Path
 # packages
 from fastapi import APIRouter, Request, status
 from folio import FOLIO, OWLObjectProperty
-from starlette.responses import Response, JSONResponse
+from starlette.responses import Response, JSONResponse, RedirectResponse
 
 # project
 from folio_api.rendering import get_property_neighbors, strip_folio_prefix
@@ -136,18 +136,12 @@ async def browse_properties(request: Request) -> Response:
     status_code=status.HTTP_200_OK,
 )
 async def explore_property_tree(request: Request) -> Response:
-    """Interactive property tree explorer."""
-    typeahead_js_path = Path(__file__).parent.parent / "static" / "js" / "typeahead_search.js"
-    typeahead_js_source = typeahead_js_path.read_text(encoding="utf-8")
-
-    return request.app.state.templates.TemplateResponse(
-        "properties/tree.html",
-        {
-            "request": request,
-            "typeahead_js_source": typeahead_js_source,
-            "config": request.app.state.config,
-        },
-    )
+    """Redirect to the unified explore tree view."""
+    target = "/explore/tree"
+    node = request.query_params.get("node")
+    if node:
+        target += f"?node={node}&type=property"
+    return RedirectResponse(url=target, status_code=301)
 
 
 @router.get(

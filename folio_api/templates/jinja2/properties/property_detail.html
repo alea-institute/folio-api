@@ -55,8 +55,8 @@
         <div class="flex justify-between items-start">
             <div>
                 <div class="flex items-center mb-2">
-                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800 mr-2">Object Property</span>
-                    <h3 class="text-xl font-semibold text-[--color-primary]">Identification</h3>
+                    <h3 class="text-2xl font-semibold text-[--color-primary]">{{ (prop.label or "Unnamed Property")|strip_folio_prefix }}</h3>
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800 ml-3">Verb (Property)</span>
                 </div>
                 <div class="flex flex-col sm:flex-row sm:items-center text-gray-500 text-sm mb-4">
                     <span class="font-medium mb-1 sm:mb-0 sm:mr-1.5 flex-shrink-0">IRI:</span>
@@ -74,22 +74,14 @@
         <div class="bg-gray-50 rounded-lg p-4 mt-4">
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div class="flex flex-col">
-                    <span class="text-gray-500 text-xs font-medium uppercase tracking-wide mb-1">Label</span>
-                    <span class="text-gray-800 font-medium">{{ (prop.label or "N/A")|strip_folio_prefix }}</span>
-                </div>
-                <div class="flex flex-col">
                     <span class="text-gray-500 text-xs font-medium uppercase tracking-wide mb-1">Preferred Label</span>
-                    <span class="text-gray-800">{{ (prop.preferred_label or "N/A")|strip_folio_prefix }}</span>
-                </div>
-                <div class="flex flex-col">
-                    <span class="text-gray-500 text-xs font-medium uppercase tracking-wide mb-1">Inverse Of</span>
-                    {% if inverse_data %}
-                    <a href="/properties/tree?node={{ inverse_data.iri }}" class="text-blue-600 hover:underline">{{ inverse_data.label }}</a>
+                    {% if prop.preferred_label %}
+                    <span class="text-gray-800">{{ prop.preferred_label|strip_folio_prefix }}</span>
                     {% else %}
-                    <span class="text-gray-800">N/A</span>
+                    <span class="text-gray-400 italic">N/A</span>
                     {% endif %}
                 </div>
-                <div class="md:col-span-3">
+                <div class="flex flex-col">
                     <span class="text-gray-500 text-xs font-medium uppercase tracking-wide mb-1">Alternative Labels</span>
                     {% if prop.alternative_labels %}
                     <div class="flex flex-wrap gap-1 mt-1">
@@ -99,13 +91,21 @@
                         {% endfor %}
                     </div>
                     {% else %}
-                    <p class="text-gray-700">None</p>
+                    <p class="text-gray-400 italic">None</p>
+                    {% endif %}
+                </div>
+                <div class="flex flex-col">
+                    <span class="text-gray-500 text-xs font-medium uppercase tracking-wide mb-1">Inverse Of</span>
+                    {% if inverse_data %}
+                    <a href="/properties/tree?node={{ inverse_data.iri }}" class="text-blue-600 hover:underline">{{ inverse_data.label }}</a>
+                    {% else %}
+                    <span class="text-gray-400 italic">N/A</span>
                     {% endif %}
                 </div>
             </div>
         </div>
     </section>
-    
+
     <!-- Definition and Examples -->
     <section class="card animate-fade-in border-t-4 border-emerald-500">
         <div class="flex items-start mb-4">
@@ -164,7 +164,7 @@
                     {% else %}
                     <li class="flex items-center">
                         <span class="text-gray-400 mr-2">&bull;</span>
-                        <span class="text-gray-500 italic">None (root property)</span>
+                        <span class="text-gray-400 italic">None (root property)</span>
                     </li>
                     {% endif %}
                 </ul>
@@ -191,7 +191,7 @@
                         {% else %}
                         <li class="flex items-center">
                             <span class="text-gray-400 mr-2">&bull;</span>
-                            <span class="text-gray-500 italic">None</span>
+                            <span class="text-gray-400 italic">None</span>
                         </li>
                         {% endif %}
                     </ul>

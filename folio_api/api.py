@@ -23,6 +23,7 @@ import folio_api.routes.root
 import folio_api.routes.search
 import folio_api.routes.taxonomy
 import folio_api.routes.properties
+import folio_api.routes.explore
 from folio_api.api_config import load_config
 
 
@@ -237,6 +238,7 @@ def get_app() -> FastAPI:
     app_instance.include_router(folio_api.routes.search.router)
     app_instance.include_router(folio_api.routes.taxonomy.router)
     app_instance.include_router(folio_api.routes.properties.router)
+    app_instance.include_router(folio_api.routes.explore.router)
 
     return app_instance
 

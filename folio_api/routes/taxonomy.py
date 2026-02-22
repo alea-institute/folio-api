@@ -8,7 +8,7 @@ from pathlib import Path
 # packages
 from fastapi import APIRouter, Request, status
 from folio import FOLIO, FOLIO_TYPE_IRIS
-from starlette.responses import Response, JSONResponse
+from starlette.responses import Response, JSONResponse, RedirectResponse
 
 # project
 from folio_api.models import OWLClassList
@@ -1248,36 +1248,13 @@ async def get_class_details_html(request: Request, iri: str) -> Response:
     status_code=status.HTTP_200_OK,
 )
 async def explore_taxonomy_tree(request: Request) -> Response:
-    """
-    Interactive taxonomic explorer using jsTree for navigation.
-
-    This endpoint provides an interactive UI for exploring the FOLIO taxonomy hierarchy.
-    The left panel shows a navigable tree view of all classes, while the right panel
-    displays detailed information about the selected class.
-
-    Features:
-    - Lazy-loaded tree for efficient browsing of large hierarchies
-    - Detailed class information in the right panel
-    - Interactive visualization of class relationships
-    - Search functionality
-
-    Returns:
-        Response: HTML page with the interactive taxonomy explorer
-    """
-    # Import JavaScript for tree view
-    typeahead_js_path = (
-        Path(__file__).parent.parent / "static" / "js" / "typeahead_search.js"
-    )
-    typeahead_js_source = typeahead_js_path.read_text(encoding="utf-8")
-
-    return request.app.state.templates.TemplateResponse(
-        "taxonomy/tree.html",
-        {
-            "request": request,
-            "typeahead_js_source": typeahead_js_source,
-            "config": request.app.state.config,
-        },
-    )
+    """Redirect to the unified explore tree view."""
+    # Preserve any query params (e.g. ?node=...)
+    target = "/explore/tree"
+    node = request.query_params.get("node")
+    if node:
+        target += f"?node={node}&type=class"
+    return RedirectResponse(url=target, status_code=301)
 
 
 @router.get(
