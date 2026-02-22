@@ -1705,12 +1705,12 @@ function fallbackRenderClassDetails(data, container) {
             const flag = languageFlags[langLower] || "🌐";
             
             translationItems += `
-                <div class="bg-gray-50 rounded p-3 border-l-2 border-blue-300">
-                    <div class="flex items-center mb-2">
+                <div class="bg-gray-50 rounded px-3 py-1.5 border-l-2 border-blue-300">
+                    <div class="flex items-center">
                         <span class="text-lg mr-2">${flag}</span>
-                        <p class="text-gray-700 font-medium">${lang}</p>
+                        <span class="text-gray-500 font-mono text-sm w-12 flex-shrink-0">${lang}</span>
+                        <span class="text-gray-800 italic ml-2">${translation}</span>
                     </div>
-                    <p class="text-gray-800 italic">${translation}</p>
                 </div>
             `;
         }

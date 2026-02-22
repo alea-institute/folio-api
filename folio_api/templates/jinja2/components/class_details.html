@@ -151,12 +151,12 @@
         <div class="max-h-[200px] overflow-y-auto pr-1">
             <div class="grid grid-cols-1 gap-3">
                 {% for language, translation in class_data.translations.items() %}
-                <div class="bg-gray-50 rounded-md p-3 border-l-2 border-blue-300">
-                    <div class="flex items-center mb-1.5">
+                <div class="bg-gray-50 rounded-md px-3 py-1.5 border-l-2 border-blue-300">
+                    <div class="flex items-center">
                         {% set language_lower = language|lower %}
                         {% set language_code = language_lower[:2] %}
                         {% set language_flags = {
-                            "en": "🇬🇧", "en-gb": "🇬🇧", "en-us": "🇺🇸", "en-ca": "🇨🇦", "en-au": "🇦🇺", "en-nz": "🇳🇿", 
+                            "en": "🇬🇧", "en-gb": "🇬🇧", "en-us": "🇺🇸", "en-ca": "🇨🇦", "en-au": "🇦🇺", "en-nz": "🇳🇿",
                             "de": "🇩🇪", "de-de": "🇩🇪", "de-at": "🇦🇹", "de-ch": "🇨🇭",
                             "fr": "🇫🇷", "fr-fr": "🇫🇷", "fr-ca": "🇨🇦", "fr-ch": "🇨🇭", "fr-be": "🇧🇪",
                             "es": "🇪🇸", "es-es": "🇪🇸", "es-mx": "🇲🇽", "es-ar": "🇦🇷", "es-co": "🇨🇴",
@@ -170,13 +170,13 @@
                             "ko": "🇰🇷", "ko-kr": "🇰🇷",
                             "hi": "🇮🇳", "hi-in": "🇮🇳",
                             "ar": "🇸🇦", "ar-sa": "🇸🇦", "ar-eg": "🇪🇬", "ar-dz": "🇩🇿",
-                            "he": "🇮🇱", "he-il": "🇮🇱", 
+                            "he": "🇮🇱", "he-il": "🇮🇱",
                             "th": "🇹🇭", "vi": "🇻🇳"
                         } %}
                         <span class="text-lg mr-2">{{ language_flags.get(language_lower, language_flags.get(language_code, "🌐")) }}</span>
-                        <p class="text-gray-700 font-medium">{{ language }}</p>
+                        <span class="text-gray-500 font-mono text-sm w-12 flex-shrink-0">{{ language }}</span>
+                        <span class="text-gray-800 italic ml-2">{{ translation }}</span>
                     </div>
-                    <p class="text-gray-800 italic">{{ translation }}</p>
                 </div>
                 {% endfor %}
             </div>

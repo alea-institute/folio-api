@@ -382,14 +382,14 @@
             </svg>
             <h3 class="text-xl font-semibold text-[--color-primary]">Translations</h3>
         </div>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
             {% for language, translation in owl_class.translations.items() %}
-            <div class="bg-indigo-50 p-4 rounded-lg">
-                <div class="flex items-center mb-2">
+            <div class="bg-indigo-50 px-4 py-2 rounded-lg">
+                <div class="flex items-center">
                     {% set language_lower = language|lower %}
                     {% set language_code = language_lower[:2] %}
                     {% set lang_flags = {
-                        "en": "🇬🇧", "en-gb": "🇬🇧", "en-us": "🇺🇸", "en-ca": "🇨🇦", "en-au": "🇦🇺", "en-nz": "🇳🇿", 
+                        "en": "🇬🇧", "en-gb": "🇬🇧", "en-us": "🇺🇸", "en-ca": "🇨🇦", "en-au": "🇦🇺", "en-nz": "🇳🇿",
                         "de": "🇩🇪", "de-de": "🇩🇪", "de-at": "🇦🇹", "de-ch": "🇨🇭",
                         "fr": "🇫🇷", "fr-fr": "🇫🇷", "fr-ca": "🇨🇦", "fr-ch": "🇨🇭", "fr-be": "🇧🇪",
                         "es": "🇪🇸", "es-es": "🇪🇸", "es-mx": "🇲🇽", "es-ar": "🇦🇷", "es-co": "🇨🇴",
@@ -403,15 +403,15 @@
                         "ko": "🇰🇷", "ko-kr": "🇰🇷",
                         "hi": "🇮🇳", "hi-in": "🇮🇳",
                         "ar": "🇸🇦", "ar-sa": "🇸🇦", "ar-eg": "🇪🇬", "ar-dz": "🇩🇿",
-                        "he": "🇮🇱", "he-il": "🇮🇱", 
+                        "he": "🇮🇱", "he-il": "🇮🇱",
                         "th": "🇹🇭", "vi": "🇻🇳"
                     } %}
-                    <span class="inline-block mr-2 text-xl" title="{{ language }}">
+                    <span class="inline-block mr-2 text-lg" title="{{ language }}">
                         {{ lang_flags.get(language_lower, lang_flags.get(language_code, "🌐")) }}
                     </span>
-                    <p class="text-indigo-700 text-sm font-medium uppercase tracking-wide">{{ language }}</p>
+                    <span class="text-indigo-700 font-mono text-sm w-12 flex-shrink-0">{{ language }}</span>
+                    <span class="text-gray-700 italic ml-2">{{ translation }}</span>
                 </div>
-                <p class="mt-1 text-gray-700">{{ translation }}</p>
             </div>
             {% endfor %}
         </div>
