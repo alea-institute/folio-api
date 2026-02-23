@@ -785,10 +785,16 @@ function hasMatchDescendant(nodeId, treeData) {
     return false;
 }
 
-function addFilterModeControls(totalCount, query, classCount, propCount) {
-    // Show the inline clear (X) button inside the search input
+function toggleSearchClearButtons(showClear) {
+    const searchBtn = document.getElementById('explore-search-button');
     const clearBtn = document.getElementById('explore-search-clear');
-    if (clearBtn) clearBtn.style.display = 'flex';
+    if (searchBtn) searchBtn.style.display = showClear ? 'none' : 'flex';
+    if (clearBtn) clearBtn.style.display = showClear ? 'flex' : 'none';
+}
+
+function addFilterModeControls(totalCount, query, classCount, propCount) {
+    // Show Clear button, hide Search button
+    toggleSearchClearButtons(true);
 
     // Build match-count text
     let detail = totalCount + ' match' + (totalCount !== 1 ? 'es' : '');
@@ -814,9 +820,8 @@ function addFilterModeControls(totalCount, query, classCount, propCount) {
 }
 
 function clearFilterMode() {
-    // Hide inline clear button and match count
-    const clearBtn = document.getElementById('explore-search-clear');
-    if (clearBtn) clearBtn.style.display = 'none';
+    // Hide Clear button, show Search button
+    toggleSearchClearButtons(false);
     const countEl = document.getElementById('search-match-count');
     if (countEl) { countEl.textContent = ''; countEl.style.display = 'none'; }
 
