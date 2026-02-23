@@ -19,6 +19,13 @@ router = APIRouter(prefix="/properties", tags=["properties"])
 # The OWL top-level property IRI
 OWL_TOP_OBJECT_PROPERTY = "http://www.w3.org/2002/07/owl#topObjectProperty"
 
+# Root properties to hide from the tree
+HIDDEN_ROOT_PROPERTY_IRIS = {
+    "https://folio.openlegalstandard.org/RBD1G5FjdaXj6UM26EWBxJc",  # utbms:activities
+    "https://folio.openlegalstandard.org/RDc1B2GDj6ckfXBkRRSJXfH",  # TR:SALI
+    "https://folio.openlegalstandard.org/RDNZZOyU2yb5Q9xbxIWXd62",  # ZZZ:DEPRECATED PROPERTIES
+}
+
 
 def _find_property(folio: FOLIO, iri: str) -> OWLObjectProperty | None:
     """4-step IRI resolution for properties (mirrors class resolution pattern)."""
@@ -61,7 +68,7 @@ def _is_root_property(prop: OWLObjectProperty) -> bool:
 
 def _get_root_properties(folio: FOLIO) -> list[OWLObjectProperty]:
     """Get all root-level object properties."""
-    roots = [p for p in folio.object_properties if _is_root_property(p)]
+    roots = [p for p in folio.object_properties if _is_root_property(p) and p.iri not in HIDDEN_ROOT_PROPERTY_IRIS]
     roots.sort(key=lambda p: (p.label or p.iri).lower())
     return roots
 
