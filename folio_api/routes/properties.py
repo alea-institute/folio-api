@@ -73,6 +73,28 @@ def _get_root_properties(folio: FOLIO) -> list[OWLObjectProperty]:
     return roots
 
 
+def _is_in_hidden_branch(folio: FOLIO, prop: OWLObjectProperty) -> bool:
+    """Check if a property is itself hidden or is a descendant of a hidden root."""
+    if prop.iri in HIDDEN_ROOT_PROPERTY_IRIS:
+        return True
+    visited = set()
+    current = prop
+    while current and current.sub_property_of:
+        for parent_iri in current.sub_property_of:
+            if parent_iri == OWL_TOP_OBJECT_PROPERTY or parent_iri in visited:
+                continue
+            if parent_iri in HIDDEN_ROOT_PROPERTY_IRIS:
+                return True
+            visited.add(parent_iri)
+            parent = folio.get_property(parent_iri)
+            if parent:
+                current = parent
+                break
+        else:
+            break
+    return False
+
+
 def _get_child_properties(folio: FOLIO, parent_iri: str, property_children: dict = None) -> list[OWLObjectProperty]:
     """Get child properties of a given parent IRI."""
     if property_children is not None:
@@ -372,7 +394,7 @@ async def search_property_tree(request: Request, query: str) -> JSONResponse:
     query_lower = query.lower()
 
     for prop in folio.object_properties:
-        if prop.iri in seen_iris:
+        if prop.iri in seen_iris or _is_in_hidden_branch(folio, prop):
             continue
 
         label_match = False
