@@ -1,8 +1,8 @@
 """
-Models for FOLIO ontology classes and search results.
+Models for FOLIO ontology classes, object properties, and search results.
 
 These models define the response schemas for the API endpoints that return
-FOLIO ontology classes and search results.
+FOLIO ontology classes, object properties, and search results.
 """
 
 # Standard library imports
@@ -10,7 +10,7 @@ from typing import List, Tuple, Union
 
 # Third-party imports
 from pydantic import BaseModel, Field
-from folio import OWLClass
+from folio import OWLClass, OWLObjectProperty
 
 
 class OWLClassList(BaseModel):
@@ -48,6 +48,30 @@ class OWLClassList(BaseModel):
                 "iri": "R8pNPutX0TN6DlEqkyZuxSw",
                 "label": "Lessor",
                 "definition": "A party that grants a right to use something in return for payment.",
+            }
+        ],
+    )
+    properties: List[OWLObjectProperty] = Field(
+        default_factory=list,
+        description="List of OWLObjectProperty objects matching the search",
+    )
+
+
+class OWLObjectPropertyList(BaseModel):
+    """
+    A collection of OWLObjectProperty objects from the FOLIO ontology.
+
+    Attributes:
+        properties: A list of OWLObjectProperty objects representing FOLIO ontology object properties
+    """
+
+    properties: List[OWLObjectProperty] = Field(
+        description="List of OWLObjectProperty objects from the FOLIO ontology",
+        example=[
+            {
+                "iri": "R6qohvM786wjw0MNQJg9Dq",
+                "label": "drafted",
+                "definition": "A relationship indicating that something was drafted.",
             }
         ],
     )

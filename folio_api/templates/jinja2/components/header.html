@@ -6,15 +6,16 @@
                 <p class="text-xl text-white opacity-80 hidden md:block">{% block header_subtitle %}Exploring the Federated Open Legal Information Ontology{% endblock %}</p>
             </div>
             <div class="hidden md:block header-buttons">
-                <a href="https://openlegalstandard.org/" target="_blank" class="inline-block bg-white text-[--color-primary] font-semibold px-4 py-2 rounded hover:bg-opacity-90 transition-colors duration-200 mr-2">FOLIO Website</a>
+                <a href="/explore/tree" class="inline-block bg-white text-[--color-primary] font-semibold px-4 py-2 rounded hover:bg-opacity-90 transition-colors duration-200 mr-2">Browse</a>
+                <a href="https://openlegalstandard.org/" target="_blank" class="inline-block bg-transparent text-white border border-white font-semibold px-4 py-2 rounded hover:bg-white hover:bg-opacity-10 transition-colors duration-200 mr-2">FOLIO Website</a>
                 <a href="https://openlegalstandard.org/education/" target="_blank" class="inline-block bg-transparent text-white border border-white font-semibold px-4 py-2 rounded hover:bg-white hover:bg-opacity-10 transition-colors duration-200">Learn More</a>
             </div>
         </div>
         
         <div class="mt-6 max-w-3xl">
             <div class="relative">
-                <label for="search-input" class="sr-only">Search for FOLIO classes</label>
-                <input id="search-input" type="text" placeholder="Search for FOLIO classes..." class="w-full p-3 rounded-lg border border-white focus:outline-none focus:ring-2 focus:ring-white focus:ring-opacity-50 text-gray-800">
+                <label for="search-input" class="sr-only">Search for FOLIO classes and properties</label>
+                <input id="search-input" type="text" placeholder="Search for FOLIO classes and properties..." class="w-full p-3 rounded-lg border border-white focus:outline-none focus:ring-2 focus:ring-white focus:ring-opacity-50 text-gray-800">
                 <div id="search-results" class="absolute top-14 left-0 w-full bg-white dark:bg-[--color-bg-page] shadow-lg rounded-lg overflow-hidden mt-2 border border-[--color-secondary] border-opacity-20"></div>
                 
                 <!-- Progressive enhancement: Alternative search for non-JS browsers -->

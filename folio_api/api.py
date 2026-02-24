@@ -3,6 +3,7 @@
 # imports
 import logging
 import os
+from collections import defaultdict
 from contextlib import asynccontextmanager
 from typing import Any, Dict
 from pathlib import Path
@@ -21,6 +22,8 @@ import folio_api.routes.info
 import folio_api.routes.root
 import folio_api.routes.search
 import folio_api.routes.taxonomy
+import folio_api.routes.properties
+import folio_api.routes.explore
 from folio_api.api_config import load_config
 
 
@@ -64,6 +67,13 @@ async def lifespan_handler(app_instance: FastAPI):
         app_instance.state.config["folio"],
         app_instance.state.config["llm"],
     )
+
+    # Build reverse index for property children lookups
+    property_children = defaultdict(list)
+    for prop in app_instance.state.folio.object_properties:
+        for parent_iri in prop.sub_property_of:
+            property_children[parent_iri].append(prop)
+    app_instance.state.property_children = dict(property_children)
 
     # log it
     app_instance.state.logger.info(
@@ -162,6 +172,10 @@ def get_app() -> FastAPI:
                 "name": "taxonomy",
                 "description": "Endpoints for exploring ontology hierarchies and class categories",
             },
+            {
+                "name": "properties",
+                "description": "Endpoints for browsing and exploring OWL object properties",
+            },
         ],
         docs_url="/docs",
         terms_of_service=api_config["terms_of_service"],
@@ -212,11 +226,19 @@ def get_app() -> FastAPI:
     # Store templates instance in app state
     app_instance.state.templates = Jinja2Templates(directory=templates_dir)
 
+    # INTERIM FIX: Register strip_folio_prefix Jinja2 filter for human-readable property labels.
+    # Remove this once https://github.com/alea-institute/FOLIO/pull/5 is merged and
+    # folio-python is updated with human-readable rdfs:label values.
+    from folio_api.rendering import strip_folio_prefix
+    app_instance.state.templates.env.filters["strip_folio_prefix"] = strip_folio_prefix
+
     # Attach the routes
     app_instance.include_router(folio_api.routes.info.router)
     app_instance.include_router(folio_api.routes.root.router)
     app_instance.include_router(folio_api.routes.search.router)
     app_instance.include_router(folio_api.routes.taxonomy.router)
+    app_instance.include_router(folio_api.routes.properties.router)
+    app_instance.include_router(folio_api.routes.explore.router)
 
     return app_instance
 

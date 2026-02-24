@@ -6,6 +6,6 @@ schemas in the FOLIO API.
 """
 
 from folio_api.models.health import HealthResponse, FOLIOGraphInfo
-from folio_api.models.owl import OWLClassList, OWLSearchResults
+from folio_api.models.owl import OWLClassList, OWLObjectPropertyList, OWLSearchResults
 
-__all__ = ["HealthResponse", "FOLIOGraphInfo", "OWLClassList", "OWLSearchResults"]
+__all__ = ["HealthResponse", "FOLIOGraphInfo", "OWLClassList", "OWLObjectPropertyList", "OWLSearchResults"]

@@ -153,9 +153,9 @@ function loadTreeNodes(nodeId, container) {
 function renderTreeNode(node, container) {
     const hasChildren = node.children;
     const nodeClass = hasChildren ? 'has-children collapsed' : '';
-    const expandIcon = hasChildren ? 
-        '<span class="expand-icon mr-1">▸</span>' : 
-        '<span class="leaf-indicator ml-1 mr-3 inline-flex shrink-0 items-center justify-center w-[8px] h-[8px] rounded-full bg-gray-200"></span>';
+    const expandIcon = hasChildren ?
+        '<span class="expand-icon"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 3 11 8 6 13"></polyline></svg></span>' :
+        '<span class="leaf-indicator"><span class="leaf-dot"></span></span>';
     
     const li = $(`
         <li class="tree-node ${nodeClass}" data-id="${node.id}">
@@ -219,7 +219,7 @@ function toggleNode(li) {
     if (li.hasClass('collapsed')) {
         // Expand the node
         li.removeClass('collapsed').addClass('expanded');
-        expandIcon.html('▾');
+        expandIcon.addClass('expanded');
         childrenContainer.slideDown(200);
         
         // Load children if not already loaded - only if there are no tree nodes
@@ -238,7 +238,7 @@ function toggleNode(li) {
     } else {
         // Collapse the node
         li.removeClass('expanded').addClass('collapsed');
-        expandIcon.html('▸');
+        expandIcon.removeClass('expanded');
         childrenContainer.slideUp(200);
     }
 }
@@ -380,17 +380,47 @@ function applyArrowStyles() {
         arrowStyle.textContent = `
             .expand-icon {
                 cursor: pointer;
-                width: 16px;
+                width: 20px;
+                height: 20px;
                 display: inline-flex !important;
                 align-items: center !important;
                 justify-content: center;
-                text-align: center;
                 flex-shrink: 0;
-                font-size: 24px !important;
-                line-height: 16px !important;
-                vertical-align: middle !important;
-                position: relative !important;
-                top: -2px !important;
+                border-radius: 3px;
+                transition: transform 0.15s ease;
+                color: #6b7280;
+                margin-right: 4px;
+            }
+            .expand-icon:hover {
+                background-color: rgba(107, 114, 128, 0.12);
+                color: #374151;
+            }
+            .expand-icon.expanded {
+                transform: rotate(90deg);
+            }
+            .expand-icon svg {
+                display: block;
+            }
+            .leaf-indicator {
+                width: 20px;
+                height: 20px;
+                display: inline-flex !important;
+                align-items: center !important;
+                justify-content: center;
+                flex-shrink: 0;
+                margin-right: 4px;
+            }
+            .leaf-dot {
+                width: 6px;
+                height: 6px;
+                border-radius: 50%;
+                background-color: #d1d5db;
+            }
+            .tree-node.selected > .node-content .leaf-dot {
+                background-color: rgba(255, 255, 255, 0.6);
+            }
+            .tree-node.selected > .node-content .expand-icon {
+                color: white;
             }
         `;
         document.head.appendChild(arrowStyle);
@@ -1675,12 +1705,12 @@ function fallbackRenderClassDetails(data, container) {
             const flag = languageFlags[langLower] || "🌐";
             
             translationItems += `
-                <div class="bg-gray-50 rounded p-3 border-l-2 border-blue-300">
-                    <div class="flex items-center mb-2">
+                <div class="bg-gray-50 rounded px-3 py-1.5 border-l-2 border-blue-300">
+                    <div class="flex items-center">
                         <span class="text-lg mr-2">${flag}</span>
-                        <p class="text-gray-700 font-medium">${lang}</p>
+                        <span class="text-gray-500 font-mono text-sm w-12 flex-shrink-0">${lang}</span>
+                        <span class="text-gray-800 italic ml-2">${translation}</span>
                     </div>
-                    <p class="text-gray-800 italic">${translation}</p>
                 </div>
             `;
         }

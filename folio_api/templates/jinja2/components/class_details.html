@@ -75,7 +75,7 @@
     <!-- Parents section -->
     {% if class_data.parents %}
     <section class="card animate-fade-in">
-        <h4 class="text-lg font-medium text-[--color-primary] mb-3">Parent Classes</h4>
+        <h4 class="text-lg font-medium text-[--color-primary] mb-3">Parent(s)</h4>
         <div class="max-h-[200px] overflow-y-auto pr-1">
             <ul class="space-y-2">
                 {% for parent in class_data.parents %}
@@ -107,7 +107,7 @@
     {% if class_data.children %}
     <section class="card animate-fade-in">
         <h4 class="text-lg font-medium text-[--color-primary] mb-3 flex items-center">
-            Child Classes 
+            Children
             <span class="ml-2 px-1.5 py-0.5 text-xs font-semibold bg-blue-100 text-blue-800 rounded-full">
                 {{ class_data.children|length }}
             </span>
@@ -151,12 +151,12 @@
         <div class="max-h-[200px] overflow-y-auto pr-1">
             <div class="grid grid-cols-1 gap-3">
                 {% for language, translation in class_data.translations.items() %}
-                <div class="bg-gray-50 rounded-md p-3 border-l-2 border-blue-300">
-                    <div class="flex items-center mb-1.5">
+                <div class="bg-gray-50 rounded-md px-3 py-1.5 border-l-2 border-blue-300">
+                    <div class="flex items-center">
                         {% set language_lower = language|lower %}
                         {% set language_code = language_lower[:2] %}
                         {% set language_flags = {
-                            "en": "🇬🇧", "en-gb": "🇬🇧", "en-us": "🇺🇸", "en-ca": "🇨🇦", "en-au": "🇦🇺", "en-nz": "🇳🇿", 
+                            "en": "🇬🇧", "en-gb": "🇬🇧", "en-us": "🇺🇸", "en-ca": "🇨🇦", "en-au": "🇦🇺", "en-nz": "🇳🇿",
                             "de": "🇩🇪", "de-de": "🇩🇪", "de-at": "🇦🇹", "de-ch": "🇨🇭",
                             "fr": "🇫🇷", "fr-fr": "🇫🇷", "fr-ca": "🇨🇦", "fr-ch": "🇨🇭", "fr-be": "🇧🇪",
                             "es": "🇪🇸", "es-es": "🇪🇸", "es-mx": "🇲🇽", "es-ar": "🇦🇷", "es-co": "🇨🇴",
@@ -170,13 +170,13 @@
                             "ko": "🇰🇷", "ko-kr": "🇰🇷",
                             "hi": "🇮🇳", "hi-in": "🇮🇳",
                             "ar": "🇸🇦", "ar-sa": "🇸🇦", "ar-eg": "🇪🇬", "ar-dz": "🇩🇿",
-                            "he": "🇮🇱", "he-il": "🇮🇱", 
+                            "he": "🇮🇱", "he-il": "🇮🇱",
                             "th": "🇹🇭", "vi": "🇻🇳"
                         } %}
                         <span class="text-lg mr-2">{{ language_flags.get(language_lower, language_flags.get(language_code, "🌐")) }}</span>
-                        <p class="text-gray-700 font-medium">{{ language }}</p>
+                        <span class="text-gray-500 font-mono text-sm w-12 flex-shrink-0">{{ language }}</span>
+                        <span class="text-gray-800 italic ml-2">{{ translation }}</span>
                     </div>
-                    <p class="text-gray-800 italic">{{ translation }}</p>
                 </div>
                 {% endfor %}
             </div>
@@ -417,6 +417,49 @@
                     {% endif %}
                 </div>
             </div>
+        </div>
+    </section>
+    {% endif %}
+
+    <!-- Related Object Properties -->
+    {% if domain_properties or range_properties %}
+    <section class="card animate-fade-in xl:col-span-2">
+        <h4 class="text-lg font-medium text-[--color-primary] mb-3 flex items-center">
+            <svg class="w-4 h-4 mr-2 text-teal-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+            </svg>
+            Related Object Properties
+        </h4>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {% if domain_properties %}
+            <div class="bg-teal-50 rounded-lg p-3">
+                <p class="text-gray-700 text-xs font-medium uppercase tracking-wide mb-2">Properties with this class as Domain</p>
+                <div class="max-h-[200px] overflow-y-auto">
+                    <ul class="space-y-1">
+                        {# INTERIM: strip_folio_prefix can be removed once FOLIO PR #5 is merged #}
+                        {% for prop in domain_properties %}
+                        <li>
+                            <a href="/{{ prop.iri }}/html" class="text-teal-700 hover:text-teal-900 hover:underline text-sm">{{ prop.label|strip_folio_prefix }}</a>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+            {% endif %}
+            {% if range_properties %}
+            <div class="bg-orange-50 rounded-lg p-3">
+                <p class="text-gray-700 text-xs font-medium uppercase tracking-wide mb-2">Properties with this class as Range</p>
+                <div class="max-h-[200px] overflow-y-auto">
+                    <ul class="space-y-1">
+                        {% for prop in range_properties %}
+                        <li>
+                            <a href="/{{ prop.iri }}/html" class="text-orange-700 hover:text-orange-900 hover:underline text-sm">{{ prop.label|strip_folio_prefix }}</a>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+            {% endif %}
         </div>
     </section>
     {% endif %}

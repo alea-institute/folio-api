@@ -8,14 +8,43 @@ from pathlib import Path
 # packages
 from fastapi import APIRouter, Request, status
 from folio import FOLIO, FOLIO_TYPE_IRIS
-from starlette.responses import Response, JSONResponse
+from starlette.responses import Response, JSONResponse, RedirectResponse
 
 # project
 from folio_api.models import OWLClassList
-from folio_api.rendering import get_node_neighbors
+from folio_api.rendering import get_node_neighbors, strip_folio_prefix
 
 # API router
 router = APIRouter(prefix="/taxonomy", tags=["taxonomy"])
+
+# Curated list of root-level class IRI IDs (direct subclasses of owl:Thing,
+# excluding sandbox/draft classes not ready for public display).
+ROOT_CLASS_IRI_IDS = [
+    "R8CdMpOM0RmyrgCCvbpiLS0",  # Actor / Player
+    "RSYBzf149Mi5KE0YtmpUmr",  # Area of Law
+    "RCIwc6WJi6IT7xePURxsi4T",  # Asset Type
+    "R8qItBwG2pRMFhUq1HQEMnb",  # Communication Modality
+    "R767niCLQVC5zIcO5WDQMSl",  # Currency
+    "R79aItNTJQwHgR002wuX3iC",  # Data Format
+    "RDt4vQCYDfY0R9fZ5FNnTbj",  # Document / Artifact
+    "R9kmGZf5FSmFdouXWQ1Nndm",  # Engagement Attributes
+    "R73hoH1RXYjBTYiGfolpsAF",  # Event
+    "RhBgnef56iLBXYfPqWQE41",  # Financial Concepts and Metrics
+    "RBjHwNNG2ASVmasLFU42otk",  # Forums and Venues
+    "RBQGborh1CfXanGZipDL0Qo",  # Governmental Body
+    "R8f4qGdjxuiQary8OBpq8W9",  # Industry and Market
+    "RDOvAHsvY8TKJ1O1orXPM9o",  # Language
+    "RC1CZydjfH8oiM4W3rCkma3",  # Legal Authorities
+    "R7L5eLIzH0CpOUE74uJvSjL",  # Legal Entity
+    "R9B8sRCK209t5Y8LlU4f62a",  # Legal Use Cases
+    "R9aSzp9cEiBCzObnP92jYFX",  # Location
+    "R7ReDY2v13rer1U8AyOj55L",  # Matter Narrative
+    "RlNFgB3TQfMzV26V4V7u4E",  # Objectives
+    "RDK1QEdQg1T8B5HQqMK2pZN",  # Service
+    "RB4cFSLB4xvycDlKv73dOg6",  # Standards Compatibility
+    "Rx69EnEj3H3TpcgTfUSoYx",  # Status
+    "R8EoZh39tWmXCkmP2Xzjl6E",  # System Identifiers
+]
 
 
 @router.get(
@@ -514,25 +543,12 @@ async def get_tree_data(
 
     # If requesting root nodes
     if node_id == "#":
-        # OWL_THING URI from the FOLIO library
-        OWL_THING = "http://www.w3.org/2002/07/owl#Thing"
-
-        # Filter for classes that are direct subclasses of owl:Thing
-        root_classes = []
-
-        # Get all IRIs from the FOLIO instance
-        for iri in FOLIO_TYPE_IRIS.values():
-            owl_class = folio[iri]
-
-            # Check if this class directly inherits from owl:Thing
-            if hasattr(owl_class, "sub_class_of") and isinstance(
-                owl_class.sub_class_of, list
-            ):
-                if (
-                    len(owl_class.sub_class_of) == 1
-                    and owl_class.sub_class_of[0] == OWL_THING
-                ):
-                    root_classes.append(owl_class)
+        # Look up root classes from curated list
+        root_classes = [
+            folio[iri_id] for iri_id in ROOT_CLASS_IRI_IDS
+            if folio[iri_id] is not None
+        ]
+        root_classes.sort(key=lambda x: (x.label or "").lower())
 
         # Format for jsTree
         result = []
@@ -1214,12 +1230,27 @@ async def get_class_details_html(request: Request, iri: str) -> Response:
                         "iri": see_also_iri,
                     }
 
+    # Cross-linking: properties with this class as domain or range
+    domain_properties = []
+    range_properties = []
+    for p in folio.object_properties:
+        if owl_class.iri in p.domain:
+            # INTERIM: strip_folio_prefix can be removed once FOLIO PR #5 is merged
+            domain_properties.append({"iri": p.iri, "label": strip_folio_prefix(p.label or p.iri)})
+        if owl_class.iri in p.range:
+            # INTERIM: strip_folio_prefix can be removed once FOLIO PR #5 is merged
+            range_properties.append({"iri": p.iri, "label": strip_folio_prefix(p.label or p.iri)})
+    domain_properties.sort(key=lambda x: x["label"].lower())
+    range_properties.sort(key=lambda x: x["label"].lower())
+
     return request.app.state.templates.TemplateResponse(
         "components/class_details.html",
         {
             "request": request,
             "class_data": class_data,
             "folio_graph": simplified_folio_graph,
+            "domain_properties": domain_properties,
+            "range_properties": range_properties,
         },
     )
 
@@ -1233,36 +1264,13 @@ async def get_class_details_html(request: Request, iri: str) -> Response:
     status_code=status.HTTP_200_OK,
 )
 async def explore_taxonomy_tree(request: Request) -> Response:
-    """
-    Interactive taxonomic explorer using jsTree for navigation.
-
-    This endpoint provides an interactive UI for exploring the FOLIO taxonomy hierarchy.
-    The left panel shows a navigable tree view of all classes, while the right panel
-    displays detailed information about the selected class.
-
-    Features:
-    - Lazy-loaded tree for efficient browsing of large hierarchies
-    - Detailed class information in the right panel
-    - Interactive visualization of class relationships
-    - Search functionality
-
-    Returns:
-        Response: HTML page with the interactive taxonomy explorer
-    """
-    # Import JavaScript for tree view
-    typeahead_js_path = (
-        Path(__file__).parent.parent / "static" / "js" / "typeahead_search.js"
-    )
-    typeahead_js_source = typeahead_js_path.read_text(encoding="utf-8")
-
-    return request.app.state.templates.TemplateResponse(
-        "taxonomy/tree.html",
-        {
-            "request": request,
-            "typeahead_js_source": typeahead_js_source,
-            "config": request.app.state.config,
-        },
-    )
+    """Redirect to the unified explore tree view."""
+    # Preserve any query params (e.g. ?node=...)
+    target = "/explore/tree"
+    node = request.query_params.get("node")
+    if node:
+        target += f"?node={node}&type=class"
+    return RedirectResponse(url=target, status_code=301)
 
 
 @router.get(
@@ -1294,26 +1302,12 @@ async def browse_top_level_classes(request: Request) -> Response:
     """
     folio: FOLIO = request.app.state.folio
 
-    # OWL_THING URI from the FOLIO library
-    OWL_THING = "http://www.w3.org/2002/07/owl#Thing"
+    # Look up root classes from curated list
+    root_classes = [
+        folio[iri_id] for iri_id in ROOT_CLASS_IRI_IDS
+        if folio[iri_id] is not None
+    ]
 
-    # Filter for classes that are direct subclasses of owl:Thing
-    root_classes = []
-
-    # Get all IRIs from the FOLIO instance
-    for iri in FOLIO_TYPE_IRIS.values():
-        owl_class = folio[iri]
-
-        # Check if this class directly inherits from owl:Thing
-        if hasattr(owl_class, "sub_class_of") and isinstance(
-            owl_class.sub_class_of, list
-        ):
-            if (
-                len(owl_class.sub_class_of) == 1
-                and owl_class.sub_class_of[0] == OWL_THING
-            ):
-                root_classes.append(owl_class)
-    
     # Sort root classes alphabetically by label
     root_classes.sort(key=lambda x: x.label.lower() if x.label else "")
 

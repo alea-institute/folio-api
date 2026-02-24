@@ -83,7 +83,7 @@
     <section class="card animate-fade-in border-t-4 border-[--color-primary]">
         <div class="flex justify-between items-start">
             <div>
-                <h3 class="text-xl font-semibold mb-2 text-[--color-primary]">Identification</h3>
+                <h3 class="text-2xl font-semibold mb-2 text-[--color-primary]">{{ owl_class.label or "Unnamed Class" }}</h3>
                 <div class="flex flex-col sm:flex-row sm:items-center text-gray-500 text-sm mb-4">
                     <span class="font-medium mb-1 sm:mb-0 sm:mr-1.5 flex-shrink-0">IRI:</span>
                     <div class="overflow-hidden flex-1 min-w-0 mb-1 sm:mb-0 sm:mr-2">
@@ -112,40 +112,34 @@
         </div>
         
         <div class="bg-gray-50 rounded-lg p-4 mt-4">
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div class="flex flex-col">
-                    <span class="text-gray-500 text-xs font-medium uppercase tracking-wide mb-1">Label</span>
-                    <span class="text-gray-800 font-medium">{{ owl_class.label or "N/A" }}</span>
-                </div>
-                
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div class="flex flex-col">
                     <span class="text-gray-500 text-xs font-medium uppercase tracking-wide mb-1">Preferred Label</span>
-                    <span class="text-gray-800">{{ owl_class.preferred_label or "N/A" }}</span>
+                    {% if owl_class.preferred_label %}
+                    <span class="text-gray-800">{{ owl_class.preferred_label }}</span>
+                    {% else %}
+                    <span class="text-gray-400 italic">N/A</span>
+                    {% endif %}
                 </div>
-                
+
                 <div class="flex flex-col">
-                    <span class="text-gray-500 text-xs font-medium uppercase tracking-wide mb-1">Identifier</span>
-                    <span class="text-gray-800 font-mono text-sm">{{ owl_class.identifier or "N/A" }}</span>
-                </div>
-                
-                <div class="md:col-span-3">
                     <span class="text-gray-500 text-xs font-medium uppercase tracking-wide mb-1">Alternative Labels</span>
                     {% if owl_class.alternative_labels %}
-                    <div class="flex flex-wrap gap-1 mt-1">
+                    <div class="flex flex-wrap gap-1.5 mt-1">
                         {% for label in owl_class.alternative_labels %}
-                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium bg-blue-50 text-blue-700">
                             {{ label }}
                         </span>
                         {% endfor %}
                     </div>
                     {% else %}
-                    <p class="text-gray-700">None</p>
+                    <p class="text-gray-400 italic">None</p>
                     {% endif %}
                 </div>
             </div>
         </div>
     </section>
-    
+
     <!-- Definition and Examples -->
     <section class="card animate-fade-in border-t-4 border-emerald-500">
         <div class="flex items-start mb-4">
@@ -193,7 +187,7 @@
                     <svg class="w-4 h-4 mr-2 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18" />
                     </svg>
-                    <p class="text-gray-700 text-sm font-medium uppercase tracking-wide">Sub Class Of</p>
+                    <p class="text-gray-700 text-sm font-medium uppercase tracking-wide">Parent(s)</p>
                 </div>
                 <ul class="list-none space-y-2">
                     {% if owl_class.sub_class_of %}
@@ -210,7 +204,7 @@
                     {% else %}
                     <li class="flex items-center">
                         <span class="text-gray-400 mr-2">•</span>
-                        <span class="text-gray-500 italic">None</span>
+                        <span class="text-gray-400 italic">None</span>
                     </li>
                     {% endif %}
                 </ul>
@@ -223,7 +217,11 @@
                     </svg>
                     <p class="text-gray-700 text-sm font-medium uppercase tracking-wide">Is Defined By</p>
                 </div>
-                <p class="text-gray-800 ml-6">{{ owl_class.is_defined_by or "N/A" }}</p>
+                {% if owl_class.is_defined_by %}
+                <p class="text-gray-800 ml-6">{{ owl_class.is_defined_by }}</p>
+                {% else %}
+                <p class="text-gray-400 italic ml-6">N/A</p>
+                {% endif %}
                 
                 <div class="flex items-center mb-3 mt-4">
                     <svg class="w-4 h-4 mr-2 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -261,7 +259,7 @@
                     {% endfor %}
                 </ul>
                 {% else %}
-                <p class="text-gray-500 italic ml-6">None</p>
+                <p class="text-gray-400 italic ml-6">None</p>
                 {% endif %}
             </div>
         </div>
@@ -272,7 +270,7 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
                 </svg>
                 <p class="text-gray-700 text-sm font-medium uppercase tracking-wide">
-                    Parent Class Of 
+                    Children 
                     <span class="inline-flex items-center justify-center ml-2 bg-green-100 text-green-800 px-2 py-0.5 rounded-full text-xs">
                         {{ owl_class.parent_class_of|length if owl_class.parent_class_of else 0 }}
                     </span>
@@ -294,7 +292,7 @@
                     {% else %}
                     <li class="flex items-center">
                         <span class="text-gray-400 mr-2">•</span>
-                        <span class="text-gray-500 italic">None</span>
+                        <span class="text-gray-400 italic">None</span>
                     </li>
                     {% endif %}
                 </ul>
@@ -302,6 +300,77 @@
         </div>
     </section>
     
+    <!-- Related Object Properties -->
+    {% if domain_properties or range_properties %}
+    <section class="card animate-fade-in border-t-4 border-teal-500">
+        <div class="flex items-start mb-4">
+            <svg class="w-5 h-5 mt-1 mr-2 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+            </svg>
+            <h3 class="text-xl font-semibold text-[--color-primary]">Related Object Properties</h3>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {% if domain_properties %}
+            <div class="bg-teal-50 rounded-lg p-4">
+                <div class="flex items-center mb-3">
+                    <svg class="w-4 h-4 mr-2 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                    </svg>
+                    <p class="text-gray-700 text-sm font-medium uppercase tracking-wide">
+                        Properties with this class as Domain
+                        <span class="inline-flex items-center justify-center ml-2 bg-teal-100 text-teal-800 px-2 py-0.5 rounded-full text-xs">
+                            {{ domain_properties|length }}
+                        </span>
+                    </p>
+                </div>
+                <div class="max-h-60 overflow-y-auto">
+                    <ul class="list-none space-y-2">
+                        {# INTERIM: strip_folio_prefix can be removed once FOLIO PR #5 is merged #}
+                        {% for prop in domain_properties %}
+                        <li class="flex items-center">
+                            <span class="text-teal-500 mr-2">•</span>
+                            <a class="text-teal-700 hover:text-teal-900 hover:underline transition-colors duration-150" href="{{ prop.iri }}/html">
+                                {{ prop.label|strip_folio_prefix }}
+                            </a>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+            {% endif %}
+
+            {% if range_properties %}
+            <div class="bg-orange-50 rounded-lg p-4">
+                <div class="flex items-center mb-3">
+                    <svg class="w-4 h-4 mr-2 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16l-4-4m0 0l4-4m-4 4h18" />
+                    </svg>
+                    <p class="text-gray-700 text-sm font-medium uppercase tracking-wide">
+                        Properties with this class as Range
+                        <span class="inline-flex items-center justify-center ml-2 bg-orange-100 text-orange-800 px-2 py-0.5 rounded-full text-xs">
+                            {{ range_properties|length }}
+                        </span>
+                    </p>
+                </div>
+                <div class="max-h-60 overflow-y-auto">
+                    <ul class="list-none space-y-2">
+                        {% for prop in range_properties %}
+                        <li class="flex items-center">
+                            <span class="text-orange-500 mr-2">•</span>
+                            <a class="text-orange-700 hover:text-orange-900 hover:underline transition-colors duration-150" href="{{ prop.iri }}/html">
+                                {{ prop.label|strip_folio_prefix }}
+                            </a>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </section>
+    {% endif %}
+
     <!-- Translations -->
     {% if owl_class.translations %}
     <section class="card animate-fade-in border-t-4 border-indigo-500">
@@ -311,14 +380,14 @@
             </svg>
             <h3 class="text-xl font-semibold text-[--color-primary]">Translations</h3>
         </div>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
             {% for language, translation in owl_class.translations.items() %}
-            <div class="bg-indigo-50 p-4 rounded-lg">
-                <div class="flex items-center mb-2">
+            <div class="bg-indigo-50 px-4 py-2 rounded-lg">
+                <div class="flex items-center">
                     {% set language_lower = language|lower %}
                     {% set language_code = language_lower[:2] %}
                     {% set lang_flags = {
-                        "en": "🇬🇧", "en-gb": "🇬🇧", "en-us": "🇺🇸", "en-ca": "🇨🇦", "en-au": "🇦🇺", "en-nz": "🇳🇿", 
+                        "en": "🇬🇧", "en-gb": "🇬🇧", "en-us": "🇺🇸", "en-ca": "🇨🇦", "en-au": "🇦🇺", "en-nz": "🇳🇿",
                         "de": "🇩🇪", "de-de": "🇩🇪", "de-at": "🇦🇹", "de-ch": "🇨🇭",
                         "fr": "🇫🇷", "fr-fr": "🇫🇷", "fr-ca": "🇨🇦", "fr-ch": "🇨🇭", "fr-be": "🇧🇪",
                         "es": "🇪🇸", "es-es": "🇪🇸", "es-mx": "🇲🇽", "es-ar": "🇦🇷", "es-co": "🇨🇴",
@@ -332,15 +401,15 @@
                         "ko": "🇰🇷", "ko-kr": "🇰🇷",
                         "hi": "🇮🇳", "hi-in": "🇮🇳",
                         "ar": "🇸🇦", "ar-sa": "🇸🇦", "ar-eg": "🇪🇬", "ar-dz": "🇩🇿",
-                        "he": "🇮🇱", "he-il": "🇮🇱", 
+                        "he": "🇮🇱", "he-il": "🇮🇱",
                         "th": "🇹🇭", "vi": "🇻🇳"
                     } %}
-                    <span class="inline-block mr-2 text-xl" title="{{ language }}">
+                    <span class="inline-block mr-2 text-lg" title="{{ language }}">
                         {{ lang_flags.get(language_lower, lang_flags.get(language_code, "🌐")) }}
                     </span>
-                    <p class="text-indigo-700 text-sm font-medium uppercase tracking-wide">{{ language }}</p>
+                    <span class="text-indigo-700 font-mono text-sm w-12 flex-shrink-0">{{ language }}</span>
+                    <span class="text-gray-700 italic ml-2">{{ translation }}</span>
                 </div>
-                <p class="mt-1 text-gray-700">{{ translation }}</p>
             </div>
             {% endfor %}
         </div>
@@ -398,11 +467,19 @@
                 <div class="space-y-4">
                     <div class="p-3 bg-white rounded border border-gray-100">
                         <p class="text-gray-700 text-xs font-medium uppercase tracking-wide mb-1">Comment</p>
-                        <p class="text-gray-800">{{ owl_class.comment or "None" }}</p>
+                        {% if owl_class.comment %}
+                        <p class="text-gray-800">{{ owl_class.comment }}</p>
+                        {% else %}
+                        <p class="text-gray-400 italic">None</p>
+                        {% endif %}
                     </div>
                     <div class="p-3 bg-white rounded border border-gray-100">
                         <p class="text-gray-700 text-xs font-medium uppercase tracking-wide mb-1">Description</p>
-                        <p class="text-gray-800">{{ owl_class.description or "None" }}</p>
+                        {% if owl_class.description %}
+                        <p class="text-gray-800">{{ owl_class.description }}</p>
+                        {% else %}
+                        <p class="text-gray-400 italic">None</p>
+                        {% endif %}
                     </div>
                     <div class="p-3 bg-white rounded border border-gray-100">
                         <p class="text-gray-700 text-xs font-medium uppercase tracking-wide mb-1">Notes</p>
@@ -417,7 +494,7 @@
                             {% else %}
                             <li class="flex">
                                 <span class="text-gray-400 mr-2">•</span>
-                                <span class="text-gray-500 italic">None</span>
+                                <span class="text-gray-400 italic">None</span>
                             </li>
                             {% endif %}
                         </ul>
@@ -432,14 +509,30 @@
                     </svg>
                     <h4 class="text-lg font-medium text-[--color-primary]">Editorial Information</h4>
                 </div>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div class="p-3 bg-white rounded border border-gray-100">
                         <p class="text-gray-700 text-xs font-medium uppercase tracking-wide mb-1">History Note</p>
-                        <p class="text-gray-800">{{ owl_class.history_note or "None" }}</p>
+                        {% if owl_class.history_note %}
+                        <p class="text-gray-800">{{ owl_class.history_note }}</p>
+                        {% else %}
+                        <p class="text-gray-400 italic">None</p>
+                        {% endif %}
                     </div>
                     <div class="p-3 bg-white rounded border border-gray-100">
                         <p class="text-gray-700 text-xs font-medium uppercase tracking-wide mb-1">Editorial Note</p>
-                        <p class="text-gray-800">{{ owl_class.editorial_note or "None" }}</p>
+                        {% if owl_class.editorial_note %}
+                        <p class="text-gray-800">{{ owl_class.editorial_note }}</p>
+                        {% else %}
+                        <p class="text-gray-400 italic">None</p>
+                        {% endif %}
+                    </div>
+                    <div class="p-3 bg-white rounded border border-gray-100">
+                        <p class="text-gray-700 text-xs font-medium uppercase tracking-wide mb-1">Identifier</p>
+                        {% if owl_class.identifier %}
+                        <p class="text-gray-800 font-mono text-sm">{{ owl_class.identifier }}</p>
+                        {% else %}
+                        <p class="text-gray-400 italic">N/A</p>
+                        {% endif %}
                     </div>
                     <div class="p-3 bg-white rounded border border-gray-100">
                         <p class="text-gray-700 text-xs font-medium uppercase tracking-wide mb-1">Deprecated</p>

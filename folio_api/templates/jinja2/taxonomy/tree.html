@@ -67,9 +67,13 @@
     }
     
     .leaf-indicator {
-        flex: 0 0 8px;
-        min-width: 8px;
-        aspect-ratio: 1 / 1;
+        width: 20px;
+        height: 20px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        margin-right: 4px;
     }
     
     /* Tree search highlight styles */
@@ -92,6 +96,39 @@
     .children-container .tree-node:not(.selected):not(.tree-node-highlighted):not(.tree-node-match) > .node-content {
         background-color: white;
         color: var(--color-text-default, rgb(16, 16, 16));
+    }
+
+    /* Split-pane drag handle */
+    .split-handle {
+        width: 6px;
+        cursor: col-resize;
+        background: transparent;
+        flex-shrink: 0;
+        position: relative;
+        z-index: 10;
+        transition: background-color 0.15s;
+    }
+    .split-handle::after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 2px;
+        height: 32px;
+        border-radius: 1px;
+        background-color: #d1d5db;
+        transition: background-color 0.15s, height 0.15s;
+    }
+    .split-handle:hover {
+        background-color: rgba(59, 130, 246, 0.08);
+    }
+    .split-handle:hover::after {
+        background-color: #3b82f6;
+        height: 48px;
+    }
+    @media (max-width: 767px) {
+        .split-handle { display: none; }
     }
 </style>
 {% endblock %}
@@ -159,15 +196,21 @@
     // Re-initialize the original typeahead search in the header
     {{ typeahead_js_source|safe }}
 </script>
+<script src="/static/js/split_pane.js"></script>
 <script src="/static/js/taxonomy_tree.js"></script>
 <script>
     // Initialize tree first without TypeaheadJS
     document.addEventListener('DOMContentLoaded', function() {
+        // Initialize split pane resizer
+        if (typeof initSplitPane === 'function') {
+            initSplitPane({ storageKey: 'folio-taxonomy-split', defaultPct: 25 });
+        }
+
         // Initialize the tree immediately
         if (typeof initializeTree === 'function') {
             initializeTree();
         }
-        
+
         // Set up tree controls
         if (typeof setupTreeControls === 'function') {
             setupTreeControls();
@@ -320,9 +363,9 @@
         const nodeClass = hasChildren ? 
             (isExpanded ? 'has-children expanded' : 'has-children collapsed') : '';
         const isMatch = node.is_match ? 'tree-node-match' : '';
-        const expandIcon = hasChildren ? 
-            `<span class="expand-icon mr-1" style="font-size: 24px; line-height: 16px; display: inline-flex; align-items: center; vertical-align: middle; position: relative; top: -2px;">${isExpanded ? '▾' : '▸'}</span>` : 
-            '<span class="leaf-indicator ml-1 mr-3 inline-flex shrink-0 items-center justify-center w-[8px] h-[8px] rounded-full bg-gray-200"></span>';
+        const expandIcon = hasChildren ?
+            `<span class="expand-icon${isExpanded ? ' expanded' : ''}"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 3 11 8 6 13"></polyline></svg></span>` :
+            '<span class="leaf-indicator"><span class="leaf-dot"></span></span>';
         
         const li = document.createElement('li');
         li.className = `tree-node ${nodeClass} ${isMatch}`;
@@ -507,9 +550,9 @@
             rootCategories.forEach(node => {
                 const hasChildren = node.children === true;
                 const nodeClass = hasChildren ? 'has-children collapsed' : '';
-                const expandIcon = hasChildren ? 
-                    '<span class="expand-icon mr-1" style="font-size: 24px; line-height: 16px; display: inline-flex; align-items: center; vertical-align: middle; position: relative; top: -2px;">▸</span>' : 
-                    '<span class="leaf-indicator ml-1 mr-3 inline-flex shrink-0 items-center justify-center w-[8px] h-[8px] rounded-full bg-gray-200"></span>';
+                const expandIcon = hasChildren ?
+                    '<span class="expand-icon"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 3 11 8 6 13"></polyline></svg></span>' :
+                    '<span class="leaf-indicator"><span class="leaf-dot"></span></span>';
                 
                 const li = document.createElement('li');
                 li.className = `tree-node ${nodeClass}`;
