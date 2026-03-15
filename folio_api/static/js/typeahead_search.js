@@ -168,6 +168,22 @@
                             }
                         }
 
+                        // Highlight preferred label if it matches the query
+                        let prefLabelHtml = '';
+                        if (data.preferred_label) {
+                            let prefText = data.preferred_label;
+                            if (query && query.length > 0) {
+                                const prefLower = prefText.toLowerCase();
+                                const prefIdx = prefLower.indexOf(query);
+                                if (prefIdx >= 0) {
+                                    prefText = prefText.substring(0, prefIdx) +
+                                        '<span class="bg-yellow-200 text-black">' + prefText.substring(prefIdx, prefIdx + query.length) + '</span>' +
+                                        prefText.substring(prefIdx + query.length);
+                                }
+                            }
+                            prefLabelHtml = `<span class="text-sm font-light text-[--color-text-muted] truncate">Preferred: ${prefText}</span>`;
+                        }
+
                         // Type badge
                         const isProperty = data.entity_type === 'Property';
                         const badgeColor = isProperty ? 'bg-teal-100 text-teal-800' : 'bg-blue-100 text-blue-800';
@@ -178,6 +194,7 @@
                             <div class="flex flex-col p-2 hover:bg-gray-100">
                                 <span class="font-semibold text-[--color-primary]">${label}${badge}</span>
                                 <span class="text-sm font-semibold text-[--color-text-secondary] truncate">${data.iri}</span>
+                                ${prefLabelHtml}
                                 <span class="text-sm font-light text-[--color-text-muted] truncate">Synonyms: ${data.alternative_labels}</span>
                                 <span class="text-sm font-light text-[--color-text-muted] truncate">Definition: ${data.definition}</span>
                             </div>

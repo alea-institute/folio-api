@@ -718,7 +718,21 @@ function searchUnified(query) {
         document.querySelectorAll('.tree-node-match').forEach(node => {
             node.classList.add('tree-node-highlighted');
             const label = node.querySelector('.node-label');
-            if (label) label.innerHTML = highlightText(label.textContent, query);
+            if (label) {
+                // Highlight in the main label text and in the preflabel annotation separately
+                const annotation = label.querySelector('.preflabel-annotation');
+                if (annotation) {
+                    const mainText = label.firstChild;
+                    if (mainText && mainText.nodeType === Node.TEXT_NODE) {
+                        const span = document.createElement('span');
+                        span.innerHTML = highlightText(mainText.textContent, query);
+                        label.replaceChild(span, mainText);
+                    }
+                    annotation.innerHTML = '(' + highlightText(annotation.textContent.replace(/[()]/g, ''), query) + ')';
+                } else {
+                    label.innerHTML = highlightText(label.textContent, query);
+                }
+            }
         });
 
         // Select first match
@@ -755,11 +769,17 @@ function renderFilteredNode(nodeId, treeData, container, sectionType, isExpanded
         ? '<span class="expand-icon' + (isExpanded ? ' expanded' : '') + '"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 3 11 8 6 13"></polyline></svg></span>'
         : '<span class="leaf-indicator"><span class="leaf-dot"></span></span>';
 
+    // Show preferred label annotation when match is via preferred_label
+    let labelHtml = node.label;
+    if (node.is_match && node.preferred_label && node.match_field === 'preferred_label') {
+        labelHtml += ' <span class="preflabel-annotation">(' + node.preferred_label + ')</span>';
+    }
+
     const li = document.createElement('li');
     li.className = 'tree-node ' + nodeClass + ' ' + isMatch;
     li.dataset.id = node.id;
     li.dataset.type = sectionType;
-    li.innerHTML = '<div class="node-content">' + expandIcon + '<span class="node-label">' + node.label + '</span></div>' +
+    li.innerHTML = '<div class="node-content">' + expandIcon + '<span class="node-label">' + labelHtml + '</span></div>' +
         (hasChildren ? '<ul class="children-container" style="display:' + (isExpanded ? 'block' : 'none') + ';"></ul>' : '');
     container.appendChild(li);
 
@@ -862,7 +882,7 @@ function addFilterModeStyles() {
     if (document.getElementById('filter-mode-styles')) return;
     const style = document.createElement('style');
     style.id = 'filter-mode-styles';
-    style.textContent = '.tree-node-highlighted>.node-content,.tree-node-match>.node-content{background-color:var(--color-primary,rgb(24,70,120))!important;color:white!important;border-left-color:rgba(255,255,255,0.8)!important}.tree-node-match>.node-content{font-weight:500}';
+    style.textContent = '.tree-node-highlighted>.node-content,.tree-node-match>.node-content{background-color:var(--color-primary,rgb(24,70,120))!important;color:white!important;border-left-color:rgba(255,255,255,0.8)!important}.tree-node-match>.node-content{font-weight:500}.preflabel-annotation{font-size:0.8em;opacity:0.85;font-style:italic}';
     document.head.appendChild(style);
 }
 
