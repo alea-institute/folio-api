@@ -388,6 +388,20 @@ async def search_property_tree(request: Request, query: str) -> JSONResponse:
     if not query or len(query) < 2:
         return JSONResponse(content={"matches": [], "tree": {}})
 
+    def _get_match_field(prop, q_lower):
+        """Determine which field matched the search query."""
+        if prop.label and q_lower in prop.label.lower():
+            return "label"
+        if prop.alternative_labels:
+            for alt in prop.alternative_labels:
+                if alt and q_lower in alt.lower():
+                    return "alternative_labels"
+        if prop.preferred_label and q_lower in prop.preferred_label.lower():
+            return "preferred_label"
+        if prop.definition and q_lower in prop.definition.lower():
+            return "definition"
+        return "label"  # fallback
+
     # Search properties
     search_results = []
     seen_iris = set()
@@ -455,11 +469,14 @@ async def search_property_tree(request: Request, query: str) -> JSONResponse:
     for node_iri in included_nodes:
         prop = folio.get_property(node_iri)
         if prop:
+            is_match = any(m["iri"] == node_iri for m in matches)
             tree["nodes"][node_iri] = {
                 "id": node_iri,
                 "label": strip_folio_prefix(prop.label or "Unnamed Property"),
+                "preferred_label": strip_folio_prefix(prop.preferred_label) if prop.preferred_label else None,
                 "children": [],
-                "is_match": any(m["iri"] == node_iri for m in matches),
+                "is_match": is_match,
+                "match_field": _get_match_field(prop, query_lower) if is_match else None,
             }
 
     # Build parent-child relationships

@@ -901,6 +901,18 @@ async def search_taxonomy_tree(request: Request, query: str) -> JSONResponse:
     """
     folio: FOLIO = request.app.state.folio
 
+    def _get_match_field(cls, q_lower):
+        """Determine which field matched the search query."""
+        if cls.label and q_lower in cls.label.lower():
+            return "label"
+        if cls.alternative_labels:
+            for alt in cls.alternative_labels:
+                if alt and q_lower in alt.lower():
+                    return "alternative_labels"
+        if cls.preferred_label and q_lower in cls.preferred_label.lower():
+            return "preferred_label"
+        return "label"  # fallback (e.g. prefix match)
+
     # First, search for matching classes
     # Reusing exactly the same logic from search endpoint
     search_results = []
@@ -1033,11 +1045,14 @@ async def search_taxonomy_tree(request: Request, query: str) -> JSONResponse:
         cls = folio[node_iri]
         if cls:
             # Basic node data
+            is_match = any(match["iri"] == node_iri for match in matches)
             tree["nodes"][node_iri] = {
                 "id": node_iri,
                 "label": cls.label or "Unnamed Class",
+                "preferred_label": cls.preferred_label,
                 "children": [],
-                "is_match": any(match["iri"] == node_iri for match in matches),
+                "is_match": is_match,
+                "match_field": _get_match_field(cls, query_lower) if is_match else None,
             }
 
     # Step 2: Build parent-child relationships
