@@ -407,6 +407,11 @@ async def search_property_tree(request: Request, query: str) -> JSONResponse:
                     label_match = True
                     break
 
+        # Check preferred label (skos:prefLabel)
+        if not label_match and prop.preferred_label:
+            if query_lower in prop.preferred_label.lower():
+                label_match = True
+
         if not label_match and prop.definition and query_lower in prop.definition.lower():
             label_match = True
 

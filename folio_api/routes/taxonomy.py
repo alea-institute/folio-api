@@ -966,6 +966,15 @@ async def search_taxonomy_tree(request: Request, query: str) -> JSONResponse:
                     label_match = True
                     break
 
+        # Check preferred label (skos:prefLabel)
+        if not label_match and owl_class.preferred_label:
+            if (
+                query in owl_class.preferred_label
+                or query_lower in owl_class.preferred_label.lower()
+                or query_title in owl_class.preferred_label
+            ):
+                label_match = True
+
         if label_match:
             seen_iris.add(owl_class.iri)
             search_results.append(owl_class)
