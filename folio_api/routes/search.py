@@ -188,6 +188,15 @@ async def search_prefix(request: Request, query: str) -> OWLClassList:
                     label_match = True
                     break
 
+        # Check preferred label (skos:prefLabel)
+        if not label_match and owl_class.preferred_label:
+            if (
+                query in owl_class.preferred_label
+                or query_lower in owl_class.preferred_label.lower()
+                or query_title in owl_class.preferred_label
+            ):
+                label_match = True
+
         if label_match:
             seen_iris.add(owl_class.iri)
             label_results.append(owl_class)
@@ -214,6 +223,14 @@ async def search_prefix(request: Request, query: str) -> OWLClassList:
                 ):
                     label_match = True
                     break
+        # Check preferred label (skos:prefLabel)
+        if not label_match and prop.preferred_label:
+            if (
+                query in prop.preferred_label
+                or query_lower in prop.preferred_label.lower()
+                or query_title in prop.preferred_label
+            ):
+                label_match = True
         if label_match:
             property_results.append(prop)
 
