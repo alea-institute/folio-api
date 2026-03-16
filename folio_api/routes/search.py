@@ -876,3 +876,109 @@ async def search_system_identifiers(
             query=query, search_set=folio.get_system_identifiers(max_depth=max_depth)
         )
     )
+
+
+# ── Structured Query ──────────────────────────────────────────────────
+
+
+@router.get(
+    "/query",
+    tags=["search"],
+    response_model=OWLClassList,
+    summary="Query Concepts with Structured Filters",
+    description="Search classes using composable text and structural filters",
+    status_code=status.HTTP_200_OK,
+)
+async def query_concepts(
+    request: Request,
+    label: str | None = None,
+    definition: str | None = None,
+    alt_label: str | None = None,
+    example: str | None = None,
+    any_text: str | None = None,
+    branch: str | None = None,
+    parent_iri: str | None = None,
+    has_children: bool | None = None,
+    deprecated: bool = False,
+    country: str | None = None,
+    match_mode: str = "substring",
+    limit: int = 20,
+) -> OWLClassList:
+    """Query FOLIO classes with composable text and structural filters.
+
+    Text filters (all specified filters must match):
+    - label: Match against rdfs:label
+    - definition: Match against skos:definition
+    - alt_label: Match against skos:altLabel entries
+    - example: Match against skos:example entries
+    - any_text: Match against all text fields
+
+    Structural filters:
+    - branch: Limit to taxonomy branch (e.g., "AREA_OF_LAW", "CURRENCY")
+    - parent_iri: Only descendants of this IRI (transitive subClassOf)
+    - has_children: true = non-leaf only, false = leaf only
+    - deprecated: Include deprecated classes (default false)
+    - country: Match against mads:country
+
+    Match modes: "substring" (default), "exact", "regex", "fuzzy"
+    """
+    folio: FOLIO = request.app.state.folio
+    results = folio.query(
+        label=label,
+        definition=definition,
+        alt_label=alt_label,
+        example=example,
+        any_text=any_text,
+        branch=branch,
+        parent_iri=parent_iri,
+        has_children=has_children,
+        deprecated=deprecated,
+        country=country,
+        match_mode=match_mode,
+        limit=limit,
+    )
+    return OWLClassList(classes=results)
+
+
+@router.get(
+    "/query_properties",
+    tags=["search"],
+    response_model=OWLObjectPropertyList,
+    summary="Query Properties with Structured Filters",
+    description="Search object properties using composable text and structural filters",
+    status_code=status.HTTP_200_OK,
+)
+async def query_properties(
+    request: Request,
+    label: str | None = None,
+    definition: str | None = None,
+    domain_iri: str | None = None,
+    range_iri: str | None = None,
+    has_inverse: bool | None = None,
+    match_mode: str = "substring",
+    limit: int = 20,
+) -> OWLObjectPropertyList:
+    """Query FOLIO object properties with composable text and structural filters.
+
+    Text filters:
+    - label: Match against rdfs:label
+    - definition: Match against skos:definition
+
+    Structural filters:
+    - domain_iri: Only properties whose domain includes this class
+    - range_iri: Only properties whose range includes this class
+    - has_inverse: true = only with inverse, false = only without
+
+    Match modes: "substring" (default), "exact", "regex", "fuzzy"
+    """
+    folio: FOLIO = request.app.state.folio
+    results = folio.query_properties(
+        label=label,
+        definition=definition,
+        domain_iri=domain_iri,
+        range_iri=range_iri,
+        has_inverse=has_inverse,
+        match_mode=match_mode,
+        limit=limit,
+    )
+    return OWLObjectPropertyList(properties=results)

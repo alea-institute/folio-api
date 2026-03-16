@@ -34,7 +34,7 @@ The OpenAPI spec file can be found at [https://folio.openlegalstandard.org/opena
 ### Prerequisites
 
 - [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/)
-- An OpenAI API key if you're using the LLM search features
+- An API key for your LLM provider (OpenAI, Anthropic, Google, xAI/Grok, or a local VLLM server)
 
 ### Quick Start
 
@@ -117,6 +117,9 @@ export WEB_PORT=8080
 The following environment variables can be set:
 
 - `OPENAI_API_KEY`: Your OpenAI API key (if using OpenAI models)
+- `ANTHROPIC_API_KEY`: Your Anthropic API key (if using Anthropic models)
+- `GOOGLE_API_KEY`: Your Google API key (if using Google models)
+- `XAI_API_KEY`: Your xAI API key (if using Grok models)
 - `PORT`: The port on which the API server runs (default: 8000)
 - `WEB_PORT`: The port on which the web server runs (default: 80)
 
@@ -144,6 +147,40 @@ The API can be configured using the `config.json` file. The main configuration s
 - `folio`: Settings for the FOLIO ontology source (GitHub repository or HTTP URL)
 - `llm`: Configuration for the LLM model used for semantic searches
 - `api`: API metadata, binding options, and CORS settings
+
+### LLM Configuration
+
+The `llm` section of `config.json` supports:
+
+| Key | Description | Default |
+|---|---|---|
+| `type` | Provider: `openai`, `anthropic`, `google`, `grok`, `vllm` | `openai` |
+| `model` | Model name | `gpt-5.1-mini` |
+| `effort` | Reasoning effort: `low`, `medium`, `high` | _(none)_ |
+| `tier` | Service tier: `flex`, `standard`, `priority` | _(none)_ |
+| `endpoint` | Custom API endpoint | _(provider default)_ |
+| `api_key` | API key (or use env var) | _(from env)_ |
+
+The `effort` and `tier` settings are provider-agnostic — they automatically translate to the correct provider-specific parameters (e.g. `effort: "low"` becomes `reasoning_effort: "none"` for OpenAI, `output_config.effort: "low"` for Anthropic, `thinking_level: "minimal"` for Google).
+
+**Example configurations:**
+
+```json
+// OpenAI (cheapest, fastest)
+{"type": "openai", "model": "gpt-5.1-mini", "effort": "low", "tier": "flex"}
+
+// Anthropic
+{"type": "anthropic", "model": "claude-haiku-4-5", "effort": "low"}
+
+// Google
+{"type": "google", "model": "gemini-3-flash-preview", "effort": "low"}
+
+// Grok
+{"type": "grok", "model": "grok-4-fast-non-reasoning"}
+
+// Local VLLM
+{"type": "vllm", "model": "Qwen/Qwen2.5-0.5B-Instruct", "endpoint": "http://192.168.4.200:8000/"}
+```
 
 ### Docker Configuration
 

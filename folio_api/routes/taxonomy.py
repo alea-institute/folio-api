@@ -514,6 +514,60 @@ async def get_system_identifiers(request: Request, max_depth: int = 1) -> OWLCla
 
 
 @router.get(
+    "/branches",
+    tags=["taxonomy"],
+    response_model=None,
+    summary="List All Taxonomy Branches",
+    description="List all 24 taxonomy branches with concept counts",
+    status_code=status.HTTP_200_OK,
+)
+async def list_branches(request: Request) -> JSONResponse:
+    """List all taxonomy branches with their concept counts.
+
+    Returns a JSON object mapping branch names to concept counts.
+    """
+    folio: FOLIO = request.app.state.folio
+
+    # Branch name → FOLIO method name mapping
+    branch_methods = {
+        "actors_players": "get_player_actors",
+        "areas_of_law": "get_areas_of_law",
+        "asset_types": "get_asset_types",
+        "communication_modalities": "get_communication_modalities",
+        "currencies": "get_currencies",
+        "data_formats": "get_data_formats",
+        "document_artifacts": "get_document_artifacts",
+        "engagement_terms": "get_engagement_terms",
+        "events": "get_events",
+        "forum_venues": "get_forum_venues",
+        "governmental_bodies": "get_governmental_bodies",
+        "industries": "get_industries",
+        "languages": "get_languages",
+        "folio_types": "get_folio_types",
+        "legal_authorities": "get_legal_authorities",
+        "legal_entities": "get_legal_entities",
+        "locations": "get_locations",
+        "matter_narratives": "get_matter_narratives",
+        "matter_narrative_formats": "get_matter_narrative_formats",
+        "objectives": "get_objectives",
+        "services": "get_services",
+        "standards_compatibilities": "get_standards_compatibilities",
+        "statuses": "get_statuses",
+        "system_identifiers": "get_system_identifiers",
+    }
+
+    result = {}
+    for branch_name, method_name in branch_methods.items():
+        method = getattr(folio, method_name, None)
+        if method:
+            concepts = method(max_depth=1)
+            result[branch_name] = len(concepts)
+        else:
+            result[branch_name] = 0
+    return JSONResponse(content=result)
+
+
+@router.get(
     "/tree/data",
     tags=["taxonomy"],
     response_model=None,

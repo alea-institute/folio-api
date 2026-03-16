@@ -7,12 +7,14 @@
   },
   "llm": {
     "type": "openai",
-    "model": "gpt-4o"
+    "model": "gpt-5.1-mini",
+    "effort": "low",
+    "tier": "flex"
   },
   "api": {
     "title": "FOLIO API",
-    "description": "The FOLIO API provides access to the Federated Open Legal Information Ontology (FOLIO), a comprehensive ontology of legal concepts. This API enables developers, researchers, and legal professionals to search, navigate, and integrate FOLIO's structured legal knowledge into their applications.\n\n<a href=\"/taxonomy/browse\">Browse</a>",
-    "version": "0.2.0",
+    "description": "The FOLIO API provides access to the Federated Open Legal Information Ontology (FOLIO).",
+    "version": "0.4.0",
     "terms_of_service": "https://openlegalstandard.org/",
     "contact": {
       "name": "FOLIO",

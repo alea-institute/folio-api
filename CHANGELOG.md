@@ -5,6 +5,22 @@ All notable changes to the FOLIO API will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-03-16
+
+### Added
+- Support for all 5 LLM providers: OpenAI, Anthropic, Google, Grok/xAI, VLLM
+- Provider-agnostic `effort` and `tier` config options for LLM search
+  - `effort`: "low"/"medium"/"high" — controls reasoning intensity across all providers
+  - `tier`: "flex"/"standard"/"priority" — controls service tier/pricing
+- Automatic provider detection and parameter translation via alea-llm-client 0.3.1
+
+### Changed
+- Default LLM model updated to `gpt-5.1-mini` (was `gpt-4o`)
+- Default config includes `effort: "low"` and `tier: "flex"` for cost-efficient search
+- LLM provider initialization refactored with clean `_LLM_CLASSES` mapping
+- Updated README with LLM configuration documentation and multi-provider examples
+- Bumped alea-llm-client dependency to >=0.3.0, folio-python to >=0.3.0
+
 ## [0.3.1] - 2025-04-16
 
 ### Added

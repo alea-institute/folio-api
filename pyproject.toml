@@ -1,13 +1,13 @@
 [project]
 name = "folio-api"
-version = "0.3.1"
+version = "0.4.0"
 description = "API for FOLIO - the Federated Open Legal Information Ontology"
 authors = [{ name = "ALEA Institute", email = "hello@aleainstitute.ai" }]
 requires-python = ">=3.10,<4.0.0"
 readme = "README.md"
 license = "MIT"
 dependencies = [
-    "folio-python[search]>=0.3.0",
+    "folio-python[search]>=0.3.1",
     "fastapi>=0.112.2",
     "uvicorn>=0.30.6",
     "jinja2>=3.1.6",

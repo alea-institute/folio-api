@@ -105,6 +105,39 @@ def _get_child_properties(folio: FOLIO, parent_iri: str, property_children: dict
 
 
 @router.get(
+    "/all",
+    tags=["properties"],
+    response_model=None,
+    summary="Get All Object Properties",
+    description="Retrieve all OWL object properties from the FOLIO ontology",
+    status_code=status.HTTP_200_OK,
+)
+async def get_all_properties(request: Request) -> JSONResponse:
+    """Get all OWL object properties defined in the FOLIO ontology.
+
+    Returns a JSON object with a 'properties' array, each containing
+    iri, label, definition, domain, range, inverse_of, and sub_property_of.
+    """
+    folio: FOLIO = request.app.state.folio
+    props = folio.get_all_properties()
+    result = []
+    for prop in props:
+        d = {"iri": prop.iri, "label": prop.label}
+        if prop.definition:
+            d["definition"] = prop.definition
+        if prop.domain:
+            d["domain"] = prop.domain
+        if prop.range:
+            d["range"] = prop.range
+        if prop.inverse_of:
+            d["inverse_of"] = prop.inverse_of
+        if prop.sub_property_of:
+            d["sub_property_of"] = prop.sub_property_of
+        result.append(d)
+    return JSONResponse(content={"properties": result})
+
+
+@router.get(
     "/browse",
     tags=["properties"],
     response_model=None,
