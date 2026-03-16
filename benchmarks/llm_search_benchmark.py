@@ -40,22 +40,29 @@ class BenchmarkResult:
 
 # Models to benchmark — (provider_class, model_name, effort, tier)
 MODELS = [
-    # OpenAI - flagship
+    # OpenAI - GPT-5.x flagship
     (OpenAIModel, "gpt-5.4", "low", "flex"),
     (OpenAIModel, "gpt-5.4", "medium", "flex"),
     (OpenAIModel, "gpt-5.4", "high", "flex"),
-    # OpenAI - cheaper
+    # OpenAI - GPT-5.x cheap/fast
+    (OpenAIModel, "gpt-5-mini", None, None),
+    (OpenAIModel, "gpt-5-nano", None, None),
+    # OpenAI - GPT-4.x
     (OpenAIModel, "gpt-4.1-mini", None, None),
     (OpenAIModel, "gpt-4.1-nano", None, None),
     # Anthropic
     (AnthropicModel, "claude-sonnet-4-6", "low", None),
     (AnthropicModel, "claude-sonnet-4-6", "high", None),
-    (AnthropicModel, "claude-haiku-4-5", "low", None),
+    (AnthropicModel, "claude-haiku-4-5", None, None),
     # Google
     (GoogleModel, "gemini-3.1-pro-preview", "low", None),
+    (GoogleModel, "gemini-3.1-pro-preview", "high", None),
     (GoogleModel, "gemini-3-flash-preview", "low", None),
+    (GoogleModel, "gemini-3-flash-preview", "high", None),
+    (GoogleModel, "gemini-2.5-flash", "low", None),
     # Grok
     (GrokModel, "grok-4-fast-non-reasoning", None, None),
+    (GrokModel, "grok-4-fast-reasoning", None, None),
     (GrokModel, "grok-3-mini", None, None),
 ]
 
