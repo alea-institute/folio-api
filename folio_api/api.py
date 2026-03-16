@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from folio import FOLIO
-from alea_llm_client import OpenAIModel, AnthropicModel, VLLMModel
+from alea_llm_client import AnthropicModel, GoogleModel, GrokModel, OpenAIModel, VLLMModel
 
 # project imports
 import folio_api.routes.info
@@ -24,6 +24,7 @@ import folio_api.routes.search
 import folio_api.routes.taxonomy
 import folio_api.routes.properties
 import folio_api.routes.explore
+import folio_api.routes.connections
 from folio_api.api_config import load_config
 
 
@@ -75,6 +76,10 @@ async def lifespan_handler(app_instance: FastAPI):
             property_children[parent_iri].append(prop)
     app_instance.state.property_children = dict(property_children)
 
+    # Share FOLIO instance with MCP server
+    from folio_mcp.server import set_shared_folio
+    set_shared_folio(app_instance.state.folio)
+
     # log it
     app_instance.state.logger.info(
         "FOLIO instance initialized with llm %s", app_instance.state.folio.llm.model
@@ -86,47 +91,55 @@ async def lifespan_handler(app_instance: FastAPI):
     app_instance.state.logger.info("Shutting down API")
 
 
+_LLM_CLASSES = {
+    "openai": OpenAIModel,
+    "anthropic": AnthropicModel,
+    "google": GoogleModel,
+    "grok": GrokModel,
+    "xai": GrokModel,
+    "vllm": VLLMModel,
+}
+
+_API_KEY_ENV_VARS = {
+    "openai": "OPENAI_API_KEY",
+    "anthropic": "ANTHROPIC_API_KEY",
+    "google": "GOOGLE_API_KEY",
+    "grok": "XAI_API_KEY",
+    "xai": "XAI_API_KEY",
+    "vllm": "VLLM_API_KEY",
+}
+
+
 def initialize_folio(folio_config: Dict[str, Any], llm_config: Dict[str, Any]) -> FOLIO:
-    """Initialize FOLIO instance based on configuration
+    """Initialize FOLIO instance based on configuration.
 
     Args:
-        folio_config (Dict[str, Any]): FOLIO configuration dictionary
-        llm_config (Dict[str, Any]): LLM configuration dictionary
+        folio_config: FOLIO configuration dictionary
+        llm_config: LLM configuration dictionary. Supports keys:
+            - type: Provider name ("openai", "anthropic", "google", "grok", "vllm")
+            - model: Model name (default: "gpt-5.1-mini")
+            - endpoint: Optional API endpoint override
+            - api_key: Optional API key (falls back to env var)
+            - effort: Universal effort level ("low", "medium", "high")
+            - tier: Universal service tier ("flex", "standard", "priority")
 
     Returns:
         FOLIO: Initialized FOLIO instance
     """
-    # initialize an llm
     llm_engine = llm_config.get("type", "openai").lower().strip()
-    llm_model = llm_config.get("model", "gpt-4.1-mini-2025-04-14").lower().strip()
+    llm_model = llm_config.get("model", "gpt-5.1-mini").strip()
     llm_endpoint = llm_config.get("endpoint", None)
-    llm_api_key = llm_config.get("api_key", os.getenv("OPENAI_API_KEY"))
+    llm_api_key = llm_config.get("api_key", os.getenv(_API_KEY_ENV_VARS.get(llm_engine, "OPENAI_API_KEY")))
+    llm_effort = llm_config.get("effort", None)
+    llm_tier = llm_config.get("tier", None)
 
-    # create the llm
-    if llm_engine in ("openai",):
-        llm_args = {
-            "model": llm_model,
-            "api_key": llm_api_key,
-        }
+    # Create the LLM
+    llm_cls = _LLM_CLASSES.get(llm_engine)
+    if llm_cls is not None:
+        llm_args: Dict[str, Any] = {"model": llm_model, "api_key": llm_api_key}
         if llm_endpoint is not None:
             llm_args["endpoint"] = llm_endpoint
-        llm = OpenAIModel(**llm_args)
-    elif llm_engine in ("anthropic",):
-        llm_args = {
-            "model": llm_model,
-            "api_key": llm_api_key,
-        }
-        if llm_endpoint is not None:
-            llm_args["endpoint"] = llm_endpoint
-        llm = AnthropicModel(**llm_args)
-    elif llm_engine in ("vllm",):
-        llm_args = {
-            "model": llm_model,
-            "api_key": llm_api_key,
-        }
-        if llm_endpoint is not None:
-            llm_args["endpoint"] = llm_endpoint
-        llm = VLLMModel(**llm_args)
+        llm = llm_cls(**llm_args)
     else:
         llm = None
 
@@ -137,6 +150,8 @@ def initialize_folio(folio_config: Dict[str, Any], llm_config: Dict[str, Any]) -
         github_repo_branch=folio_config["branch"],
         use_cache=True,
         llm=llm,
+        effort=llm_effort,
+        tier=llm_tier,
     )
 
 
@@ -239,6 +254,11 @@ def get_app() -> FastAPI:
     app_instance.include_router(folio_api.routes.taxonomy.router)
     app_instance.include_router(folio_api.routes.properties.router)
     app_instance.include_router(folio_api.routes.explore.router)
+    app_instance.include_router(folio_api.routes.connections.router)
+
+    # Mount FOLIO MCP server at /mcp
+    from folio_mcp.server import mcp as folio_mcp_server
+    app_instance.mount("/mcp", folio_mcp_server.streamable_http_app())
 
     return app_instance
 
