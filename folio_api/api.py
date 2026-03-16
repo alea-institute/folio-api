@@ -249,12 +249,13 @@ def get_app() -> FastAPI:
 
     # Attach the routes
     app_instance.include_router(folio_api.routes.info.router)
-    app_instance.include_router(folio_api.routes.root.router)
     app_instance.include_router(folio_api.routes.search.router)
     app_instance.include_router(folio_api.routes.taxonomy.router)
     app_instance.include_router(folio_api.routes.properties.router)
     app_instance.include_router(folio_api.routes.explore.router)
     app_instance.include_router(folio_api.routes.connections.router)
+    # root.router has /{iri} catch-all, so it must be registered last
+    app_instance.include_router(folio_api.routes.root.router)
 
     # Mount FOLIO MCP server at /mcp
     from folio_mcp.server import mcp as folio_mcp_server
