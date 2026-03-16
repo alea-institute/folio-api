@@ -5,9 +5,11 @@
     "branch": "2.0.0",
     "path": "FOLIO.owl"
   },
+  "_llm_option_1_best_quality": "OpenAI GPT-5.4 — 1.8s avg, $2.50/M input",
+  "_llm_option_2_best_value": "Grok 4 Fast — 1.1s avg, $0.20/M input",
   "llm": {
     "type": "openai",
-    "model": "gpt-5.1-mini",
+    "model": "gpt-5.4",
     "effort": "low",
     "tier": "flex",
     "api_key": "${OPENAI_API_KEY}"

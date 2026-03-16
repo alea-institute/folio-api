@@ -155,31 +155,66 @@ The `llm` section of `config.json` supports:
 | Key | Description | Default |
 |---|---|---|
 | `type` | Provider: `openai`, `anthropic`, `google`, `grok`, `vllm` | `openai` |
-| `model` | Model name | `gpt-5.1-mini` |
-| `effort` | Reasoning effort: `low`, `medium`, `high` | _(none)_ |
-| `tier` | Service tier: `flex`, `standard`, `priority` | _(none)_ |
+| `model` | Model name | `gpt-5.4` |
+| `effort` | Reasoning effort: `low`, `medium`, `high` | `low` |
+| `tier` | Service tier: `flex`, `standard`, `priority` | `flex` |
 | `endpoint` | Custom API endpoint | _(provider default)_ |
 | `api_key` | API key (or use env var) | _(from env)_ |
 
-The `effort` and `tier` settings are provider-agnostic — they automatically translate to the correct provider-specific parameters (e.g. `effort: "low"` becomes `reasoning_effort: "none"` for OpenAI, `output_config.effort: "low"` for Anthropic, `thinking_level: "minimal"` for Google).
+The `effort` and `tier` settings are provider-agnostic — they automatically translate to the correct provider-specific parameters (e.g. `effort: "low"` becomes `reasoning_effort: "none"` for OpenAI, `thinking_level: "minimal"` for Google).
 
-**Example configurations:**
+#### Recommended Configurations
+
+Based on benchmarks across 20 model configurations and 5 legal search queries on the FOLIO ontology (see `benchmarks/llm_search_benchmark.py`):
+
+| Config | Avg Latency | Avg Results | Cost/M input | Best For |
+|---|---|---|---|---|
+| **grok-4-fast (recommended)** | **1.1s** | **4.0** | **$0.20** | Best value — fast, broad, cheap |
+| **gpt-5.4 effort=low flex** | **1.8s** | **3.8** | **$2.50** | Best quality on OpenAI |
+| gemini-3-flash-preview low | 3.6s | 4.8 | low | Most comprehensive results |
+| gpt-4.1-mini | 1.7s | 4.0 | $0.40 | Good OpenAI fallback |
+
+**Option 1 — Best value (Grok):**
+```json
+{
+  "llm": {
+    "type": "grok",
+    "model": "grok-4-fast-non-reasoning"
+  }
+}
+```
+
+**Option 2 — Best quality (OpenAI):**
+```json
+{
+  "llm": {
+    "type": "openai",
+    "model": "gpt-5.4",
+    "effort": "low",
+    "tier": "flex"
+  }
+}
+```
+
+**Avoid** for this workload: `gpt-5-mini`/`nano` (9-14s, surprisingly slow), `effort: "high"` (5x latency, no quality gain), reasoning models like `grok-4-fast-reasoning` or `grok-3-mini` (3-15x slower with fewer results).
+
+#### All Provider Examples
 
 ```json
-// OpenAI (cheapest, fastest)
-{"type": "openai", "model": "gpt-5.1-mini", "effort": "low", "tier": "flex"}
+// OpenAI — best quality
+{"type": "openai", "model": "gpt-5.4", "effort": "low", "tier": "flex"}
 
-// Anthropic
-{"type": "anthropic", "model": "claude-haiku-4-5", "effort": "low"}
-
-// Google
-{"type": "google", "model": "gemini-3-flash-preview", "effort": "low"}
-
-// Grok
+// Grok — best value
 {"type": "grok", "model": "grok-4-fast-non-reasoning"}
 
+// Google — most comprehensive
+{"type": "google", "model": "gemini-3-flash-preview", "effort": "low"}
+
+// Anthropic
+{"type": "anthropic", "model": "claude-sonnet-4-6", "effort": "low"}
+
 // Local VLLM
-{"type": "vllm", "model": "Qwen/Qwen2.5-0.5B-Instruct", "endpoint": "http://192.168.4.200:8000/"}
+{"type": "vllm", "model": "your-model-name", "endpoint": "http://your-server:8000/"}
 ```
 
 ### Docker Configuration
