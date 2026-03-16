@@ -7,7 +7,7 @@
   },
   "llm": {
     "type": "openai",
-    "model": "gpt-5.1-mini",
+    "model": "gpt-5.4",
     "effort": "low",
     "tier": "flex"
   },
@@ -23,7 +23,9 @@
     },
     "bind_ip": "0.0.0.0",
     "bind_port": 8000,
-    "cors_origins": ["*"],
+    "cors_origins": [
+      "*"
+    ],
     "log_level": "info"
   }
 }
