@@ -36,7 +36,7 @@ COPY --chown=app:app pyproject.toml ./
 COPY --chown=app:app README.md ./
 
 # Install dependencies
-RUN bash -l -c "uv sync --upgrade && uv venv && uv run python"
+RUN uv sync --upgrade
 
 # Copy application code
 COPY --chown=app:app folio_api folio_api
