@@ -1,0 +1,67 @@
+{
+  "folio": {
+    "source": "github",
+    "repository": "alea-institute/folio",
+    "branch": "2.0.0",
+    "path": "FOLIO.owl"
+  },
+  "llm": {
+    "type": "openai",
+    "model": "gpt-5.4",
+    "effort": "low",
+    "tier": "flex",
+    "api_key": "${OPENAI_API_KEY}"
+  },
+  "api": {
+    "title": "FOLIO API",
+    "description": "The FOLIO API provides access to the Federated Open Legal Information Ontology (FOLIO).",
+    "version": "0.4.0",
+    "terms_of_service": "https://openlegalstandard.org/",
+    "contact": {
+      "name": "FOLIO",
+      "url": "https://openlegalstandard.org",
+      "email": "hello@aleainstitute.ai"
+    },
+    "bind_ip": "0.0.0.0",
+    "bind_port": 8000,
+    "cors_origins": ["*"],
+    "logging": {
+      "version": 1,
+      "disable_existing_loggers": false,
+      "formatters": {
+        "default": {
+          "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        }
+      },
+      "handlers": {
+        "api_file": {
+          "class": "logging.FileHandler",
+          "filename": "api.log",
+          "formatter": "default"
+        }
+      },
+      "loggers": {
+        "uvicorn": {
+          "level": "INFO",
+          "handlers": ["api_file"],
+          "propagate": false
+        },
+        "uvicorn.error": {
+          "level": "INFO",
+          "handlers": ["api_file"],
+          "propagate": false
+        },
+        "uvicorn.access": {
+          "level": "INFO",
+          "handlers": ["api_file"],
+          "propagate": false
+        },
+        "folio_api": {
+          "level": "INFO",
+          "handlers": ["api_file"],
+          "propagate": false
+        }
+      }
+    }
+  }
+}
