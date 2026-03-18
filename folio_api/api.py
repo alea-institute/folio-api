@@ -1,7 +1,9 @@
 """Main API module to define the FastAPI app and its configuration"""
 
 # imports
+import copy
 import logging
+import logging.config
 import os
 from collections import defaultdict
 from contextlib import asynccontextmanager
@@ -27,6 +29,8 @@ import folio_api.routes.explore
 import folio_api.routes.connections
 from folio_api.api_config import load_config
 
+_DEFAULT_LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
 
 @asynccontextmanager
 async def lifespan_handler(app_instance: FastAPI):
@@ -40,28 +44,39 @@ async def lifespan_handler(app_instance: FastAPI):
     """
     # Initialize the FOLIO graph
     app_instance.state.config = load_config()
-
-    # get log level
-    log_level = {
-        "info": logging.INFO,
-        "debug": logging.DEBUG,
-        "warning": logging.WARNING,
-        "error": logging.ERROR,
-        "critical": logging.CRITICAL,
-    }.get(
-        app_instance.state.config.get("log_level", "info").lower().strip(), logging.INFO
-    )
-
-    # set up the logger at api.log
     app_instance.state.logger = logging.getLogger("folio_api")
-    app_instance.state.logger.setLevel(log_level)
-    log_handler = logging.FileHandler("api.log")
-    log_handler.setLevel(log_level)
-    log_formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    )
-    log_handler.setFormatter(log_formatter)
-    app_instance.state.logger.addHandler(log_handler)
+
+    # Use standard json logging config
+    api_config = app_instance.state.config["api"]
+    logging_config = api_config.get("logging")
+    if logging_config:
+        logging_config = copy.deepcopy(logging_config)
+        if "formatters" not in logging_config:
+            logging_config["formatters"] = {"default": {"format": _DEFAULT_LOG_FORMAT}}
+            for handler in logging_config.get("handlers", {}).values():
+                handler.setdefault("formatter", "default")
+        logging.config.dictConfig(logging_config)
+    else:
+        # get log level
+        log_level = {
+            "info": logging.INFO,
+            "debug": logging.DEBUG,
+            "warning": logging.WARNING,
+            "error": logging.ERROR,
+            "critical": logging.CRITICAL,
+        }.get(
+            api_config.get("log_level", "info").lower().strip(), logging.INFO
+        )
+
+        # set up the logger at api.log
+        app_instance.state.logger.setLevel(log_level)
+        log_handler = logging.FileHandler("api.log")
+        log_handler.setLevel(log_level)
+        log_formatter = logging.Formatter(
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        )
+        log_handler.setFormatter(log_formatter)
+        app_instance.state.logger.addHandler(log_handler)
 
     # initialize the FOLIO instance
     app_instance.state.folio = initialize_folio(
