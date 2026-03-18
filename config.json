@@ -23,9 +23,25 @@
     },
     "bind_ip": "0.0.0.0",
     "bind_port": 8000,
-    "cors_origins": [
-      "*"
-    ],
-    "log_level": "info"
+    "cors_origins": ["*"],
+    "logging": {
+      "version": 1,
+      "formatters": {
+        "json": {
+          "class": "pythonjsonlogger.json.JsonFormatter"
+        }
+      },
+      "handlers": {
+        "console": {
+          "class": "logging.StreamHandler",
+          "formatter": "json",
+          "stream": "ext://sys.stdout"
+        }
+      },
+      "root": {
+        "level": "INFO",
+        "handlers": ["console"]
+      }
+    }
   }
 }
