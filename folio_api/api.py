@@ -17,7 +17,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from folio import FOLIO
-from alea_llm_client import AnthropicModel, GoogleModel, GrokModel, OpenAIModel, VLLMModel
+from alea_llm_client import (
+    AnthropicModel,
+    GoogleModel,
+    GrokModel,
+    OpenAIModel,
+    VLLMModel,
+)
 
 # project imports
 import folio_api.routes.info
@@ -64,9 +70,7 @@ async def lifespan_handler(app_instance: FastAPI):
             "warning": logging.WARNING,
             "error": logging.ERROR,
             "critical": logging.CRITICAL,
-        }.get(
-            api_config.get("log_level", "info").lower().strip(), logging.INFO
-        )
+        }.get(api_config.get("log_level", "info").lower().strip(), logging.INFO)
 
         app_instance.state.logger.setLevel(log_level)
         log_handler = logging.FileHandler("api.log")
@@ -90,6 +94,7 @@ async def lifespan_handler(app_instance: FastAPI):
 
     # Share FOLIO instance with MCP server
     from folio_mcp.server import set_shared_folio
+
     set_shared_folio(app_instance.state.folio)
 
     # log it
@@ -141,7 +146,9 @@ def initialize_folio(folio_config: Dict[str, Any], llm_config: Dict[str, Any]) -
     llm_engine = llm_config.get("type", "openai").lower().strip()
     llm_model = llm_config.get("model", "gpt-5.1-mini").strip()
     llm_endpoint = llm_config.get("endpoint", None)
-    llm_api_key = llm_config.get("api_key", os.getenv(_API_KEY_ENV_VARS.get(llm_engine, "OPENAI_API_KEY")))
+    llm_api_key = llm_config.get(
+        "api_key", os.getenv(_API_KEY_ENV_VARS.get(llm_engine, "OPENAI_API_KEY"))
+    )
     llm_effort = llm_config.get("effort", None)
     llm_tier = llm_config.get("tier", None)
 
@@ -257,6 +264,7 @@ def get_app() -> FastAPI:
     # Remove this once https://github.com/alea-institute/FOLIO/pull/5 is merged and
     # folio-python is updated with human-readable rdfs:label values.
     from folio_api.rendering import strip_folio_prefix
+
     app_instance.state.templates.env.filters["strip_folio_prefix"] = strip_folio_prefix
 
     # Attach the routes
@@ -271,6 +279,7 @@ def get_app() -> FastAPI:
 
     # Mount FOLIO MCP server at /mcp
     from folio_mcp.server import mcp as folio_mcp_server
+
     app_instance.mount("/mcp", folio_mcp_server.streamable_http_app())
 
     return app_instance
