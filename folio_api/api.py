@@ -1,7 +1,9 @@
 """Main API module to define the FastAPI app and its configuration"""
 
 # imports
+import copy
 import logging
+import logging.config
 import os
 from collections import defaultdict
 from contextlib import asynccontextmanager
@@ -15,7 +17,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from folio import FOLIO
-from alea_llm_client import AnthropicModel, GoogleModel, GrokModel, OpenAIModel, VLLMModel
+from alea_llm_client import (
+    AnthropicModel,
+    GoogleModel,
+    GrokModel,
+    OpenAIModel,
+    VLLMModel,
+)
 
 # project imports
 import folio_api.routes.info
@@ -26,6 +34,8 @@ import folio_api.routes.properties
 import folio_api.routes.explore
 import folio_api.routes.connections
 from folio_api.api_config import load_config
+
+_DEFAULT_LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
 
 @asynccontextmanager
@@ -40,28 +50,34 @@ async def lifespan_handler(app_instance: FastAPI):
     """
     # Initialize the FOLIO graph
     app_instance.state.config = load_config()
-
-    # get log level
-    log_level = {
-        "info": logging.INFO,
-        "debug": logging.DEBUG,
-        "warning": logging.WARNING,
-        "error": logging.ERROR,
-        "critical": logging.CRITICAL,
-    }.get(
-        app_instance.state.config.get("log_level", "info").lower().strip(), logging.INFO
-    )
-
-    # set up the logger at api.log
     app_instance.state.logger = logging.getLogger("folio_api")
-    app_instance.state.logger.setLevel(log_level)
-    log_handler = logging.FileHandler("api.log")
-    log_handler.setLevel(log_level)
-    log_formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    )
-    log_handler.setFormatter(log_formatter)
-    app_instance.state.logger.addHandler(log_handler)
+
+    # Configure logging via dictConfig if provided, otherwise fall back to
+    # simple FileHandler setup using the log_level key.
+    api_config = app_instance.state.config["api"]
+    logging_config = api_config.get("logging")
+    if logging_config and "version" in logging_config:
+        logging_config = copy.deepcopy(logging_config)
+        if "formatters" not in logging_config:
+            logging_config["formatters"] = {"default": {"format": _DEFAULT_LOG_FORMAT}}
+            for handler in logging_config.get("handlers", {}).values():
+                handler.setdefault("formatter", "default")
+        logging.config.dictConfig(logging_config)
+    else:
+        log_level = {
+            "info": logging.INFO,
+            "debug": logging.DEBUG,
+            "warning": logging.WARNING,
+            "error": logging.ERROR,
+            "critical": logging.CRITICAL,
+        }.get(api_config.get("log_level", "info").lower().strip(), logging.INFO)
+
+        app_instance.state.logger.setLevel(log_level)
+        log_handler = logging.FileHandler("api.log")
+        log_handler.setLevel(log_level)
+        log_formatter = logging.Formatter(_DEFAULT_LOG_FORMAT)
+        log_handler.setFormatter(log_formatter)
+        app_instance.state.logger.addHandler(log_handler)
 
     # initialize the FOLIO instance
     app_instance.state.folio = initialize_folio(
@@ -78,6 +94,7 @@ async def lifespan_handler(app_instance: FastAPI):
 
     # Share FOLIO instance with MCP server
     from folio_mcp.server import set_shared_folio
+
     set_shared_folio(app_instance.state.folio)
 
     # log it
@@ -129,7 +146,9 @@ def initialize_folio(folio_config: Dict[str, Any], llm_config: Dict[str, Any]) -
     llm_engine = llm_config.get("type", "openai").lower().strip()
     llm_model = llm_config.get("model", "gpt-5.1-mini").strip()
     llm_endpoint = llm_config.get("endpoint", None)
-    llm_api_key = llm_config.get("api_key", os.getenv(_API_KEY_ENV_VARS.get(llm_engine, "OPENAI_API_KEY")))
+    llm_api_key = llm_config.get(
+        "api_key", os.getenv(_API_KEY_ENV_VARS.get(llm_engine, "OPENAI_API_KEY"))
+    )
     llm_effort = llm_config.get("effort", None)
     llm_tier = llm_config.get("tier", None)
 
@@ -245,6 +264,7 @@ def get_app() -> FastAPI:
     # Remove this once https://github.com/alea-institute/FOLIO/pull/5 is merged and
     # folio-python is updated with human-readable rdfs:label values.
     from folio_api.rendering import strip_folio_prefix
+
     app_instance.state.templates.env.filters["strip_folio_prefix"] = strip_folio_prefix
 
     # Attach the routes
@@ -259,6 +279,7 @@ def get_app() -> FastAPI:
 
     # Mount FOLIO MCP server at /mcp
     from folio_mcp.server import mcp as folio_mcp_server
+
     app_instance.mount("/mcp", folio_mcp_server.streamable_http_app())
 
     return app_instance
