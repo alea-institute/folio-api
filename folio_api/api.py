@@ -56,7 +56,7 @@ async def lifespan_handler(app_instance: FastAPI):
     # simple FileHandler setup using the log_level key.
     api_config = app_instance.state.config["api"]
     logging_config = api_config.get("logging")
-    if logging_config:
+    if logging_config and "version" in logging_config:
         logging_config = copy.deepcopy(logging_config)
         if "formatters" not in logging_config:
             logging_config["formatters"] = {"default": {"format": _DEFAULT_LOG_FORMAT}}
