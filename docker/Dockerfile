@@ -35,12 +35,15 @@ RUN uv python install 3.12 \
 COPY --chown=app:app pyproject.toml ./
 COPY --chown=app:app README.md ./
 
-# Install dependencies
-RUN bash -l -c "uv sync --upgrade && uv venv && uv run python"
+# Install dependencies (without the project itself — code isn't copied yet)
+RUN uv sync --no-install-project --upgrade
 
 # Copy application code
 COPY --chown=app:app folio_api folio_api
 COPY --chown=app:app config.json.example ./config.json.example
+
+# Install the project package now that source is available
+RUN uv sync --upgrade
 
 # Set default port
 ENV PORT=8000
