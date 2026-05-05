@@ -32,18 +32,21 @@ RUN uv python install 3.12 \
     uv tool install pip
 
 # Copy dependency files first for better layer caching
-COPY --chown=app:app pyproject.toml ./
+COPY --chown=app:app pyproject.toml uv.lock ./
 COPY --chown=app:app README.md ./
 
-# Install dependencies (without the project itself — code isn't copied yet)
-RUN uv sync --no-install-project --upgrade
+# Install dependencies (without the project itself — code isn't copied yet).
+# Use --frozen to honor uv.lock; the previous --upgrade ignored the lockfile and
+# pulled latest on every fresh build, which silently broke the API when
+# Starlette 1.0 removed the legacy TemplateResponse(name, context) signature.
+RUN uv sync --no-install-project --frozen
 
 # Copy application code
 COPY --chown=app:app folio_api folio_api
 COPY --chown=app:app config.json.example ./config.json.example
 
 # Install the project package now that source is available
-RUN uv sync --upgrade
+RUN uv sync --frozen
 
 # Set default port
 ENV PORT=8000
