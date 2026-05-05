@@ -38,14 +38,7 @@ done
 
 # Display the ASCII logo
 echo -e "\033[34m"
-cat << "EOF"
-  ______ _____ _      _____ _____ 
- |  ____|  __ \ |    |_   _/ ____|
- | |__  | |  | | |      | || |  __ 
- |  __| | |  | | |      | || | |_ |
- | |    | |__| | |____ _| || |__| |
- |_|    |_____/|______|_____\_____|  API
-EOF
+cat docs/banner.txt
 echo -e "\033[0m"
 
 # Show port configuration
