@@ -14,6 +14,7 @@ from folio_api.rendering.html_formatter import (
     get_property_neighbors,
     render_tailwind_html,
     strip_folio_prefix,
+    english_alternative_labels,
 )
 
 __all__ = [
@@ -25,4 +26,5 @@ __all__ = [
     "get_property_neighbors",
     "render_tailwind_html",
     "strip_folio_prefix",
+    "english_alternative_labels",
 ]

@@ -263,9 +263,14 @@ def get_app() -> FastAPI:
     # INTERIM FIX: Register strip_folio_prefix Jinja2 filter for human-readable property labels.
     # Remove this once https://github.com/alea-institute/FOLIO/pull/5 is merged and
     # folio-python is updated with human-readable rdfs:label values.
-    from folio_api.rendering import strip_folio_prefix
+    from folio_api.rendering import english_alternative_labels, strip_folio_prefix
 
     app_instance.state.templates.env.filters["strip_folio_prefix"] = strip_folio_prefix
+    # Filter altLabels to exclude translation values — folio-python ≥0.3.5
+    # conflates translations into alternative_labels.
+    app_instance.state.templates.env.filters["english_alternative_labels"] = (
+        english_alternative_labels
+    )
 
     # Attach the routes
     app_instance.include_router(folio_api.routes.info.router)

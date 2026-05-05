@@ -83,9 +83,10 @@
                 </div>
                 <div class="flex flex-col">
                     <span class="text-gray-500 text-xs font-medium uppercase tracking-wide mb-1">Alternative Labels</span>
-                    {% if prop.alternative_labels %}
+                    {% set english_alts = prop | english_alternative_labels %}
+                    {% if english_alts %}
                     <div class="flex flex-wrap gap-1.5 mt-1">
-                        {% for label in prop.alternative_labels %}
+                        {% for label in english_alts %}
                         {# INTERIM: strip_folio_prefix can be removed once FOLIO PR #5 is merged #}
                         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium bg-blue-50 text-blue-700">{{ label|strip_folio_prefix }}</span>
                         {% endfor %}
