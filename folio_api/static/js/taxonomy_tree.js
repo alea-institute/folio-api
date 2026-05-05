@@ -628,6 +628,37 @@ function collapseAllNodes() {
 }
 
 /**
+ * Expand one ply deeper than the current frontier.
+ * First click expands top branches; each subsequent click drills one more level.
+ */
+function expandOneMoreLevel() {
+    let maxExpandedDepth = -1;
+    $('.tree-node.expanded').each(function() {
+        const k = $(this).parents('.tree-node').length;
+        if (k > maxExpandedDepth) maxExpandedDepth = k;
+    });
+    const targetDepth = maxExpandedDepth + 1;
+    $('.tree-node.collapsed').each(function() {
+        if ($(this).parents('.tree-node').length === targetDepth) toggleNode($(this));
+    });
+}
+
+/**
+ * Collapse only the deepest currently-expanded layer.
+ */
+function collapseOneLevel() {
+    let maxDepth = -1;
+    $('.tree-node.expanded').each(function() {
+        const k = $(this).parents('.tree-node').length;
+        if (k > maxDepth) maxDepth = k;
+    });
+    if (maxDepth < 0) return;
+    $('.tree-node.expanded').each(function() {
+        if ($(this).parents('.tree-node').length === maxDepth) toggleNode($(this));
+    });
+}
+
+/**
  * Get the currently selected node ID from the URL or UI
  * @returns {string|null} The currently selected node ID or null if none
  */
