@@ -124,9 +124,10 @@
 
                 <div class="flex flex-col">
                     <span class="text-gray-500 text-xs font-medium uppercase tracking-wide mb-1">Alternative Labels</span>
-                    {% if owl_class.alternative_labels %}
+                    {% set english_alts = owl_class | english_alternative_labels %}
+                    {% if english_alts %}
                     <div class="flex flex-wrap gap-1.5 mt-1">
-                        {% for label in owl_class.alternative_labels %}
+                        {% for label in english_alts %}
                         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium bg-blue-50 text-blue-700">
                             {{ label }}
                         </span>

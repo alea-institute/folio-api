@@ -24,6 +24,29 @@ def strip_folio_prefix(label: str) -> str:
     return label or ""
 
 
+def english_alternative_labels(obj) -> List[str]:
+    """Return the truly-English alternative labels for an OWL class or property.
+
+    folio-python ≥0.3.5 conflates non-English translations into the
+    `alternative_labels` list (alongside the dedicated `translations` dict).
+    Without filtering, the "Alternative Labels" UI redundantly shows
+    "Droit de la franchise", "Franchiserecht", etc. that are already in the
+    Translations panel.
+
+    Strict subtraction: drop any altLabel value present in translations.values()
+    (any language). Works on both raw OWL objects and the dict shape that
+    routes hand to templates.
+    """
+    if isinstance(obj, dict):
+        alt = obj.get("alternative_labels") or []
+        translations = obj.get("translations") or {}
+    else:
+        alt = getattr(obj, "alternative_labels", None) or []
+        translations = getattr(obj, "translations", None) or {}
+    translation_values = set(translations.values()) if translations else set()
+    return [a for a in alt if a not in translation_values]
+
+
 def format_label(owl_class: OWLClass) -> str:
     """
     Format the label of the class for display  in HTML.
@@ -39,9 +62,10 @@ def format_label(owl_class: OWLClass) -> str:
         return owl_class.preferred_label
     elif owl_class.label:
         return owl_class.label
-    elif owl_class.alternative_labels:
-        return owl_class.alternative_labels[0]
     else:
+        english_alts = english_alternative_labels(owl_class)
+        if english_alts:
+            return english_alts[0]
         return owl_class.iri
 
 
@@ -256,9 +280,10 @@ def format_property_label(prop: OWLObjectProperty) -> str:
         return strip_folio_prefix(prop.preferred_label)
     elif prop.label:
         return strip_folio_prefix(prop.label)
-    elif prop.alternative_labels:
-        return strip_folio_prefix(prop.alternative_labels[0])
     else:
+        english_alts = english_alternative_labels(prop)
+        if english_alts:
+            return strip_folio_prefix(english_alts[0])
         return prop.iri
 
 
@@ -581,7 +606,7 @@ def render_tailwind_html(
                         
                         <div>
                             <p class="text-gray-500 text-sm mb-1">Alternative Labels</p>
-                            <p>{", ".join(owl_class.alternative_labels) or "None"}</p>
+                            <p>{", ".join(english_alternative_labels(owl_class)) or "None"}</p>
                         </div>
                     </div>
                 </section>

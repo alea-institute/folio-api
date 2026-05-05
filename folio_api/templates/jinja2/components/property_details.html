@@ -30,7 +30,8 @@
 
 <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 w-full" style="width: 100%; max-width: 100%;" id="detail-grid">
     <!-- Labels section -->
-    {% if prop_data.preferred_label or prop_data.alternative_labels %}
+    {% set english_alts = prop_data | english_alternative_labels %}
+    {% if prop_data.preferred_label or english_alts %}
     <section class="card animate-fade-in">
         <h4 class="text-lg font-medium text-[--color-primary] mb-3 flex items-center">
             <svg class="w-4 h-4 mr-2 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -46,11 +47,11 @@
                     <span class="text-gray-800 font-medium text-lg block">{{ prop_data.preferred_label|strip_folio_prefix }}</span>
                 </div>
                 {% endif %}
-                {% if prop_data.alternative_labels %}
+                {% if english_alts %}
                 <div>
                     <span class="text-gray-500 text-xs font-medium uppercase tracking-wide mb-2 block">Alternative Labels</span>
                     <div class="flex flex-wrap gap-1">
-                        {% for label in prop_data.alternative_labels %}
+                        {% for label in english_alts %}
                         {# INTERIM: strip_folio_prefix can be removed once FOLIO PR #5 is merged #}
                         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium bg-purple-100 text-purple-800">{{ label|strip_folio_prefix }}</span>
                         {% endfor %}

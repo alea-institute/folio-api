@@ -38,7 +38,7 @@
 <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 w-full" style="width: 100%; max-width: 100%;" id="detail-grid">
     <!-- COLUMN 1 -->
     <!-- Labels section - Added at the top -->
-    {% if class_data.preferred_label or class_data.alternative_labels %}
+    {% if class_data.preferred_label or (class_data | english_alternative_labels) %}
     <section class="card animate-fade-in">
         <h4 class="text-lg font-medium text-[--color-primary] mb-3 flex items-center">
             <svg class="w-4 h-4 mr-2 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -55,11 +55,12 @@
                 </div>
                 {% endif %}
                 
-                {% if class_data.alternative_labels %}
+                {% set english_alts = class_data | english_alternative_labels %}
+                {% if english_alts %}
                 <div>
                     <span class="text-gray-500 text-xs font-medium uppercase tracking-wide mb-2 block">Alternative Labels</span>
                     <div class="flex flex-wrap gap-1">
-                        {% for label in class_data.alternative_labels %}
+                        {% for label in english_alts %}
                         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium bg-purple-100 text-purple-800">
                             {{ label }}
                         </span>
