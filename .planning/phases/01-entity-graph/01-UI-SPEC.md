@@ -1,10 +1,11 @@
 ---
 phase: 1
 slug: entity-graph
-status: draft
+status: approved
 shadcn_initialized: false
 preset: not applicable (non-React stack)
 created: 2026-05-05
+reviewed_at: 2026-05-05
 ---
 
 # Phase 1 — UI Design Contract: Entity Graph
@@ -325,14 +326,14 @@ This UI-SPEC is checker-ready when:
 
 ## Checker Sign-Off
 
-- [ ] Dimension 1 Copywriting: PASS
-- [ ] Dimension 2 Visuals: PASS
-- [ ] Dimension 3 Color: PASS
-- [ ] Dimension 4 Typography: PASS
-- [ ] Dimension 5 Spacing: PASS
-- [ ] Dimension 6 Registry Safety: PASS
+- [x] Dimension 1 Copywriting: PASS
+- [x] Dimension 2 Visuals: PASS
+- [x] Dimension 3 Color: PASS
+- [x] Dimension 4 Typography: PASS
+- [x] Dimension 5 Spacing: PASS
+- [x] Dimension 6 Registry Safety: PASS
 
-**Approval:** pending
+**Approval:** APPROVED — 2026-05-05 by gsd-ui-checker (all 6 dimensions PASS, no blocking issues)
 
 ---
 
