@@ -961,22 +961,25 @@ The < 500ms initial render budget (D-25) is achievable but requires honoring all
 
 If A1 is wrong, Wave 0 testing catches it immediately. All other assumptions are low-risk.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Should the endpoint accept a depth parameter for ancestor traversal?**
    - What we know: D-08 says default = full chain to root. No truncation per D-23.
    - What's unclear: Should the endpoint hard-code "walk to terminator" or accept `?max_depth=N` as a defensive limit? FOLIO chains are bounded (rarely > 12) so no real need.
    - Recommendation: No depth parameter for v1.1. Hard-code "walk until terminator". Add later if user demand emerges.
+   - **RESOLVED:** Adopted "walk to terminator" with NO depth parameter. Implemented in Plan 01-04 (route signature has no `?max_depth`). Future addition tracked under REQUIREMENTS.md "Future Requirements".
 
 2. **Should we vendor elkjs in this phase or follow CONTEXT.md's "CDN is fine" decision?**
    - What we know: CONTEXT.md D-03 says CDN; "Future Requirements" lists vendoring. UI-SPEC's CDN URL is wrong (cdnjs returns 404).
    - What's unclear: Whether the user wants to update D-03 in light of the URL mismatch, or accept a CSP edit to allow unpkg.
    - Recommendation: **Vendor it.** This satisfies "Claude's Discretion" (CONTEXT.md "Whether to vendor or CDN-load `elkjs` — D-03 says CDN; if researcher finds CDN reliability concerns, vendor is acceptable"). The fact that the planned cdnjs URL doesn't exist counts as a "CDN reliability concern". Document the decision in the plan.
+   - **RESOLVED:** Vendoring elected. Implemented in Plan 01-02 (downloads `elk.bundled.js` to `folio_api/static/js/vendor/` with SHA-384 pin). D-03's CDN preference is overridden under the "Claude's Discretion" clause; rationale is the empirical CDN 404 finding plus folio-api's CSP not allowing unpkg/jsdelivr.
 
 3. **Should JS unit tests be added in this phase or deferred?**
    - What we know: pyproject.toml has pytest configured, no JS test framework, all donor code came in production-tested.
    - What's unclear: Whether adding jest/vitest now is worth it.
    - Recommendation: Defer JS unit tests. Manual UAT script is sufficient for v1.1; adding a JS test framework is out of scope unless explicitly requested.
+   - **RESOLVED:** Deferred. No plan introduces jest/vitest. JS coverage strategy = the 16-item Manual UAT script in VALIDATION.md, browser DevTools console error check, and Plans 14 (perf) + 15 (a11y) checkpoints.
 
 ## Sources
 
