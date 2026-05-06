@@ -24,6 +24,28 @@
 (function () {
   'use strict';
 
+  // ---------------- Performance instrumentation (Plan 14) ----------------
+  // Lightweight User Timing marks/measures around the four phases of the
+  // tab-activation flow: fetch → layout → render. The DevTools Performance
+  // tab groups these under the "User Timing" track so a regression is easy
+  // to attribute. Per CONTEXT D-25 / GRAPH-14: the < 500 ms p50 budget is
+  // gated on `eg:total` (eg:fetch:start → eg:render:end).
+  //
+  // Defensive guards: some test environments (jsdom-without-performance,
+  // ancient browsers) stub `performance` to undefined or omit `mark`/
+  // `measure`. Wrap every call so a missing API is a silent no-op rather
+  // than a thrown error that would break the actual graph render.
+  function _perfMark(name) {
+    if (typeof performance === 'undefined') return;
+    if (typeof performance.mark !== 'function') return;
+    try { performance.mark(name); } catch (_) { /* swallow — instrumentation must never break render */ }
+  }
+  function _perfMeasure(name, startMark, endMark) {
+    if (typeof performance === 'undefined') return;
+    if (typeof performance.measure !== 'function') return;
+    try { performance.measure(name, startMark, endMark); } catch (_) { /* swallow */ }
+  }
+
   // ---------------- Internal state ----------------
   // Mutated by later plans; declared here so all plans see one source of truth.
   const state = {
@@ -666,6 +688,16 @@
     } else {
       requestAnimationFrame(fitGraph);
     }
+
+    // Plan 14 boundary 4: SVG + nodes mounted, fit queued for next frame.
+    // Render phase ends here; fit-to-viewport runs on the next animation
+    // frame and is excluded from eg:render to keep the measurement focused
+    // on DOM construction work attributable to this code path. The eg:total
+    // measure spans eg:fetch:start (refreshFor entry) → eg:render:end
+    // (mount complete) — this is what the < 500 ms p50 budget gates on.
+    _perfMark('eg:render:end');
+    _perfMeasure('eg:render', 'eg:render:start', 'eg:render:end');
+    _perfMeasure('eg:total', 'eg:fetch:start', 'eg:render:end');
   }
 
   // ---------------- Pan / Zoom (Plan 10) ----------------
@@ -879,6 +911,10 @@
       return Promise.resolve(state.graphData);
     }
 
+    // Plan 14 boundary 1: mark the start of the fetch phase. Total time
+    // (eg:total) bridges this mark to eg:render:end inside _mountGraph.
+    _perfMark('eg:fetch:start');
+
     showSkeleton();
 
     // Reset state for a new selection (D-11): each selection is a fresh graph;
@@ -899,6 +935,11 @@
         return res.json();
       })
       .then(function (data) {
+        // Plan 14 boundary 2: fetch + JSON parse complete; pivot to ELK layout.
+        _perfMark('eg:fetch:end');
+        _perfMeasure('eg:fetch', 'eg:fetch:start', 'eg:fetch:end');
+        _perfMark('eg:layout:start');
+
         state.graphData = data;
         state.currentIri = iri;
         state.currentType = type;
@@ -906,6 +947,10 @@
         return runLayout(spec).then(function (laid) {
           // Stash layout on graphData so Plan 08's renderer can read it.
           state.graphData.layout = laid;
+          // Plan 14 boundary 3: ELK layout resolved; pivot to DOM render.
+          _perfMark('eg:layout:end');
+          _perfMeasure('eg:layout', 'eg:layout:start', 'eg:layout:end');
+          _perfMark('eg:render:start');
           // Plan 08: mount the SVG + DIV scaffold. renderGraph defers the DOM
           // work to requestAnimationFrame, so the Promise still resolves
           // synchronously after the layout completes (callers can chain
