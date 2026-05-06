@@ -184,6 +184,23 @@ function selectNode(li, updateUrl) {
     const sectionType = li.data('type');
     loadDetails(nodeId, sectionType, updateUrl);
     ensureNodeVisible(li);
+
+    // Phase 1 (entity-graph): notify subscribers (entity_graph.js) that the
+    // user picked a new entity. Custom event keeps unified_tree.js unaware
+    // of the graph module (RESEARCH.md Pattern 1 — Custom-Event-Based Coupling).
+    try {
+        var _iri  = (typeof li !== 'undefined' && li && li.data) ? li.data('id') : null;
+        var _type = (typeof li !== 'undefined' && li && li.data) ? li.data('type') : null;
+        if (_iri) {
+            document.dispatchEvent(new CustomEvent('entity:selected', {
+                detail: { iri: _iri, type: _type }
+            }));
+        }
+    } catch (e) {
+        if (window.console && window.console.warn) {
+            window.console.warn('entity:selected dispatch failed:', e);
+        }
+    }
 }
 
 function ensureNodeVisible(li) {
@@ -292,6 +309,77 @@ function selectNodeByIri(iri) {
         }
     });
 }
+// ============================================================
+// Phase 1: Detail-pane tab strip (Details | Entity Graph)
+// Wires the buttons added by tree.html (Plan 05 Task 1) to swap
+// panel visibility. Updates window.EntityGraph.state.activeTab so
+// the graph module knows whether to fetch on entity:selected.
+// ============================================================
+
+function wireDetailTabs() {
+    var tabDetails = document.getElementById('tab-details');
+    var tabGraph   = document.getElementById('tab-graph');
+    var panelDetails = document.getElementById('tab-panel-details');
+    var panelGraph   = document.getElementById('tab-panel-graph');
+    if (!tabDetails || !tabGraph || !panelDetails || !panelGraph) {
+        // tree.html structure not present (e.g. dev page); nothing to wire.
+        return;
+    }
+
+    var ACTIVE_CLS = 'px-4 py-2 text-sm font-semibold border-b-2 border-blue-600 bg-white text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2';
+    var INACTIVE_CLS = 'px-4 py-2 text-sm font-semibold border-b-2 border-transparent bg-gray-100 text-gray-600 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2';
+
+    function activate(which) {
+        var detailsActive = (which === 'details');
+        tabDetails.setAttribute('aria-selected', detailsActive ? 'true' : 'false');
+        tabGraph.setAttribute('aria-selected',   detailsActive ? 'false' : 'true');
+        tabDetails.setAttribute('tabindex', detailsActive ? '0' : '-1');
+        tabGraph.setAttribute('tabindex',   detailsActive ? '-1' : '0');
+        tabDetails.className = detailsActive ? ACTIVE_CLS : INACTIVE_CLS;
+        tabGraph.className   = detailsActive ? INACTIVE_CLS : ACTIVE_CLS;
+        if (detailsActive) {
+            panelDetails.classList.remove('hidden');
+            panelDetails.removeAttribute('hidden');
+            panelGraph.classList.add('hidden');
+            panelGraph.setAttribute('hidden', '');
+        } else {
+            panelGraph.classList.remove('hidden');
+            panelGraph.removeAttribute('hidden');
+            panelDetails.classList.add('hidden');
+            panelDetails.setAttribute('hidden', '');
+        }
+        if (window.EntityGraph && window.EntityGraph.state) {
+            window.EntityGraph.state.activeTab = detailsActive ? 'details' : 'graph';
+        }
+        if (!detailsActive && window.EntityGraph && typeof window.EntityGraph.onTabActivated === 'function') {
+            try { window.EntityGraph.onTabActivated(); } catch (err) {
+                if (window.console && window.console.error) window.console.error(err);
+            }
+        }
+    }
+
+    tabDetails.addEventListener('click', function () { activate('details'); });
+    tabGraph.addEventListener('click',   function () { activate('graph');   });
+
+    // Arrow-key cycling per UI-SPEC §Interaction Contract (ARIA tablist pattern).
+    function onKey(e) {
+        if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+        e.preventDefault();
+        var current = (document.activeElement === tabGraph) ? 'graph' : 'details';
+        var next = (current === 'details') ? 'graph' : 'details';
+        activate(next);
+        (next === 'graph' ? tabGraph : tabDetails).focus();
+    }
+    tabDetails.addEventListener('keydown', onKey);
+    tabGraph.addEventListener('keydown',   onKey);
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', wireDetailTabs);
+} else {
+    wireDetailTabs();
+}
+
 window.selectNodeByIri = selectNodeByIri;
 
 // ---------- Load and select node (expand path) ----------
