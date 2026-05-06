@@ -785,17 +785,53 @@
   }
 
   function _onEntitySelected(ev) {
-    // Plan 12 implements the real handler. The skeleton dedupes per
-    // RESEARCH.md Pitfall 7 (re-fetch loop on graph-node click) and otherwise
-    // does nothing if the Graph tab is not active (D-10 lazy fetch).
-    const detail = (ev && ev.detail) || {};
+    // Plan 12 Task 1: real handler. Lazy-fetch (D-10): only refresh while the
+    // Graph tab is active. Dedupe (RESEARCH Pitfall 7 / T-1-W3-05): no-op if
+    // the iri/type already matches the rendered graph — this is what breaks
+    // the otherwise-infinite chain of selectNodeByIri → entity:selected →
+    // refreshFor → renderGraph → graph-node click → selectNodeByIri.
+    var detail = (ev && ev.detail) || {};
     if (state.activeTab !== 'graph') return;
+    if (!detail.iri) return;
     if (detail.iri === state.currentIri && detail.type === state.currentType) return;
-    // Plan 12 will replace this body with a real refreshFor() call.
-    // For now, leave a console hint so a misconfigured handler is visible.
-    if (typeof window.console !== 'undefined' && window.console.debug) {
-      window.console.debug('[EntityGraph] entity:selected pending Plan 12 wire-up:', detail);
+    refreshFor(detail.iri, detail.type).catch(function (err) {
+      if (window.console && window.console.error) {
+        window.console.error('[EntityGraph] _onEntitySelected refreshFor failed:', err);
+      }
+    });
+  }
+
+  // onTabActivated — called by unified_tree.js wireDetailTabs() when the user
+  // switches to the Entity Graph tab (D-05 / D-10 lazy fetch). Reads the
+  // currently-selected tree LI and either:
+  //   (a) renders the empty-state if nothing is selected (GRAPH-18),
+  //   (b) no-ops if the graph for that IRI is already loaded (preserves
+  //       pan/zoom on tab toggling — the user expects their view back), or
+  //   (c) calls refreshFor(iri, type) for first-time activation / new entity.
+  //
+  // Selector convention (per unified_tree.js selectNode at line 179):
+  //   <li class="tree-node selected" data-id="…" data-type="class|property">
+  function onTabActivated() {
+    var sel = document.querySelector('.tree-node.selected[data-id]');
+    if (!sel) {
+      showEmpty();
+      return;
     }
+    var iri = sel.getAttribute('data-id');
+    var type = sel.getAttribute('data-type') || 'class';
+    if (!iri) {
+      showEmpty();
+      return;
+    }
+    // Already-loaded same graph → no-op (pan/zoom preserved per D-26).
+    if (state.currentIri === iri && state.graphData && state.graphData.layout) {
+      return;
+    }
+    refreshFor(iri, type).catch(function (err) {
+      if (window.console && window.console.error) {
+        window.console.error('[EntityGraph] onTabActivated refreshFor failed:', err);
+      }
+    });
   }
 
   function refreshFor(iri, type, force) {
@@ -926,6 +962,9 @@
     expand: expand,
     close: close,
     toggleFullscreen: toggleFullscreen,
+    // Plan 12 Task 1: lifecycle hook called by unified_tree.js wireDetailTabs()
+    // when the Entity Graph tab is activated (D-05 / GRAPH-05 lazy fetch).
+    onTabActivated: onTabActivated,
     showEmpty: showEmpty,
     showSkeleton: showSkeleton,
     showError: showError,
