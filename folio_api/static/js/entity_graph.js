@@ -274,6 +274,159 @@
     });
   }
 
+  // ---------------- SVG renderer (Plan 08) ----------------
+  // buildEdgePath — copied VERBATIM from donor folio-enrich/frontend/index.html:8976-8990,
+  // simplified for D-04 (direction is always DOWN). Cubic bezier S-curve guarantees
+  // 90° vertical entry/exit at both endpoints.
+  // Per CONTEXT D-02 / D-08, GRAPH-08, and RESEARCH.md lines 692-703.
+  function buildEdgePath(section) {
+    var sp = section.startPoint;
+    var ep = section.endPoint;
+    var midY = (sp.y + ep.y) / 2;
+    return 'M' + sp.x + ',' + sp.y + ' C' + sp.x + ',' + midY + ' ' + ep.x + ',' + midY + ' ' + ep.x + ',' + ep.y;
+  }
+
+  var SVG_NS = 'http://www.w3.org/2000/svg';
+
+  // _findUltimateRootIri — locate the IRI of the ancestor with branch_root_type==='ultimate'
+  // so renderGraph can stamp it with the .graph-node-root class (Plan 09 styles it).
+  function _findUltimateRootIri(graphData) {
+    var ancestors = (graphData && graphData.ancestors) || [];
+    for (var i = 0; i < ancestors.length; i++) {
+      if (ancestors[i] && ancestors[i].branch_root_type === 'ultimate') {
+        return ancestors[i].iri;
+      }
+    }
+    // Fallback: the ELK selected node itself can be marked as ultimate when a class
+    // has no ancestors (root entity). Surface that via graphData.selected if present.
+    if (graphData && graphData.selected && graphData.selected.branch_root_type === 'ultimate') {
+      return graphData.selected.iri;
+    }
+    return null;
+  }
+
+  // _mountGraph — actual DOM construction; called inside requestAnimationFrame
+  // by renderGraph so that #tab-panel-graph is visible (clientWidth > 0) before
+  // we measure or mount (RESEARCH.md Pitfall 6).
+  function _mountGraph(graphData) {
+    var pane = _pane();
+    if (!pane) return;
+    var layout = graphData && graphData.layout;
+    if (!layout) return;
+
+    var children = layout.children || [];
+    var edges = layout.edges || [];
+
+    // Compute bounds with 16 px padding (UI-SPEC §spacing).
+    var maxX = 0;
+    var maxY = 0;
+    for (var i = 0; i < children.length; i++) {
+      var c = children[i];
+      var rx = (c.x || 0) + (c.width || 0);
+      var ry = (c.y || 0) + (c.height || 0);
+      if (rx > maxX) maxX = rx;
+      if (ry > maxY) maxY = ry;
+    }
+    maxX += 16;
+    maxY += 16;
+
+    // Reset pane (skeleton already cleared in renderGraph, but be defensive).
+    pane.innerHTML = '';
+    pane.removeAttribute('aria-busy');
+
+    // Scaffolding: viewport > transform > (svg + nodes-div).
+    var viewport = document.createElement('div');
+    viewport.id = 'graph-viewport';
+    viewport.className = 'absolute inset-0 overflow-hidden';
+
+    var xform = document.createElement('div');
+    xform.id = 'graph-transform';
+    xform.className = 'absolute top-0 left-0';
+    xform.style.transformOrigin = '0 0';
+
+    var svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('id', 'graph-svg');
+    svg.setAttribute('width', String(maxX));
+    svg.setAttribute('height', String(maxY));
+    svg.setAttribute('viewBox', '0 0 ' + maxX + ' ' + maxY);
+    svg.style.position = 'absolute';
+    svg.style.top = '0';
+    svg.style.left = '0';
+    svg.style.pointerEvents = 'none';
+
+    var edgesGroup = document.createElementNS(SVG_NS, 'g');
+    edgesGroup.setAttribute('class', 'graph-edges');
+    svg.appendChild(edgesGroup);
+
+    var nodesDiv = document.createElement('div');
+    nodesDiv.className = 'graph-nodes';
+    nodesDiv.style.position = 'relative';
+    nodesDiv.style.width = maxX + 'px';
+    nodesDiv.style.height = maxY + 'px';
+
+    // Edges — defensive `(edge.sections || []).forEach` guard per Pitfall 5.
+    for (var ei = 0; ei < edges.length; ei++) {
+      var edge = edges[ei] || {};
+      var sections = edge.sections || [];
+      for (var si = 0; si < sections.length; si++) {
+        var section = sections[si];
+        if (!section || !section.startPoint || !section.endPoint) continue;
+        var path = document.createElementNS(SVG_NS, 'path');
+        path.setAttribute('d', buildEdgePath(section));
+        path.setAttribute('class', 'graph-edge');
+        path.setAttribute('fill', 'none');
+        path.setAttribute('stroke', 'currentColor');
+        path.setAttribute('stroke-width', '1.5');
+        edgesGroup.appendChild(path);
+      }
+    }
+
+    // Selected + root markers.
+    var selectedIri = (graphData.selected && graphData.selected.iri) || null;
+    var rootIri = _findUltimateRootIri(graphData);
+
+    // Nodes — DIVs positioned absolutely; label via textContent (XSS mitigation,
+    // RESEARCH.md Security row 2 / threat T-1-W2-03).
+    for (var ni = 0; ni < children.length; ni++) {
+      var node = children[ni];
+      if (!node) continue;
+      var nodeDiv = document.createElement('div');
+      var classes = ['graph-node'];
+      if (selectedIri && node.id === selectedIri) classes.push('graph-node-selected');
+      if (rootIri && node.id === rootIri) classes.push('graph-node-root');
+      nodeDiv.className = classes.join(' ');
+      nodeDiv.setAttribute('data-iri', node.id);
+      nodeDiv.style.position = 'absolute';
+      nodeDiv.style.left = (node.x || 0) + 'px';
+      nodeDiv.style.top = (node.y || 0) + 'px';
+      nodeDiv.style.width = (node.width || 0) + 'px';
+      nodeDiv.style.height = (node.height || 0) + 'px';
+
+      var labelText = '';
+      if (node.labels && node.labels.length && node.labels[0] && node.labels[0].text != null) {
+        labelText = String(node.labels[0].text);
+      }
+      nodeDiv.textContent = labelText;
+      nodesDiv.appendChild(nodeDiv);
+    }
+
+    xform.appendChild(svg);
+    xform.appendChild(nodesDiv);
+    viewport.appendChild(xform);
+    pane.appendChild(viewport);
+  }
+
+  // renderGraph — public-ish renderer. Defers DOM mount to the next animation
+  // frame so #tab-panel-graph is un-hidden before we measure (Pitfall 6).
+  // No-op if graphData has no layout (refreshFor failed before runLayout).
+  function renderGraph(graphData) {
+    if (!graphData || !graphData.layout) return;
+    clearStates();
+    requestAnimationFrame(function () {
+      _mountGraph(graphData);
+    });
+  }
+
   // ---------------- Public API stubs ----------------
   // Each method is a stub that throws until the relevant plan implements it.
   // The throws make accidental early-call regressions loud during plan execution.
@@ -337,6 +490,11 @@
         return runLayout(spec).then(function (laid) {
           // Stash layout on graphData so Plan 08's renderer can read it.
           state.graphData.layout = laid;
+          // Plan 08: mount the SVG + DIV scaffold. renderGraph defers the DOM
+          // work to requestAnimationFrame, so the Promise still resolves
+          // synchronously after the layout completes (callers can chain
+          // post-render work via the resolved graphData).
+          renderGraph(state.graphData);
           return state.graphData;
         });
       })
