@@ -812,6 +812,9 @@
     // Real implementation: register the entity:selected listener.
     // Subsequent plans add tab DOM wiring, modal DOM wiring, etc.
     document.addEventListener('entity:selected', _onEntitySelected);
+    // Plan 13: bind Full screen button + modal close + scrim + ESC + focus
+    // trap (idempotent — safe to re-call after hot reload).
+    _wireFullscreenChrome();
   }
 
   function _onEntitySelected(ev) {
@@ -979,9 +982,110 @@
     // Plan 13 (or wherever close becomes meaningful). No-op in skeleton.
   }
 
+  // toggleFullscreen — Plan 13.
+  // Per CONTEXT D-07 + RESEARCH.md Pattern 2 (DOM-Swap State Preservation):
+  // the SAME #entity-graph-pane DOM node is moved between #tab-panel-graph
+  // (in-pane host) and #graph-modal-host (modal host) via appendChild().
+  // appendChild on an existing node detaches it from its current parent and
+  // reattaches it to the new parent WITHOUT clone — so the SVG, all node
+  // DIVs, the pan/zoom transform, and every event listener survive the swap.
+  // This is what preserves the user's pan, zoom, and expanded children
+  // (state.transform + state.expandedIris are also unchanged because they
+  // live on the closure-scoped `state` object, not on any DOM attribute).
   function toggleFullscreen() {
-    // Plan 13 implementation.
-    throw new Error('EntityGraph.toggleFullscreen not yet implemented (Plan 13)');
+    var modalRoot = document.getElementById('graph-modal-root');
+    var modalHost = document.getElementById('graph-modal-host');
+    var inPaneHost = document.getElementById('tab-panel-graph');
+    var pane = document.getElementById('entity-graph-pane');
+    var fsBtn = document.getElementById('tab-fullscreen');
+    if (!modalRoot || !modalHost || !inPaneHost || !pane) return;
+    if (state.isFullscreen) {
+      // Close: move pane back to in-pane host; hide modal; restore focus.
+      inPaneHost.appendChild(pane);
+      modalRoot.classList.add('hidden');
+      modalRoot.setAttribute('aria-hidden', 'true');
+      state.isFullscreen = false;
+      if (fsBtn) fsBtn.focus();
+      // Re-apply transform: a paint nudge after the re-mount so the new host
+      // size is reflected. The viewport size changes (modal is much larger
+      // than in-pane), but per D-26 we preserve the user's zoom on toggle —
+      // the scale + translate persist through the swap because they live on
+      // #graph-transform (which moved with the pane).
+      applyTransform();
+    } else {
+      // Open: move pane into modal host; show modal; trap focus to close button.
+      modalHost.appendChild(pane);
+      modalRoot.classList.remove('hidden');
+      modalRoot.setAttribute('aria-hidden', 'false');
+      state.isFullscreen = true;
+      var closeBtn = document.getElementById('graph-modal-close');
+      if (closeBtn) closeBtn.focus();
+      applyTransform();
+    }
+  }
+
+  // _wireFullscreenChrome — bind the Full screen button + modal close +
+  // scrim + ESC + focus-trap listeners. Idempotent via dataset flags so
+  // re-init (e.g. hot reload) does not double-bind. Called from init().
+  function _wireFullscreenChrome() {
+    var fsBtn = document.getElementById('tab-fullscreen');
+    var closeBtn = document.getElementById('graph-modal-close');
+    var scrim = document.getElementById('graph-modal-scrim');
+    var panel = document.getElementById('graph-modal-panel');
+    if (fsBtn && fsBtn.dataset.fsWired !== '1') {
+      fsBtn.dataset.fsWired = '1';
+      // Hydrate the Heroicons arrows-pointing-out SVG.
+      var iconHost = fsBtn.querySelector('.full-screen-icon-host');
+      if (iconHost) iconHost.innerHTML = ICONS.arrowsPointingOut;
+      fsBtn.addEventListener('click', toggleFullscreen);
+    }
+    if (closeBtn && closeBtn.dataset.fsWired !== '1') {
+      closeBtn.dataset.fsWired = '1';
+      var xHost = closeBtn.querySelector('.x-mark-icon-host');
+      if (xHost) xHost.innerHTML = ICONS.xMark;
+      closeBtn.addEventListener('click', toggleFullscreen);
+    }
+    if (scrim && scrim.dataset.fsWired !== '1') {
+      scrim.dataset.fsWired = '1';
+      scrim.addEventListener('click', toggleFullscreen);
+    }
+    // Global ESC handler — only acts when modal is open. Bound once to
+    // document; the isFullscreen guard makes it cheap when the modal is
+    // closed (the common case).
+    if (!document.body.dataset.fsEscWired) {
+      document.body.dataset.fsEscWired = '1';
+      document.addEventListener('keydown', function (e) {
+        if (e.key !== 'Escape') return;
+        if (state.isFullscreen) {
+          e.preventDefault();
+          toggleFullscreen();
+        }
+      });
+    }
+    // Focus trap — Tab/Shift+Tab cycles within the modal panel while open.
+    // The simple two-focusable case (close button + graph host) is enough
+    // for v1.1 because graph nodes are NOT individually tab-focusable
+    // (UI-SPEC §Interaction Contract). We query focusables fresh on each
+    // Tab so future additions to the panel header are picked up.
+    if (panel && panel.dataset.fsTrapWired !== '1') {
+      panel.dataset.fsTrapWired = '1';
+      panel.addEventListener('keydown', function (e) {
+        if (e.key !== 'Tab' || !state.isFullscreen) return;
+        var focusables = panel.querySelectorAll(
+          'button:not([disabled]), [href], [tabindex="0"], input:not([disabled])'
+        );
+        if (focusables.length === 0) return;
+        var first = focusables[0];
+        var last = focusables[focusables.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      });
+    }
   }
 
   // ---------------- Export ----------------
