@@ -177,6 +177,103 @@
     return _elkLoadPromise;
   }
 
+  // ---------------- ELK layout pipeline (Plan 07) ----------------
+  // buildELKGraph adapts donor folio-enrich/frontend/index.html:8809-8840
+  // to folio-api's ancestors-only payload shape.
+  //
+  // Per CONTEXT D-04 + UI-SPEC §spacing:
+  //   - direction: DOWN (top-to-bottom); ancestors above the selected node
+  //   - nodeNode: 32 px, nodeNodeBetweenLayers: 64 px, padding: 16 px
+  // Per CONTEXT D-21 + GRAPH-07: the topmost ancestor (branch_root_type === 'ultimate')
+  // is pinned to the FIRST ELK layer via elk.layered.layering.layerConstraint
+  // (donor pattern from line 8882 of index.html).
+  function buildELKGraph(graphData) {
+    var selected = graphData.selected;
+    var ancestors = graphData.ancestors || [];
+    var children = graphData.children || [];
+
+    // Set of node IRIs that are edge-targets — only non-targets may carry the
+    // FIRST layerConstraint (ELK rejects layer constraints on nodes that are
+    // already ordered by inbound edges).
+    var targetIds = new Set();
+    var edges = [];
+
+    // Ancestor chain edges: ancestors[i] → ancestors[i+1] (root-first).
+    for (var i = 0; i < ancestors.length - 1; i++) {
+      edges.push({
+        id: 'e_' + i,
+        sources: [ancestors[i].iri],
+        targets: [ancestors[i + 1].iri],
+      });
+      targetIds.add(ancestors[i + 1].iri);
+    }
+    // Last ancestor → selected.
+    if (ancestors.length > 0) {
+      var lastAnc = ancestors[ancestors.length - 1];
+      edges.push({
+        id: 'e_anc_sel',
+        sources: [lastAnc.iri],
+        targets: [selected.iri],
+      });
+      targetIds.add(selected.iri);
+    }
+    // Selected → each loaded child.
+    for (var ci = 0; ci < children.length; ci++) {
+      edges.push({
+        id: 'e_child_' + ci,
+        sources: [selected.iri],
+        targets: [children[ci].iri],
+      });
+      targetIds.add(children[ci].iri);
+    }
+
+    var allNodes = [selected].concat(ancestors).concat(children);
+    var elkChildren = allNodes.map(function (n) {
+      var labelText = n.label || '';
+      var w = Math.max(180, labelText.length * 7.5 + 32);
+      var node = {
+        id: n.iri,
+        width: w,
+        height: 36,
+        labels: [{ text: labelText }],
+      };
+      // Donor pattern (index.html:8882): ultimate root pinned to FIRST layer
+      // when it's not already a target of some edge.
+      if (n.branch_root_type === 'ultimate' && !targetIds.has(n.iri)) {
+        node.layoutOptions = { 'elk.layered.layering.layerConstraint': 'FIRST' };
+      }
+      return node;
+    });
+
+    return {
+      id: 'root',
+      layoutOptions: {
+        'elk.algorithm': 'layered',
+        'elk.direction': 'DOWN',
+        'elk.spacing.nodeNode': '32',
+        'elk.layered.spacing.nodeNodeBetweenLayers': '64',
+        'elk.layered.spacing.edgeNodeBetweenLayers': '24',
+        'elk.layered.spacing.edgeEdgeBetweenLayers': '12',
+        'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
+        'elk.layered.nodePlacement.strategy': 'NETWORK_SIMPLEX',
+        'elk.edgeRouting': 'POLYLINE',
+        'elk.padding': '[top=16,left=16,bottom=16,right=16]',
+      },
+      children: elkChildren,
+      edges: edges,
+    };
+  }
+
+  // runLayout — instantiates ELK lazily (via loadELK) and runs elk.layout(spec).
+  // Returns a Promise that resolves to the laid-out spec; children carry x/y/width/height,
+  // edges carry sections[] with startPoint/endPoint/(bendPoints).
+  function runLayout(spec) {
+    return loadELK().then(function (ELK) {
+      var elk = new ELK();
+      return elk.layout(spec);
+    });
+  }
+
   // ---------------- Public API stubs ----------------
   // Each method is a stub that throws until the relevant plan implements it.
   // The throws make accidental early-call regressions loud during plan execution.
@@ -201,9 +298,54 @@
     }
   }
 
-  function refreshFor(iri, type) {
-    // Plan 07/08 implementation.
-    return Promise.reject(new Error('EntityGraph.refreshFor not yet implemented (Plan 07)'));
+  function refreshFor(iri, type, force) {
+    // Plan 07 implementation: fetch /explore/api/entity-graph/{iri}, build ELK
+    // spec, run layout, store on state.graphData. Plan 08 will consume
+    // state.graphData.layout to draw the SVG.
+    //
+    // Dedupe per RESEARCH Pitfall 7: when called repeatedly with the same
+    // (iri, type) and we already have graphData, return the cached payload
+    // unless force=true (used by the Retry button in showError).
+    if (!force && iri === state.currentIri && type === state.currentType && state.graphData) {
+      return Promise.resolve(state.graphData);
+    }
+
+    showSkeleton();
+
+    // Reset state for a new selection (D-11): each selection is a fresh graph;
+    // pan/zoom resets and previously-expanded children are NOT preserved.
+    state.transform = { x: 0, y: 0, scale: 1 };
+    state.expandedIris = new Set();
+    state.graphData = null;
+
+    var url = '/explore/api/entity-graph/' + encodeURIComponent(iri);
+    return fetch(url, { headers: { 'Accept': 'application/json' } })
+      .then(function (res) {
+        if (!res.ok) {
+          // Best-effort label for the error UI; falls back to the raw IRI.
+          var errLabel = (state.graphData && state.graphData.selected && state.graphData.selected.label) || iri;
+          showError(errLabel, function () { refreshFor(iri, type, true); });
+          throw new Error('HTTP ' + res.status);
+        }
+        return res.json();
+      })
+      .then(function (data) {
+        state.graphData = data;
+        state.currentIri = iri;
+        state.currentType = type;
+        var spec = buildELKGraph(data);
+        return runLayout(spec).then(function (laid) {
+          // Stash layout on graphData so Plan 08's renderer can read it.
+          state.graphData.layout = laid;
+          return state.graphData;
+        });
+      })
+      .catch(function (err) {
+        if (window.console && window.console.error) {
+          window.console.error('[EntityGraph] refreshFor failed:', err);
+        }
+        throw err;
+      });
   }
 
   function expand(iri) {
