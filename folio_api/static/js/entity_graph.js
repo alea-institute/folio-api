@@ -436,6 +436,32 @@
     svg.style.left = '0';
     svg.style.pointerEvents = 'none';
 
+    // Plan 15 (Accessibility): expose the SVG as a labeled image to assistive
+    // tech per UI-SPEC §Interaction Contract row "Graph SVG". Format:
+    //   "Entity graph for {selected.label}, rooted at {topmost-ancestor.label},
+    //    showing {N} nodes"
+    // - rootLabel falls back to selected.label when there are no ancestors
+    //   (selected entity is itself a root, e.g. owl:Thing's direct child).
+    // - nodeCount comes from the laid-out children array (the canonical render
+    //   source). This is updated on every render because _mountGraph is the
+    //   sole entry point for SVG (re)construction (clearStates wipes the pane
+    //   on every refresh).
+    svg.setAttribute('role', 'img');
+    var _selectedLabel = (graphData.selected && graphData.selected.label) || '';
+    var _rootLabel = '';
+    if (graphData.ancestors && graphData.ancestors.length > 0 && graphData.ancestors[0].label) {
+      _rootLabel = graphData.ancestors[0].label;
+    } else {
+      _rootLabel = _selectedLabel;
+    }
+    var _nodeCount = children.length;
+    svg.setAttribute(
+      'aria-label',
+      'Entity graph for ' + _selectedLabel +
+      ', rooted at ' + _rootLabel +
+      ', showing ' + _nodeCount + ' nodes'
+    );
+
     var edgesGroup = document.createElementNS(SVG_NS, 'g');
     edgesGroup.setAttribute('class', 'graph-edges');
     svg.appendChild(edgesGroup);
