@@ -292,3 +292,34 @@ html, body {
         opacity: 0.7;
     }
 }
+
+/* ============================================================ */
+/* Phase 1 (milestone v1.1): Entity Graph node + edge styling.  */
+/* Plan 09 — closes GRAPH-15/16/17.                              */
+/* ============================================================ */
+
+.graph-edge {
+    stroke: #9CA3AF;            /* Tailwind gray-400 — UI-SPEC §Color */
+    fill: none;
+    stroke-width: 1.5;
+}
+
+.graph-node {
+    /* Positioning is set inline; this rule only owns the hover/transition layer. */
+    transition: box-shadow 0.12s ease-out;
+    user-select: none;
+}
+
+/* Selected-node outer glow — UI-SPEC §Color row 2 (D-20).
+   Targets the inner styled wrapper (the DIV with bg-white border ...) where
+   the visible border lives, so the glow visually "hugs" the border. */
+.graph-node-selected > div {
+    box-shadow: 0 0 12px rgba(37, 99, 235, 0.35);
+}
+
+/* Reduced-motion: drop the box-shadow transition on selection swaps. */
+@media (prefers-reduced-motion: reduce) {
+    .graph-node {
+        transition: none;
+    }
+}
