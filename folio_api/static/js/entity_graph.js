@@ -305,6 +305,31 @@
     return null;
   }
 
+  // _buildTypeMap — derive a per-IRI 'class' | 'property' map from the
+  // graphData payload. Per Plan 09: ancestors and the selected node share the
+  // selected node's type (single-type chain in v1.1); children carry their own
+  // `type` field (Plan 04 always sets it).
+  function _buildTypeMap(graphData) {
+    var map = {};
+    var selectedType = (graphData && graphData.selected && graphData.selected.type) || 'class';
+    if (graphData && graphData.selected && graphData.selected.iri) {
+      map[graphData.selected.iri] = selectedType;
+    }
+    var ancestors = (graphData && graphData.ancestors) || [];
+    for (var i = 0; i < ancestors.length; i++) {
+      if (ancestors[i] && ancestors[i].iri) {
+        map[ancestors[i].iri] = ancestors[i].type || selectedType;
+      }
+    }
+    var children = (graphData && graphData.children) || [];
+    for (var j = 0; j < children.length; j++) {
+      if (children[j] && children[j].iri) {
+        map[children[j].iri] = children[j].type || 'class';
+      }
+    }
+    return map;
+  }
+
   // _mountGraph — actual DOM construction; called inside requestAnimationFrame
   // by renderGraph so that #tab-panel-graph is visible (clientWidth > 0) before
   // we measure or mount (RESEARCH.md Pitfall 6).
@@ -365,6 +390,9 @@
     nodesDiv.style.height = maxY + 'px';
 
     // Edges — defensive `(edge.sections || []).forEach` guard per Pitfall 5.
+    // Per Plan 09 Task 2: edges rely on the .graph-edge CSS rule (stroke,
+    // fill, stroke-width). Inline stroke attributes removed so the rule can
+    // own the styling.
     for (var ei = 0; ei < edges.length; ei++) {
       var edge = edges[ei] || {};
       var sections = edge.sections || [];
@@ -374,9 +402,6 @@
         var path = document.createElementNS(SVG_NS, 'path');
         path.setAttribute('d', buildEdgePath(section));
         path.setAttribute('class', 'graph-edge');
-        path.setAttribute('fill', 'none');
-        path.setAttribute('stroke', 'currentColor');
-        path.setAttribute('stroke-width', '1.5');
         edgesGroup.appendChild(path);
       }
     }
@@ -384,29 +409,76 @@
     // Selected + root markers.
     var selectedIri = (graphData.selected && graphData.selected.iri) || null;
     var rootIri = _findUltimateRootIri(graphData);
+    var typeMap = _buildTypeMap(graphData);
 
-    // Nodes — DIVs positioned absolutely; label via textContent (XSS mitigation,
-    // RESEARCH.md Security row 2 / threat T-1-W2-03).
+    // Nodes — DIVs positioned absolutely. Markup per Plan 09 Task 1:
+    //   <div class="graph-node [graph-node-selected] [graph-node-root]"
+    //        data-iri=... style="position:absolute;left:..;top:..;w:..;h:..;cursor:..;">
+    //     <div class="flex items-center gap-1 px-3 py-2 h-full bg-white border
+    //                 [border-blue-600 border-2 | border-gray-300] rounded [shadow-sm]">
+    //       <span class="text-gray-500 flex-shrink-0">{ICONS.tag|link}</span>
+    //       <span class="graph-node-label {label classes}"></span>
+    //       [<span class="ml-auto text-[11px] font-semibold uppercase tracking-wide
+    //                     text-gray-500 bg-gray-100 rounded px-1.5 py-0.5">ROOT</span>]
+    //     </div>
+    //   </div>
+    // Label text is set via textContent on the .graph-node-label span AFTER
+    // innerHTML assembly (XSS mitigation; RESEARCH.md Security row 2 / T-1-W2-03).
     for (var ni = 0; ni < children.length; ni++) {
       var node = children[ni];
       if (!node) continue;
+      var isSelected = !!(selectedIri && node.id === selectedIri);
+      var isRoot = !!(rootIri && node.id === rootIri);
+      var nodeType = typeMap[node.id] || 'class';
+      var iconSvg = nodeType === 'property' ? ICONS.link : ICONS.tag;
+
+      var outerClasses = ['graph-node'];
+      if (isSelected) outerClasses.push('graph-node-selected');
+      if (isRoot) outerClasses.push('graph-node-root');
+
+      var borderClass = isSelected ? 'border-blue-600 border-2' : 'border-gray-300';
+      var rootInnerClass = isRoot ? 'shadow-sm' : '';
+
+      var labelClass;
+      if (isRoot) {
+        labelClass = 'graph-node-label text-base font-semibold leading-tight text-gray-900';
+      } else if (isSelected) {
+        labelClass = 'graph-node-label text-sm font-semibold text-gray-900';
+      } else {
+        labelClass = 'graph-node-label text-sm font-normal text-gray-700';
+      }
+
+      var rootBadgeHtml = isRoot
+        ? '<span class="ml-auto text-[11px] font-semibold uppercase tracking-wide text-gray-500 bg-gray-100 rounded px-1.5 py-0.5">ROOT</span>'
+        : '';
+
       var nodeDiv = document.createElement('div');
-      var classes = ['graph-node'];
-      if (selectedIri && node.id === selectedIri) classes.push('graph-node-selected');
-      if (rootIri && node.id === rootIri) classes.push('graph-node-root');
-      nodeDiv.className = classes.join(' ');
+      nodeDiv.className = outerClasses.join(' ');
       nodeDiv.setAttribute('data-iri', node.id);
       nodeDiv.style.position = 'absolute';
       nodeDiv.style.left = (node.x || 0) + 'px';
       nodeDiv.style.top = (node.y || 0) + 'px';
       nodeDiv.style.width = (node.width || 0) + 'px';
       nodeDiv.style.height = (node.height || 0) + 'px';
+      nodeDiv.style.cursor = isSelected ? 'default' : 'pointer';
+
+      nodeDiv.innerHTML =
+        '<div class="flex items-center gap-1 px-3 py-2 h-full bg-white border ' +
+        borderClass + ' rounded ' + rootInnerClass + '">' +
+          '<span class="text-gray-500 flex-shrink-0">' + iconSvg + '</span>' +
+          '<span class="' + labelClass + '"></span>' +
+          rootBadgeHtml +
+        '</div>';
 
       var labelText = '';
       if (node.labels && node.labels.length && node.labels[0] && node.labels[0].text != null) {
         labelText = String(node.labels[0].text);
       }
-      nodeDiv.textContent = labelText;
+      var labelSpan = nodeDiv.querySelector('.graph-node-label');
+      if (labelSpan) {
+        labelSpan.textContent = labelText;
+      }
+
       nodesDiv.appendChild(nodeDiv);
     }
 
