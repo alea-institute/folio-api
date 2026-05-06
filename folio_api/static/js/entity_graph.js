@@ -298,9 +298,54 @@
     }
   }
 
-  function refreshFor(iri, type) {
-    // Plan 07/08 implementation.
-    return Promise.reject(new Error('EntityGraph.refreshFor not yet implemented (Plan 07)'));
+  function refreshFor(iri, type, force) {
+    // Plan 07 implementation: fetch /explore/api/entity-graph/{iri}, build ELK
+    // spec, run layout, store on state.graphData. Plan 08 will consume
+    // state.graphData.layout to draw the SVG.
+    //
+    // Dedupe per RESEARCH Pitfall 7: when called repeatedly with the same
+    // (iri, type) and we already have graphData, return the cached payload
+    // unless force=true (used by the Retry button in showError).
+    if (!force && iri === state.currentIri && type === state.currentType && state.graphData) {
+      return Promise.resolve(state.graphData);
+    }
+
+    showSkeleton();
+
+    // Reset state for a new selection (D-11): each selection is a fresh graph;
+    // pan/zoom resets and previously-expanded children are NOT preserved.
+    state.transform = { x: 0, y: 0, scale: 1 };
+    state.expandedIris = new Set();
+    state.graphData = null;
+
+    var url = '/explore/api/entity-graph/' + encodeURIComponent(iri);
+    return fetch(url, { headers: { 'Accept': 'application/json' } })
+      .then(function (res) {
+        if (!res.ok) {
+          // Best-effort label for the error UI; falls back to the raw IRI.
+          var errLabel = (state.graphData && state.graphData.selected && state.graphData.selected.label) || iri;
+          showError(errLabel, function () { refreshFor(iri, type, true); });
+          throw new Error('HTTP ' + res.status);
+        }
+        return res.json();
+      })
+      .then(function (data) {
+        state.graphData = data;
+        state.currentIri = iri;
+        state.currentType = type;
+        var spec = buildELKGraph(data);
+        return runLayout(spec).then(function (laid) {
+          // Stash layout on graphData so Plan 08's renderer can read it.
+          state.graphData.layout = laid;
+          return state.graphData;
+        });
+      })
+      .catch(function (err) {
+        if (window.console && window.console.error) {
+          window.console.error('[EntityGraph] refreshFor failed:', err);
+        }
+        throw err;
+      });
   }
 
   function expand(iri) {
