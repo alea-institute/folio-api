@@ -617,6 +617,36 @@
       nodesDiv.appendChild(nodeDiv);
     }
 
+    // Plan 12 Task 2: delegated click listener on the .graph-nodes container.
+    // Clicking any non-selected graph node delegates to the existing tree
+    // navigation via window.selectNodeByIri(iri); selectNode dispatches
+    // 'entity:selected' which (Task 1's _onEntitySelected) refreshes the
+    // graph rooted at the new entity (D-11). The chain is non-cyclic because
+    // _onEntitySelected dedupes on (iri, type).
+    //
+    // Self-click on the selected node is a no-op (D-15 + UI-SPEC §Interaction
+    // Contract: re-rooting only happens via the tree).
+    //
+    // The +N Children button (Plan 11 Task 1) and hover badge (Plan 11
+    // Task 2) call e.stopPropagation() before invoking expand(), so they
+    // never reach this delegated handler — but the closest() guards below
+    // are a defensive belt-and-braces in case future markup omits the stop.
+    nodesDiv.addEventListener('click', function (ev) {
+      var nodeEl = ev.target.closest && ev.target.closest('.graph-node');
+      if (!nodeEl) return;
+      if (ev.target.closest('.graph-node-children-btn')) return;
+      if (ev.target.closest('.graph-node-hover-badge')) return;
+      var iri = nodeEl.getAttribute('data-iri');
+      if (!iri) return;
+      // Self-click → no-op (D-15).
+      if (iri === state.currentIri) return;
+      if (typeof window.selectNodeByIri === 'function') {
+        window.selectNodeByIri(iri);
+      } else if (window.console && window.console.warn) {
+        window.console.warn('[EntityGraph] selectNodeByIri not available on window');
+      }
+    });
+
     xform.appendChild(svg);
     xform.appendChild(nodesDiv);
     viewport.appendChild(xform);
