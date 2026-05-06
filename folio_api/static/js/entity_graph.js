@@ -227,7 +227,36 @@
       targetIds.add(children[ci].iri);
     }
 
-    var allNodes = [selected].concat(ancestors).concat(children);
+    // Plan 11 Task 3: expanded grandchildren (and deeper) merged via
+    // graphData.expandedChildren[parentIri] = [...]. Selected node's children
+    // are already covered by the loop above (they flow into graphData.children),
+    // so skip parentIri === selected.iri to avoid duplicate edges.
+    var extraNodes = [];
+    var seenExtraIris = new Set();
+    if (graphData.expandedChildren) {
+      var parentIris = Object.keys(graphData.expandedChildren);
+      for (var pi = 0; pi < parentIris.length; pi++) {
+        var parentIri = parentIris[pi];
+        if (parentIri === selected.iri) continue;
+        var expChildren = graphData.expandedChildren[parentIri] || [];
+        for (var xi = 0; xi < expChildren.length; xi++) {
+          var xc = expChildren[xi];
+          if (!xc || !xc.iri) continue;
+          edges.push({
+            id: 'e_exp_' + parentIri + '_' + xi,
+            sources: [parentIri],
+            targets: [xc.iri],
+          });
+          targetIds.add(xc.iri);
+          if (!seenExtraIris.has(xc.iri)) {
+            seenExtraIris.add(xc.iri);
+            extraNodes.push(xc);
+          }
+        }
+      }
+    }
+
+    var allNodes = [selected].concat(ancestors).concat(children).concat(extraNodes);
     var elkChildren = allNodes.map(function (n) {
       var labelText = n.label || '';
       var w = Math.max(180, labelText.length * 7.5 + 32);
@@ -333,7 +362,13 @@
   // _mountGraph — actual DOM construction; called inside requestAnimationFrame
   // by renderGraph so that #tab-panel-graph is visible (clientWidth > 0) before
   // we measure or mount (RESEARCH.md Pitfall 6).
-  function _mountGraph(graphData) {
+  //
+  // opts.preserveZoom (Plan 11 Task 3): when true, skip the auto-fit call after
+  // mount and re-apply the existing state.transform instead. Used after
+  // expand() so the user does not lose their pan/zoom (D-26).
+  function _mountGraph(graphData, opts) {
+    opts = opts || {};
+    var preserveZoom = !!opts.preserveZoom;
     var pane = _pane();
     if (!pane) return;
     var layout = graphData && graphData.layout;
@@ -411,8 +446,9 @@
     var rootIri = _findUltimateRootIri(graphData);
     var typeMap = _buildTypeMap(graphData);
 
-    // Nodes — DIVs positioned absolutely. Markup per Plan 09 Task 1:
-    //   <div class="graph-node [graph-node-selected] [graph-node-root]"
+    // Nodes — DIVs positioned absolutely. Markup per Plan 09 Task 1 +
+    // Plan 11 Task 1/2 (children button on selected, hover badge on others):
+    //   <div class="graph-node [graph-node-selected] [graph-node-root] relative"
     //        data-iri=... style="position:absolute;left:..;top:..;w:..;h:..;cursor:..;">
     //     <div class="flex items-center gap-1 px-3 py-2 h-full bg-white border
     //                 [border-blue-600 border-2 | border-gray-300] rounded [shadow-sm]">
@@ -421,9 +457,32 @@
     //       [<span class="ml-auto text-[11px] font-semibold uppercase tracking-wide
     //                     text-gray-500 bg-gray-100 rounded px-1.5 py-0.5">ROOT</span>]
     //     </div>
+    //     [<button class="graph-node-children-btn ..."> +N Children </button>]   ← selected w/ children
+    //     [<span class="graph-node-hover-badge ..."> +N </span>]                  ← non-selected w/ children
     //   </div>
     // Label text is set via textContent on the .graph-node-label span AFTER
     // innerHTML assembly (XSS mitigation; RESEARCH.md Security row 2 / T-1-W2-03).
+    // Button/badge text are also set via textContent post-assembly for the same reason.
+    var selectedChildCount = (graphData.selected && typeof graphData.selected.child_count === 'number')
+      ? graphData.selected.child_count : 0;
+    // Build a map of IRI → child_count for non-selected nodes. Children carry
+    // child_count from the API (Plan 04). Ancestors do not — they get no badge.
+    var childCountMap = {};
+    var allChildrenForBadge = (graphData.children || []).slice();
+    if (graphData.expandedChildren) {
+      Object.keys(graphData.expandedChildren).forEach(function (parentIri) {
+        (graphData.expandedChildren[parentIri] || []).forEach(function (c) {
+          allChildrenForBadge.push(c);
+        });
+      });
+    }
+    for (var bi = 0; bi < allChildrenForBadge.length; bi++) {
+      var bc = allChildrenForBadge[bi];
+      if (bc && bc.iri && typeof bc.child_count === 'number') {
+        childCountMap[bc.iri] = bc.child_count;
+      }
+    }
+
     for (var ni = 0; ni < children.length; ni++) {
       var node = children[ni];
       if (!node) continue;
@@ -452,14 +511,50 @@
         ? '<span class="ml-auto text-[11px] font-semibold uppercase tracking-wide text-gray-500 bg-gray-100 rounded px-1.5 py-0.5">ROOT</span>'
         : '';
 
+      // Plan 11 Task 1: permanent +N Children button on selected node when
+      // child_count > 0. Rendered as a sibling of the inner styled wrapper so
+      // it sits below the label row. Click → expand(iri) with stopPropagation
+      // so it does not also fire the (future Plan 12) node-click navigation.
+      var showChildrenBtn = isSelected && selectedChildCount > 0;
+      var childrenBtnHtml = showChildrenBtn
+        ? '<button type="button" class="graph-node-children-btn mt-1 self-start ' +
+          'bg-blue-50 text-blue-700 border border-blue-200 rounded-md ' +
+          'px-2 py-1 text-sm font-semibold hover:bg-blue-100 ' +
+          'focus-visible:outline-none focus-visible:ring-2 ' +
+          'focus-visible:ring-blue-500 focus-visible:ring-offset-1"></button>'
+        : '';
+
+      // Plan 11 Task 2: hover-only +N badge for non-selected nodes that
+      // declare child_count > 0 in the payload. Visibility is owned by the
+      // CSS rule .graph-node:hover .graph-node-hover-badge { opacity: 1 }
+      // (added to styles.css alongside this change).
+      var nodeChildCount = childCountMap[node.id];
+      var showHoverBadge = !isSelected && typeof nodeChildCount === 'number' && nodeChildCount > 0;
+      var hoverBadgeHtml = showHoverBadge
+        ? '<span class="graph-node-hover-badge absolute -top-2 -right-2 ' +
+          'bg-blue-50 text-blue-700 border border-blue-200 rounded-full ' +
+          'px-2 py-0.5 text-[11px] font-semibold ' +
+          'opacity-0 pointer-events-none transition-opacity duration-100 cursor-pointer"></span>'
+        : '';
+
       var nodeDiv = document.createElement('div');
-      nodeDiv.className = outerClasses.join(' ');
+      // 'relative flex flex-col' on the outer DIV: relative anchors the
+      // absolutely-positioned hover badge; flex-col stacks the inner styled
+      // wrapper above the +N Children button (Plan 11 Task 1).
+      nodeDiv.className = outerClasses.join(' ') + ' relative flex flex-col';
       nodeDiv.setAttribute('data-iri', node.id);
       nodeDiv.style.position = 'absolute';
       nodeDiv.style.left = (node.x || 0) + 'px';
       nodeDiv.style.top = (node.y || 0) + 'px';
       nodeDiv.style.width = (node.width || 0) + 'px';
-      nodeDiv.style.height = (node.height || 0) + 'px';
+      // Height: ELK gave us a fixed 36 px row; if we're rendering the +N
+      // Children button below, drop the inline height so the column flows
+      // naturally. Otherwise pin to ELK's measurement.
+      if (showChildrenBtn) {
+        nodeDiv.style.minHeight = (node.height || 0) + 'px';
+      } else {
+        nodeDiv.style.height = (node.height || 0) + 'px';
+      }
       nodeDiv.style.cursor = isSelected ? 'default' : 'pointer';
 
       nodeDiv.innerHTML =
@@ -468,7 +563,9 @@
           '<span class="text-gray-500 flex-shrink-0">' + iconSvg + '</span>' +
           '<span class="' + labelClass + '"></span>' +
           rootBadgeHtml +
-        '</div>';
+        '</div>' +
+        childrenBtnHtml +
+        hoverBadgeHtml;
 
       var labelText = '';
       if (node.labels && node.labels.length && node.labels[0] && node.labels[0].text != null) {
@@ -477,6 +574,44 @@
       var labelSpan = nodeDiv.querySelector('.graph-node-label');
       if (labelSpan) {
         labelSpan.textContent = labelText;
+      }
+
+      // Plan 11 Task 1 wiring: set button text + aria-label via textContent /
+      // setAttribute (XSS mitigation), then bind click → expand.
+      if (showChildrenBtn) {
+        var childrenBtn = nodeDiv.querySelector('.graph-node-children-btn');
+        if (childrenBtn) {
+          childrenBtn.textContent = '+' + selectedChildCount + ' Children';
+          childrenBtn.setAttribute(
+            'aria-label',
+            'Show ' + selectedChildCount + ' children of ' + labelText
+          );
+          childrenBtn.addEventListener('click', (function (capturedIri) {
+            return function (e) {
+              e.stopPropagation();
+              expand(capturedIri);
+            };
+          })(node.id));
+        }
+      }
+
+      // Plan 11 Task 2 wiring: same pattern for the hover badge — text via
+      // textContent, click via stopPropagation + expand.
+      if (showHoverBadge) {
+        var hoverBadge = nodeDiv.querySelector('.graph-node-hover-badge');
+        if (hoverBadge) {
+          hoverBadge.textContent = '+' + nodeChildCount;
+          hoverBadge.setAttribute(
+            'aria-label',
+            'Show ' + nodeChildCount + ' children of ' + labelText
+          );
+          hoverBadge.addEventListener('click', (function (capturedIri) {
+            return function (e) {
+              e.stopPropagation();
+              expand(capturedIri);
+            };
+          })(node.id));
+        }
       }
 
       nodesDiv.appendChild(nodeDiv);
@@ -491,8 +626,16 @@
     // initial render. Defer fitGraph to the next animation frame so the
     // viewport has its real dimensions (Pitfall 6: clientWidth==0 when the
     // pane was previously display:none).
+    //
+    // Plan 11 Task 3: when preserveZoom is true (post-expand), skip fitGraph
+    // and re-apply the existing state.transform instead — the user keeps
+    // their current pan/zoom (D-26).
     wirePanZoom();
-    requestAnimationFrame(fitGraph);
+    if (preserveZoom) {
+      applyTransform();
+    } else {
+      requestAnimationFrame(fitGraph);
+    }
   }
 
   // ---------------- Pan / Zoom (Plan 10) ----------------
@@ -620,11 +763,14 @@
   // renderGraph — public-ish renderer. Defers DOM mount to the next animation
   // frame so #tab-panel-graph is un-hidden before we measure (Pitfall 6).
   // No-op if graphData has no layout (refreshFor failed before runLayout).
-  function renderGraph(graphData) {
+  //
+  // opts.preserveZoom (Plan 11): forwarded to _mountGraph; when true, the
+  // post-mount step skips fitGraph and re-applies the existing transform.
+  function renderGraph(graphData, opts) {
     if (!graphData || !graphData.layout) return;
     clearStates();
     requestAnimationFrame(function () {
-      _mountGraph(graphData);
+      _mountGraph(graphData, opts);
     });
   }
 
@@ -707,9 +853,60 @@
       });
   }
 
+  // expand(iri) — Plan 11 Task 3.
+  // Fetches the children of `iri` via /explore/api/entity-graph/{iri}?mode=children,
+  // merges them into state.graphData (selected → graphData.children for backward-
+  // compat with Plan 07's edge construction; non-selected → graphData.expandedChildren[iri]),
+  // re-runs ELK layout, and re-renders WITHOUT auto-fitting so the user's pan/zoom
+  // is preserved (D-26).
+  //
+  // Idempotent: if `iri` is already in state.expandedIris, the existing
+  // graphData is returned without a re-fetch. The +N Children button on the
+  // selected node remains visible after expansion (D-09 says it is permanent),
+  // so a double-click should resolve immediately rather than re-issue the GET.
   function expand(iri) {
-    // Plan 11 implementation.
-    return Promise.reject(new Error('EntityGraph.expand not yet implemented (Plan 11)'));
+    if (!state.graphData) {
+      return Promise.reject(new Error('No graph loaded'));
+    }
+    if (state.expandedIris.has(iri)) {
+      return Promise.resolve(state.graphData);
+    }
+
+    var url = '/explore/api/entity-graph/' + encodeURIComponent(iri) + '?mode=children';
+    return fetch(url, { headers: { 'Accept': 'application/json' } })
+      .then(function (res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
+      })
+      .then(function (data) {
+        var fetchedChildren = (data && data.children) || [];
+        // Mark expanded BEFORE the merge so a concurrent re-entry dedupes.
+        state.expandedIris.add(iri);
+        // Selected node's children flow into the legacy `children` field so
+        // buildELKGraph's existing selected→children edge loop picks them up.
+        // Other nodes' children go into expandedChildren[iri]; buildELKGraph
+        // (extended above) emits e_exp_* edges from the parent.
+        if (state.graphData.selected && iri === state.graphData.selected.iri) {
+          state.graphData.children = fetchedChildren;
+        } else {
+          state.graphData.expandedChildren = state.graphData.expandedChildren || {};
+          state.graphData.expandedChildren[iri] = fetchedChildren;
+        }
+        var spec = buildELKGraph(state.graphData);
+        return runLayout(spec).then(function (laid) {
+          state.graphData.layout = laid;
+          // Plan 11 Task 3: preserveZoom skips fitGraph so the user keeps
+          // their current pan/zoom level (D-26).
+          renderGraph(state.graphData, { preserveZoom: true });
+          return state.graphData;
+        });
+      })
+      .catch(function (err) {
+        if (window.console && window.console.error) {
+          window.console.error('[EntityGraph] expand failed for', iri, err);
+        }
+        throw err;
+      });
   }
 
   function close() {

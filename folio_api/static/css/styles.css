@@ -323,3 +323,26 @@ html, body {
         transition: none;
     }
 }
+
+/* ============================================================ */
+/* Phase 1 (milestone v1.1): hover-only +N expansion badge.     */
+/* Plan 11 — D-22: hover-only +N badge on subsequently-revealed */
+/* (and ancestor) nodes whose child_count > 0. Badge fades in   */
+/* over 120 ms when the user hovers the parent .graph-node.    */
+/* The badge starts at opacity:0 + pointer-events:none via      */
+/* Tailwind utilities in entity_graph.js; this rule only owns   */
+/* the hover override (Tailwind cannot express :hover on a      */
+/* parent affecting a child via pure utilities).                */
+/* ============================================================ */
+
+.graph-node:hover .graph-node-hover-badge {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* Reduced-motion: badge appears instantly (per UI-SPEC §Motion). */
+@media (prefers-reduced-motion: reduce) {
+    .graph-node-hover-badge {
+        transition: none;
+    }
+}
