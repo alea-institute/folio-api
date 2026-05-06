@@ -68,3 +68,37 @@
 ## Phase order
 
 Single-phase milestone — no ordering decisions needed.
+
+---
+
+## Plans
+
+**Plans:** 15 plans across 5 waves
+
+Plans:
+- [ ] 01-01-PLAN.md — pytest scaffold (tests/__init__.py, conftest.py with folio + client fixtures, smoke test)
+- [ ] 01-02-PLAN.md — vendor elkjs 0.11.1 to static/js/vendor/elk.bundled.js with SHA-384 pin
+- [ ] 01-03-PLAN.md — entity_graph.js module skeleton (window.EntityGraph public API + lazy ELK loader + entity:selected listener)
+- [ ] 01-04-PLAN.md — GET /explore/api/entity-graph/{iri:path} endpoint + 10 unit tests (TDD)
+- [ ] 01-05-PLAN.md — Tab strip in tree.html + tab-switch handler + entity:selected dispatch in unified_tree.js
+- [ ] 01-06-PLAN.md — UI state renderers (showEmpty, showSkeleton, showError) + Heroicons ICONS const + reduced-motion CSS
+- [ ] 01-07-PLAN.md — buildELKGraph + runLayout + real refreshFor (replaces Plan 03 stub)
+- [ ] 01-08-PLAN.md — renderGraph + buildEdgePath (cubic-bezier verbatim from donor); SVG + DIV-node hybrid mount
+- [ ] 01-09-PLAN.md — Visual styling (Heroicons icon prefix, selected glow, ROOT badge, edge stroke CSS)
+- [ ] 01-10-PLAN.md — Pan/zoom transform tracking + auto-fit-to-viewport (donor 9054-9118 port)
+- [ ] 01-11-PLAN.md — +N Children button on selected + hover-only +N badge on others + real expand() with merge-and-relayout
+- [ ] 01-12-PLAN.md — Lazy fetch lifecycle (onTabActivated) + graph node click → selectNodeByIri + dedupe
+- [ ] 01-13-PLAN.md — Full-screen modal with DOM-swap state preservation + ESC/scrim close + focus trap
+- [ ] 01-14-PLAN.md — Performance instrumentation (perf.mark) + manual checkpoint for < 500ms p50 budget
+- [ ] 01-15-PLAN.md — Accessibility verification (keyboard, screen reader, reduced-motion, axe-core, WCAG AA contrast)
+
+**Wave structure:**
+
+| Wave | Plans | Parallelizable |
+|------|-------|----------------|
+| 0 (Scaffold) | 01, 02, 03 | Yes — distinct files |
+| 1 (Foundations) | 04, 05, 06 | Yes — distinct files |
+| 2 (Renderer)   | 07, 08, 09 | Sequential (07→08→09 share entity_graph.js) |
+| 3 (Interaction)| 10, 11, 12, 13 | Sequential (all share entity_graph.js) |
+| 4 (Verify)     | 14, 15 | Sequential (checkpoints) |
+
