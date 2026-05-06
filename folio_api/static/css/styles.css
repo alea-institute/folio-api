@@ -271,3 +271,24 @@ html, body {
         width: 100% !important;
     }
 }
+
+/* ============================================================ */
+/* Phase 1 (milestone v1.1): Entity Graph state styles.         */
+/* Tailwind utilities cover most of the surface; this block only */
+/* contains rules that Tailwind cannot express via utilities.   */
+/* ============================================================ */
+
+/* Skeleton container — currently only a marker class for the
+   reduced-motion override below; the visible pulse comes from
+   Tailwind's animate-pulse utility on each rectangle. */
+.entity-graph-skeleton {
+    /* No properties needed; class is a hook for the @media rule. */
+}
+
+/* Reduced-motion override per UI-SPEC §Motion. */
+@media (prefers-reduced-motion: reduce) {
+    .entity-graph-skeleton .animate-pulse {
+        animation: none !important;
+        opacity: 0.7;
+    }
+}
