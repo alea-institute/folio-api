@@ -36,6 +36,116 @@
     isFullscreen: false,           // modal open? (D-07)
   };
 
+  // ---------------- Heroicons v2 outline (inline SVG markup) ----------------
+  // Verbatim path strings from tailwindlabs/heroicons master/optimized/24/outline.
+  // RESEARCH.md verified 2026-05-05.
+  // Inlined per D-19 / UI-SPEC §Iconography (no asset fetch, no CSP img-src).
+  function _svg(sizeClass, pathsHtml) {
+    return '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"' +
+           ' stroke-width="1.5" stroke="currentColor"' +
+           ' class="' + sizeClass + '" aria-hidden="true">' + pathsHtml + '</svg>';
+  }
+  function _path(d) {
+    return '<path stroke-linecap="round" stroke-linejoin="round" d="' + d + '"></path>';
+  }
+
+  var ICONS = {
+    tag: _svg('w-4 h-4',
+      _path('M9.568 3H5.25A2.25 2.25 0 0 0 3 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 0 0 5.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 0 0 9.568 3Z') +
+      _path('M6 6h.008v.008H6V6Z')
+    ),
+    link: _svg('w-4 h-4',
+      _path('M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244')
+    ),
+    arrowsPointingOut: _svg('w-5 h-5',
+      _path('M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15')
+    ),
+    xMark: _svg('w-5 h-5',
+      _path('M6 18 L18 6M6 6l12 12')
+    ),
+    arrowPath: _svg('w-4 h-4',
+      _path('M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99')
+    ),
+    share: _svg('w-16 h-16',
+      _path('M7.217 10.907a2.25 2.25 0 1 0 0 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186 9.566-5.314m-9.566 7.5 9.566 5.314m0 0a2.25 2.25 0 1 0 3.935 2.186 2.25 2.25 0 0 0-3.935-2.186Zm0-12.814a2.25 2.25 0 1 0 3.933-2.185 2.25 2.25 0 0 0-3.933 2.185Z')
+    )
+  };
+
+  // ---------------- UI state renderers (empty / skeleton / error) ----------------
+  function _pane() {
+    return document.getElementById('entity-graph-pane');
+  }
+
+  function clearStates() {
+    var pane = _pane();
+    if (!pane) return;
+    pane.innerHTML = '';
+    pane.removeAttribute('aria-busy');
+  }
+
+  function showEmpty() {
+    // GRAPH-18 + UI-SPEC §State Inventory (Empty row).
+    var pane = _pane();
+    if (!pane) return;
+    pane.removeAttribute('aria-busy');
+    pane.innerHTML =
+      '<div class="flex flex-col items-center justify-center w-full h-full p-6 gap-6 text-center">' +
+        '<div class="text-gray-300">' + ICONS.share + '</div>' +
+        '<div class="flex flex-col gap-1">' +
+          '<h3 class="text-base font-semibold text-gray-700">No entity selected</h3>' +
+          '<p class="text-sm font-normal text-gray-500">Select an entity in the tree to see its graph.</p>' +
+        '</div>' +
+      '</div>';
+  }
+
+  function showSkeleton() {
+    // GRAPH-19 + UI-SPEC §State Inventory (Loading row).
+    // 4 stacked rectangles; aria-busy=true; respects prefers-reduced-motion via CSS.
+    var pane = _pane();
+    if (!pane) return;
+    pane.setAttribute('aria-busy', 'true');
+    pane.innerHTML =
+      '<div class="flex flex-col items-center justify-center w-full h-full gap-4 entity-graph-skeleton" role="status" aria-live="polite">' +
+        '<div class="bg-gray-100 rounded h-8 w-48 animate-pulse"></div>' +
+        '<div class="bg-gray-100 rounded h-8 w-56 animate-pulse"></div>' +
+        '<div class="bg-gray-100 rounded h-8 w-48 animate-pulse"></div>' +
+        '<div class="bg-gray-100 rounded h-8 w-44 animate-pulse"></div>' +
+        '<span class="sr-only">Loading entity graph…</span>' +
+      '</div>';
+  }
+
+  function showError(entityLabel, onRetry) {
+    // GRAPH-20 + UI-SPEC §State Inventory (Error row) + Copywriting Contract.
+    var pane = _pane();
+    if (!pane) return;
+    pane.removeAttribute('aria-busy');
+    var safeLabel = (entityLabel == null) ? '' : String(entityLabel);
+    pane.innerHTML =
+      '<div class="flex items-center justify-center w-full h-full p-6">' +
+        '<div role="alert" class="bg-red-50 border border-red-200 rounded-lg p-4 max-w-md flex flex-col gap-2">' +
+          '<h3 class="text-sm font-semibold text-red-700">Couldn’t load graph</h3>' +
+          '<p class="text-sm text-red-700"></p>' +
+          '<div>' +
+            '<button type="button" class="entity-graph-retry inline-flex items-center gap-1 bg-blue-50 text-blue-700 border border-blue-200 rounded px-3 py-1 text-sm font-semibold hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2">' +
+              ICONS.arrowPath + '<span>Retry</span>' +
+            '</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    // textContent for label per RESEARCH.md Security Domain row 2 (XSS mitigation).
+    var bodyP = pane.querySelector('[role="alert"] p');
+    if (bodyP) {
+      bodyP.textContent = 'Couldn’t load graph for ' + safeLabel + '. The server returned an error.';
+    }
+    var btn = pane.querySelector('.entity-graph-retry');
+    if (btn && typeof onRetry === 'function') {
+      btn.addEventListener('click', onRetry);
+    }
+    if (window.console && window.console.error) {
+      window.console.error('[EntityGraph] failed to load graph for', safeLabel);
+    }
+  }
+
   // ---------------- Lazy ELK loader ----------------
   // Loads /static/js/vendor/elk.bundled.js exactly once on first call.
   // Per RESEARCH.md Pattern 3 + Pitfall 1 (cdnjs URL was wrong → vendor path).
@@ -118,6 +228,11 @@
     expand: expand,
     close: close,
     toggleFullscreen: toggleFullscreen,
+    showEmpty: showEmpty,
+    showSkeleton: showSkeleton,
+    showError: showError,
+    clearStates: clearStates,
+    ICONS: ICONS,
     // Read-only state reference. Later plans mutate via internal closure;
     // external readers see the current values.
     get state() { return state; },
