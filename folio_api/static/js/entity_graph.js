@@ -486,6 +486,135 @@
     xform.appendChild(nodesDiv);
     viewport.appendChild(xform);
     pane.appendChild(viewport);
+
+    // Plan 10: wire pan/zoom listeners once and auto-fit-to-viewport on
+    // initial render. Defer fitGraph to the next animation frame so the
+    // viewport has its real dimensions (Pitfall 6: clientWidth==0 when the
+    // pane was previously display:none).
+    wirePanZoom();
+    requestAnimationFrame(fitGraph);
+  }
+
+  // ---------------- Pan / Zoom (Plan 10) ----------------
+  // Donor port: folio-enrich/frontend/index.html:9054-9118 (transform tracking).
+  // Per CONTEXT D-16: drag-pan + scroll-zoom only (no buttons, no minimap).
+  // Per CONTEXT D-26 + UI-SPEC §Interaction Contract: zoom-to-fit on initial
+  // render; preserved (NOT re-fit) after expand() in Plan 11.
+  // Per UI-SPEC line 227: min zoom 0.2×, max zoom 4.0×.
+
+  // applyTransform — writes state.transform to #graph-transform's style.transform.
+  // Called after every pan/zoom mutation; safe no-op before the scaffold mounts.
+  function applyTransform() {
+    var el = document.getElementById('graph-transform');
+    if (!el) return;
+    var t = state.transform;
+    el.style.transform = 'translate(' + t.x + 'px, ' + t.y + 'px) scale(' + t.scale + ')';
+  }
+
+  // fitGraph — centers and scales the laid-out graph to fit the viewport with
+  // 16 px padding on every side. Algorithm per Plan 10 Task 1(b):
+  //   - Read viewport bounding rect; if 0×0, reschedule to next frame (Pitfall 6).
+  //   - Read graph bounds from state.graphData.layout.children.
+  //   - scale = min(available_w/gw, available_h/gh, 1) clamped to >= 0.2.
+  //   - Center via tx = (vw - gw*scale)/2; ty = (vh - gh*scale)/2.
+  function fitGraph() {
+    var vp = document.getElementById('graph-viewport');
+    if (!vp) return;
+    var rect = vp.getBoundingClientRect();
+    var vw = rect.width;
+    var vh = rect.height;
+    // Pitfall 6: pane may have been display:none — wait for layout.
+    if (vw === 0 || vh === 0) {
+      requestAnimationFrame(fitGraph);
+      return;
+    }
+
+    var gd = state.graphData;
+    var layout = gd && gd.layout;
+    if (!layout) return;
+    var laidChildren = layout.children || [];
+    var gw = 0;
+    var gh = 0;
+    for (var i = 0; i < laidChildren.length; i++) {
+      var c = laidChildren[i];
+      var rx = (c.x || 0) + (c.width || 0);
+      var ry = (c.y || 0) + (c.height || 0);
+      if (rx > gw) gw = rx;
+      if (ry > gh) gh = ry;
+    }
+    if (gw === 0 || gh === 0) return;
+
+    var pad = 16;
+    var availW = vw - 2 * pad;
+    var availH = vh - 2 * pad;
+    var scale = Math.min(availW / gw, availH / gh, 1);
+    if (scale < 0.2) scale = 0.2;
+
+    var tx = (vw - gw * scale) / 2;
+    var ty = (vh - gh * scale) / 2;
+    state.transform = { x: tx, y: ty, scale: scale };
+    applyTransform();
+  }
+
+  // _onWheel — direct port of donor pattern (RESEARCH lines 712-725).
+  // Zoom around the cursor position; clamp scale to [0.2, 4.0]; preventDefault
+  // to suppress page scroll while the cursor is over the graph viewport.
+  function _onWheel(e) {
+    e.preventDefault();
+    var vp = document.getElementById('graph-viewport');
+    if (!vp) return;
+    var rect = vp.getBoundingClientRect();
+    var mx = e.clientX - rect.left;
+    var my = e.clientY - rect.top;
+    var oldScale = state.transform.scale;
+    var zoomFactor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+    var newScale = Math.max(0.2, Math.min(4.0, oldScale * zoomFactor));
+    state.transform.x = mx - (mx - state.transform.x) * (newScale / oldScale);
+    state.transform.y = my - (my - state.transform.y) * (newScale / oldScale);
+    state.transform.scale = newScale;
+    applyTransform();
+  }
+
+  // Pan handlers — drag-to-pan with pointer-tracking on document (so the user
+  // can drag past the viewport edge without losing the gesture). Ignores
+  // clicks that originate inside .graph-node — those become node-click handlers
+  // in Plan 12.
+  var _panning = false;
+  var _panStart = { x: 0, y: 0 };
+  var _panStartXform = { x: 0, y: 0 };
+
+  function _panMouseDown(e) {
+    if (e.button !== 0) return;            // left button only
+    if (e.target && e.target.closest && e.target.closest('.graph-node')) return;
+    _panning = true;
+    _panStart = { x: e.clientX, y: e.clientY };
+    _panStartXform = { x: state.transform.x, y: state.transform.y };
+    document.addEventListener('mousemove', _panMouseMove);
+    document.addEventListener('mouseup', _panMouseUp);
+  }
+
+  function _panMouseMove(e) {
+    if (!_panning) return;
+    state.transform.x = _panStartXform.x + (e.clientX - _panStart.x);
+    state.transform.y = _panStartXform.y + (e.clientY - _panStart.y);
+    applyTransform();
+  }
+
+  function _panMouseUp() {
+    _panning = false;
+    document.removeEventListener('mousemove', _panMouseMove);
+    document.removeEventListener('mouseup', _panMouseUp);
+  }
+
+  // wirePanZoom — attaches the wheel/mousedown listeners to #graph-viewport
+  // exactly once. Idempotent via dataset.panZoomWired flag, so re-renders
+  // (Plan 11 expand) don't double-bind.
+  function wirePanZoom() {
+    var vp = document.getElementById('graph-viewport');
+    if (!vp || vp.dataset.panZoomWired === '1') return;
+    vp.dataset.panZoomWired = '1';
+    vp.addEventListener('wheel', _onWheel, { passive: false });
+    vp.addEventListener('mousedown', _panMouseDown);
   }
 
   // renderGraph — public-ish renderer. Defers DOM mount to the next animation
@@ -604,6 +733,11 @@
     showSkeleton: showSkeleton,
     showError: showError,
     clearStates: clearStates,
+    // Plan 10: pan/zoom + auto-fit. Exported so Plans 11/13 can re-call
+    // applyTransform after layout merges (preserve user's pan/zoom per D-26)
+    // and so the modal toggle can re-fit on resize.
+    applyTransform: applyTransform,
+    fitGraph: fitGraph,
     ICONS: ICONS,
     // Read-only state reference. Later plans mutate via internal closure;
     // external readers see the current values.
