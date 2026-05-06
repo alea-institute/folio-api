@@ -346,3 +346,34 @@ html, body {
         transition: none;
     }
 }
+
+/* ============================================================ */
+/* Phase 1 (milestone v1.1): Entity Graph full-screen modal.    */
+/* Plan 13 — D-07: full-screen modal with scrim + panel.        */
+/* 200 ms ease-out-quint open transition per UI-SPEC §Motion.   */
+/* The .hidden Tailwind utility (display:none) gates visibility */
+/* — when removed, the scrim and panel fade/scale in via the    */
+/* opacity + transform transitions below.                       */
+/* ============================================================ */
+
+#graph-modal-root.hidden { display: none; }
+
+#graph-modal-root #graph-modal-scrim {
+    opacity: 1;
+    transition: opacity 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+#graph-modal-root #graph-modal-panel {
+    opacity: 1;
+    transform: scale(1);
+    transition: opacity 200ms cubic-bezier(0.16, 1, 0.3, 1),
+                transform 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Reduced-motion: modal opens/closes instantly (per UI-SPEC §Motion). */
+@media (prefers-reduced-motion: reduce) {
+    #graph-modal-root #graph-modal-scrim,
+    #graph-modal-root #graph-modal-panel {
+        transition: none !important;
+    }
+}
