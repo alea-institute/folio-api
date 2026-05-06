@@ -351,6 +351,13 @@ function wireDetailTabs() {
         if (window.EntityGraph && window.EntityGraph.state) {
             window.EntityGraph.state.activeTab = detailsActive ? 'details' : 'graph';
         }
+        // Plan 13: show the Full screen button only while the Graph tab is
+        // active. Hidden on Details so the tab strip stays clean.
+        var fsBtn = document.getElementById('tab-fullscreen');
+        if (fsBtn) {
+            if (detailsActive) fsBtn.classList.add('hidden');
+            else               fsBtn.classList.remove('hidden');
+        }
         if (!detailsActive && window.EntityGraph && typeof window.EntityGraph.onTabActivated === 'function') {
             try { window.EntityGraph.onTabActivated(); } catch (err) {
                 if (window.console && window.console.error) window.console.error(err);
