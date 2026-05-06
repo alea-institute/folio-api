@@ -214,6 +214,14 @@
         <div id="detail-tabs" role="tablist" aria-label="Detail view" class="flex border-b border-gray-300 mb-3 -mx-3 px-3 bg-white sticky top-0 z-20">
             <button id="tab-details" role="tab" type="button" aria-selected="true" aria-controls="tab-panel-details" tabindex="0" class="px-4 py-2 text-sm font-semibold border-b-2 border-blue-600 bg-white text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2">Details</button>
             <button id="tab-graph" role="tab" type="button" aria-selected="false" aria-controls="tab-panel-graph" tabindex="-1" class="px-4 py-2 text-sm font-semibold border-b-2 border-transparent bg-gray-100 text-gray-600 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2">Entity Graph</button>
+            <button id="tab-fullscreen" type="button"
+                    aria-label="Open graph in full screen"
+                    class="ml-auto px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 hidden
+                           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500
+                           focus-visible:ring-offset-2 inline-flex items-center gap-1">
+                <span class="full-screen-icon-host"></span>
+                <span>Full screen</span>
+            </button>
         </div>
         <div id="tab-panels" class="flex-grow flex flex-col overflow-hidden">
             <div id="tab-panel-details" role="tabpanel" aria-labelledby="tab-details" class="flex-grow overflow-y-auto">
@@ -234,6 +242,27 @@
             </div>
         </div>
     </div>
+</div>
+
+<!-- Phase 1 (milestone v1.1) Plan 13: Full-screen graph modal shell.
+     Hidden by default. entity_graph.js DOM-swaps #entity-graph-pane into
+     #graph-modal-host on Full screen click (D-07 — preserves pan/zoom +
+     expanded children because the same DOM nodes are moved, not cloned). -->
+<div id="graph-modal-root" class="hidden fixed inset-0 z-50" aria-hidden="true">
+  <div id="graph-modal-scrim" class="fixed inset-0 bg-black/50"></div>
+  <div id="graph-modal-panel" role="dialog" aria-modal="true" aria-labelledby="graph-modal-title"
+       class="fixed inset-4 bg-white rounded-lg shadow-2xl flex flex-col">
+    <header class="h-14 border-b border-gray-200 px-4 flex items-center justify-between flex-shrink-0">
+      <h2 id="graph-modal-title" class="text-base font-semibold text-gray-900">Entity Graph</h2>
+      <button id="graph-modal-close" type="button" aria-label="Close full-screen graph"
+              class="w-8 h-8 rounded hover:bg-gray-100
+                     focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500
+                     flex items-center justify-center">
+        <span class="x-mark-icon-host"></span>
+      </button>
+    </header>
+    <div id="graph-modal-host" class="flex-grow relative"></div>
+  </div>
 </div>
 {% endblock %}
 
