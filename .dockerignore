@@ -15,6 +15,11 @@ ENV/
 .gitignore
 .github
 
+# GSD planning and Claude artifacts (not needed in deploy image)
+.planning/
+.claude/
+tests/
+
 # Exclude Docker files
 .dockerignore
 docker-compose*.yml

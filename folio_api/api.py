@@ -149,6 +149,10 @@ def initialize_folio(folio_config: Dict[str, Any], llm_config: Dict[str, Any]) -
     llm_api_key = llm_config.get(
         "api_key", os.getenv(_API_KEY_ENV_VARS.get(llm_engine, "OPENAI_API_KEY"))
     )
+    # Treat un-substituted "${ENV_VAR}" placeholders as missing so the literal
+    # string isn't passed to the LLM client as a key. Falls back to env var.
+    if isinstance(llm_api_key, str) and llm_api_key.startswith("${") and llm_api_key.endswith("}"):
+        llm_api_key = os.getenv(_API_KEY_ENV_VARS.get(llm_engine, "OPENAI_API_KEY"))
     llm_effort = llm_config.get("effort", None)
     llm_tier = llm_config.get("tier", None)
 
