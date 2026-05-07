@@ -160,5 +160,6 @@ cython_debug/
 #  and can be added to the global gitignore or merged into this file.
 .idea/
 
-# Package manager lock files
-uv.lock
+# NOTE: uv.lock is intentionally TRACKED (not ignored) so Docker / Railway
+# builds can use `uv sync --frozen` for reproducible installs. The Dockerfile
+# COPYs uv.lock and any deploy that omits it fails at build step 7.
