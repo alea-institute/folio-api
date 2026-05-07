@@ -57,6 +57,12 @@ RUN uv sync --frozen
 # Set default port
 ENV PORT=8000
 
+# Force Python stdout/stderr to flush immediately so container logs (Docker,
+# Railway, Fly, etc.) actually surface uvicorn startup output and tracebacks.
+# Without this, output is block-buffered when stdout is a pipe — the worst
+# possible default for debugging a deploy that's silently failing.
+ENV PYTHONUNBUFFERED=1
+
 # Define healthcheck
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
   CMD curl -f http://localhost:${PORT}/info/health || exit 1
