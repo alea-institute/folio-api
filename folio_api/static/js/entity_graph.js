@@ -340,9 +340,31 @@
   }
 
   // ---------------- SVG renderer (Plan 08) ----------------
+
+  // recenterSection — override ELK's spread port positions so every edge
+  // leaves from the bottom-center of its source node and arrives at the
+  // top-center of its target node (TB direction).
+  // Ported from folio-enrich/frontend/index.html lines 8977-8998.
+  function recenterSection(section, edge, nodeMap) {
+    var srcId = edge.sources && edge.sources[0];
+    var tgtId = edge.targets && edge.targets[0];
+    var src = srcId && nodeMap[srcId];
+    var tgt = tgtId && nodeMap[tgtId];
+    if (!src || !tgt) return section;
+
+    // TB (top-to-bottom) direction — folio-api always uses DOWN.
+    var srcCx = src.x + src.w / 2;
+    var tgtCx = tgt.x + tgt.w / 2;
+    var downward = (tgt.y + tgt.h / 2) >= (src.y + src.h / 2);
+    var sp = { x: srcCx, y: downward ? src.y + src.h : src.y };
+    var ep = { x: tgtCx, y: downward ? tgt.y : tgt.y + tgt.h };
+    return { startPoint: sp, endPoint: ep, bendPoints: [] };
+  }
+
   function buildEdgePath(section) {
     var sp = section.startPoint;
     var ep = section.endPoint;
+    // Cubic Bezier S-curve: 90° exit from source bottom, 90° entry at target top.
     var midY = (sp.y + ep.y) / 2;
     return 'M' + sp.x + ',' + sp.y + ' C' + sp.x + ',' + midY + ' ' + ep.x + ',' + midY + ' ' + ep.x + ',' + ep.y;
   }
@@ -569,6 +591,15 @@
     nodesDiv.style.width = maxX + 'px';
     nodesDiv.style.height = maxY + 'px';
 
+    // Build node position map for recenterSection (id → {x, y, w, h}).
+    var nodeMap = {};
+    for (var nmi = 0; nmi < children.length; nmi++) {
+      var nm = children[nmi];
+      if (nm && nm.id) {
+        nodeMap[nm.id] = { x: nm.x || 0, y: nm.y || 0, w: nm.width || 0, h: nm.height || 0 };
+      }
+    }
+
     // Edges.
     for (var ei = 0; ei < edges.length; ei++) {
       var edge = edges[ei] || {};
@@ -578,8 +609,10 @@
       for (var si = 0; si < sections.length; si++) {
         var section = sections[si];
         if (!section || !section.startPoint || !section.endPoint) continue;
+        // Override ELK's spread port positions — converge all edges at node centers.
+        var centeredSection = recenterSection(section, edge, nodeMap);
         var pathEl = document.createElementNS(SVG_NS, 'path');
-        pathEl.setAttribute('d', buildEdgePath(section));
+        pathEl.setAttribute('d', buildEdgePath(centeredSection));
         pathEl.setAttribute('class', edgeClass);
         // Arrowhead only on subClassOf hierarchy edges (not seeAlso dashed links).
         if (rel !== 'seeAlso') {
