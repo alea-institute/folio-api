@@ -56,7 +56,34 @@
     transform: { x: 0, y: 0, scale: 1 },  // pan/zoom (D-13)
     expandedIris: new Set(),       // IRIs whose children are merged in
     isFullscreen: false,           // modal open? (D-07)
+    // Last entity selected via URL hydration or 'entity:selected' event.
+    // Used by onTabActivated as a fallback when the tree DOM doesn't carry a
+    // .tree-node.selected[data-id] marker — happens when the page is loaded
+    // via a deep-link `/explore/tree?node=<iri>&type=<class|property>` and
+    // server-side hydration populates the detail card without expanding the
+    // tree to apply the selection class. Without this fallback, deep-links
+    // would render the empty state on tab activation. URL is the canonical
+    // source of truth for "what's being viewed" — same convention as the
+    // existing entity-shareable URLs.
+    lastSelectedIri: null,
+    lastSelectedType: null,
   };
+
+  // Parse `?node=<iri>&type=<class|property>` from the current URL. Returns
+  // null if either param is missing. Run at init (synchronous) — no external
+  // calls, no fetch — so deep-link state is available before the user can
+  // click the Graph tab.
+  function _readUrlSelection() {
+    try {
+      var params = new URLSearchParams(window.location.search || '');
+      var iri = params.get('node');
+      var type = params.get('type');
+      if (!iri) return null;
+      return { iri: iri, type: (type === 'property' ? 'property' : 'class') };
+    } catch (e) {
+      return null;
+    }
+  }
 
   // ---------------- Heroicons v2 outline (inline SVG markup) ----------------
   // Verbatim path strings from tailwindlabs/heroicons master/optimized/24/outline.
@@ -870,6 +897,13 @@
     // Real implementation: register the entity:selected listener.
     // Subsequent plans add tab DOM wiring, modal DOM wiring, etc.
     document.addEventListener('entity:selected', _onEntitySelected);
+    // Seed lastSelected* from the URL so onTabActivated has a fallback when
+    // the tree DOM doesn't carry .tree-node.selected (deep-link case).
+    var fromUrl = _readUrlSelection();
+    if (fromUrl) {
+      state.lastSelectedIri = fromUrl.iri;
+      state.lastSelectedType = fromUrl.type;
+    }
     // Plan 13: bind Full screen button + modal close + scrim + ESC + focus
     // trap (idempotent — safe to re-call after hot reload).
     _wireFullscreenChrome();
@@ -882,6 +916,13 @@
     // the otherwise-infinite chain of selectNodeByIri → entity:selected →
     // refreshFor → renderGraph → graph-node click → selectNodeByIri.
     var detail = (ev && ev.detail) || {};
+    // Always remember the latest selection (even when on Details tab) so a
+    // subsequent tab switch knows what to render. URL-hydrated deep-links
+    // also seed this via init() before any event fires.
+    if (detail.iri) {
+      state.lastSelectedIri = detail.iri;
+      state.lastSelectedType = detail.type || 'class';
+    }
     if (state.activeTab !== 'graph') return;
     if (!detail.iri) return;
     if (detail.iri === state.currentIri && detail.type === state.currentType) return;
@@ -903,13 +944,20 @@
   // Selector convention (per unified_tree.js selectNode at line 179):
   //   <li class="tree-node selected" data-id="…" data-type="class|property">
   function onTabActivated() {
+    // Prefer the live tree DOM marker (natural click flow). Fall back to
+    // lastSelectedIri/Type, which is seeded by URL hydration at init() and
+    // refreshed by every entity:selected event — so deep-links and any
+    // selection that didn't apply a .tree-node.selected class still work.
+    var iri = null;
+    var type = 'class';
     var sel = document.querySelector('.tree-node.selected[data-id]');
-    if (!sel) {
-      showEmpty();
-      return;
+    if (sel && sel.getAttribute('data-id')) {
+      iri = sel.getAttribute('data-id');
+      type = sel.getAttribute('data-type') || 'class';
+    } else if (state.lastSelectedIri) {
+      iri = state.lastSelectedIri;
+      type = state.lastSelectedType || 'class';
     }
-    var iri = sel.getAttribute('data-id');
-    var type = sel.getAttribute('data-type') || 'class';
     if (!iri) {
       showEmpty();
       return;
