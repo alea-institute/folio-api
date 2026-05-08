@@ -2,10 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Entity Graph
-status: planning
-stopped_at: Phase 1 UAT complete — 17/18 PASS, phase APPROVED for milestone close
-last_updated: "2026-05-06T15:25:01.385Z"
-last_activity: 2026-05-05 — Discuss Round 2–5 added 12 new decisions (D-19 through D-30) covering visual identity, scale, UI states, deep-linking; D-08/D-09 revised (default = ancestors only, +N Children opt-in)
+status: deployed-pending-pr-and-milestone-close
+stopped_at: Phase 1 deployed to Railway preview; multi-path/seeAlso bug + 50/50 tabs bug fixed and verified live; awaiting PR open and milestone close
+last_updated: "2026-05-08T14:14:00Z"
+last_activity: 2026-05-08 — Fixed Bug 1 (multi-path ancestry + rdfs:seeAlso edges) + Bug 2 (tabs 50/50 grid). Deployed to Railway, verified Maritime Negligence renders 33 nodes / 46 edges (29 subClassOf + 17 seeAlso) / 6 ROOT badges. Live at https://folio-api-preview-production.up.railway.app
+preview_url: https://folio-api-preview-production.up.railway.app
+github_branch: feat/v1.1-entity-graph (alea-institute/folio-api), 73 commits ahead of main
+must_read_first: .planning/CONTINUATION.md
 progress:
   total_phases: 1
   completed_phases: 1
@@ -25,12 +28,24 @@ See: `.planning/PROJECT.md` (updated 2026-05-05)
 
 ## Current Position
 
-Phase: 1 of 1 (Entity Graph)
-Plan: — (not yet planned)
-Status: Context gathered, ready for planning
-Last activity: 2026-05-05 — Discuss Round 2–5 added 12 new decisions (D-19 through D-30) covering visual identity, scale, UI states, deep-linking; D-08/D-09 revised (default = ancestors only, +N Children opt-in)
+Phase: 1 of 1 (Entity Graph) — **EXECUTION COMPLETE + DEPLOYED**
+Plan: 15 of 15 plans shipped, 8 post-execution commits (deploy + bugfixes)
+Status: Live on Railway preview; awaiting PR open + milestone close
+Last activity: 2026-05-08 — Bug 1 (multi-path + seeAlso) and Bug 2 (50/50 tabs) fixed and deployed. Verified Maritime Negligence renders 33 nodes / 46 edges / 6 ROOT badges live.
 
 Progress: [██████████] 100%
+
+## Read this first if you're a fresh agent
+
+`.planning/CONTINUATION.md` — single doc orienting where things are, what's done, what's next, common pitfalls. Read before doing anything else.
+
+`.planning/phases/01-entity-graph/LEARNINGS.md` — gotchas from execution + 5 Railway deploy attempts + 2 post-UAT bugs. Read before extending the entity graph or deploying any FastAPI service in this codebase.
+
+## Suggested next steps (in priority order)
+
+1. **Open PR**: `gh pr create --repo alea-institute/folio-api --base main --head feat/v1.1-entity-graph` — branch is ready for code review
+2. **Close milestone**: `/gsd-complete-milestone` — tags v1.1, archives `phases/01-entity-graph/` to `archive/v1.1/`, moves GRAPH-01..GRAPH-20 from PROJECT.md Active → Validated, resets STATE.md for next milestone
+3. **Polish at scale**: with multi-path graphs now rendering 30–50 nodes, watch for visual issues (edge crossings, node overlap on dense graphs). User may file bugs.
 
 ## Performance Metrics
 
@@ -79,6 +94,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-05-06T15:25:01.380Z
-Stopped at: Phase 1 UAT complete — 17/18 PASS, phase APPROVED for milestone close
-Resume file: .planning/phases/01-entity-graph/01-UAT.md
+Last session: 2026-05-08T14:14:00Z
+Stopped at: Bugs 1 + 2 fixed, deployed to Railway preview; awaiting PR open / milestone close
+Resume file: .planning/CONTINUATION.md (read this first)
