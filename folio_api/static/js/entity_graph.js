@@ -10,69 +10,40 @@
  * Donor: folio-enrich/frontend/index.html lines 8750-9232 (per CONTEXT.md D-01).
  * UI-SPEC: .planning/phases/01-entity-graph/01-UI-SPEC.md.
  *
- * Wiring (downstream plans):
- *   Plan 04: backend endpoint /explore/api/entity-graph/{iri:path} (consumed by refreshFor + expand).
- *   Plan 05: tab UI in tree.html + tab-switch handler emits 'entity:selected' from unified_tree.js.
- *   Plan 07: ELK layout + buildELKGraph (consumes window.ELK from loadELK).
- *   Plan 08: SVG renderer + buildEdgePath.
- *   Plan 09: visual styling (Heroicons, selected/root/hover).
- *   Plan 10: pan/zoom transform tracking.
- *   Plan 11: +N Children expansion logic.
- *   Plan 12: graph-node click → selectNodeByIri + tab activation hookup.
- *   Plan 13: full-screen modal toggle.
+ * Visual polish (v1.1 post-ship): arrowhead markers on subClassOf edges, dotted
+ * background, canvas minimap, legend bar, red branch-root borders, blue selected
+ * border + bg — ported from folio-enrich/folio-mapper reference implementations.
  */
 (function () {
   'use strict';
 
   // ---------------- Performance instrumentation (Plan 14) ----------------
-  // Lightweight User Timing marks/measures around the four phases of the
-  // tab-activation flow: fetch → layout → render. The DevTools Performance
-  // tab groups these under the "User Timing" track so a regression is easy
-  // to attribute. Per CONTEXT D-25 / GRAPH-14: the < 500 ms p50 budget is
-  // gated on `eg:total` (eg:fetch:start → eg:render:end).
-  //
-  // Defensive guards: some test environments (jsdom-without-performance,
-  // ancient browsers) stub `performance` to undefined or omit `mark`/
-  // `measure`. Wrap every call so a missing API is a silent no-op rather
-  // than a thrown error that would break the actual graph render.
   function _perfMark(name) {
     if (typeof performance === 'undefined') return;
     if (typeof performance.mark !== 'function') return;
-    try { performance.mark(name); } catch (_) { /* swallow — instrumentation must never break render */ }
+    try { performance.mark(name); } catch (_) {}
   }
   function _perfMeasure(name, startMark, endMark) {
     if (typeof performance === 'undefined') return;
     if (typeof performance.measure !== 'function') return;
-    try { performance.measure(name, startMark, endMark); } catch (_) { /* swallow */ }
+    try { performance.measure(name, startMark, endMark); } catch (_) {}
   }
 
   // ---------------- Internal state ----------------
-  // Mutated by later plans; declared here so all plans see one source of truth.
   const state = {
-    activeTab: 'details',          // 'details' | 'graph'  (D-05)
-    currentIri: null,              // last entity rendered as 'selected'
-    currentType: null,             // 'class' | 'property'
-    graphData: null,               // last fetched ancestors payload
-    transform: { x: 0, y: 0, scale: 1 },  // pan/zoom (D-13)
-    expandedIris: new Set(),       // IRIs whose children are merged in
-    isFullscreen: false,           // modal open? (D-07)
-    // Last entity selected via URL hydration or 'entity:selected' event.
-    // Used by onTabActivated as a fallback when the tree DOM doesn't carry a
-    // .tree-node.selected[data-id] marker — happens when the page is loaded
-    // via a deep-link `/explore/tree?node=<iri>&type=<class|property>` and
-    // server-side hydration populates the detail card without expanding the
-    // tree to apply the selection class. Without this fallback, deep-links
-    // would render the empty state on tab activation. URL is the canonical
-    // source of truth for "what's being viewed" — same convention as the
-    // existing entity-shareable URLs.
+    activeTab: 'details',
+    currentIri: null,
+    currentType: null,
+    graphData: null,
+    transform: { x: 0, y: 0, scale: 1 },
+    expandedIris: new Set(),
+    isFullscreen: false,
     lastSelectedIri: null,
     lastSelectedType: null,
+    // Node positions for minimap rendering: { iri: { x, y, w, h } }
+    nodePositions: {},
   };
 
-  // Parse `?node=<iri>&type=<class|property>` from the current URL. Returns
-  // null if either param is missing. Run at init (synchronous) — no external
-  // calls, no fetch — so deep-link state is available before the user can
-  // click the Graph tab.
   function _readUrlSelection() {
     try {
       var params = new URLSearchParams(window.location.search || '');
@@ -86,9 +57,6 @@
   }
 
   // ---------------- Heroicons v2 outline (inline SVG markup) ----------------
-  // Verbatim path strings from tailwindlabs/heroicons master/optimized/24/outline.
-  // RESEARCH.md verified 2026-05-05.
-  // Inlined per D-19 / UI-SPEC §Iconography (no asset fetch, no CSP img-src).
   function _svg(sizeClass, pathsHtml) {
     return '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"' +
            ' stroke-width="1.5" stroke="currentColor"' +
@@ -133,7 +101,6 @@
   }
 
   function showEmpty() {
-    // GRAPH-18 + UI-SPEC §State Inventory (Empty row).
     var pane = _pane();
     if (!pane) return;
     pane.removeAttribute('aria-busy');
@@ -148,8 +115,6 @@
   }
 
   function showSkeleton() {
-    // GRAPH-19 + UI-SPEC §State Inventory (Loading row).
-    // 4 stacked rectangles; aria-busy=true; respects prefers-reduced-motion via CSS.
     var pane = _pane();
     if (!pane) return;
     pane.setAttribute('aria-busy', 'true');
@@ -164,7 +129,6 @@
   }
 
   function showError(entityLabel, onRetry) {
-    // GRAPH-20 + UI-SPEC §State Inventory (Error row) + Copywriting Contract.
     var pane = _pane();
     if (!pane) return;
     pane.removeAttribute('aria-busy');
@@ -181,7 +145,6 @@
           '</div>' +
         '</div>' +
       '</div>';
-    // textContent for label per RESEARCH.md Security Domain row 2 (XSS mitigation).
     var bodyP = pane.querySelector('[role="alert"] p');
     if (bodyP) {
       bodyP.textContent = 'Couldn’t load graph for ' + safeLabel + '. The server returned an error.';
@@ -196,8 +159,6 @@
   }
 
   // ---------------- Lazy ELK loader ----------------
-  // Loads /static/js/vendor/elk.bundled.js exactly once on first call.
-  // Per RESEARCH.md Pattern 3 + Pitfall 1 (cdnjs URL was wrong → vendor path).
   let _elkLoadPromise = null;
   function loadELK() {
     if (typeof window.ELK !== 'undefined') {
@@ -218,7 +179,7 @@
         resolve(window.ELK);
       };
       s.onerror = function () {
-        _elkLoadPromise = null;  // allow retry on next call
+        _elkLoadPromise = null;
         reject(new Error('Failed to load /static/js/vendor/elk.bundled.js'));
       };
       document.head.appendChild(s);
@@ -227,42 +188,20 @@
   }
 
   // ---------------- ELK layout pipeline (Plan 07) ----------------
-  // buildELKGraph adapts donor folio-enrich/frontend/index.html:8809-8840
-  // to folio-api's ancestors-only payload shape.
-  //
-  // Per CONTEXT D-04 + UI-SPEC §spacing:
-  //   - direction: DOWN (top-to-bottom); ancestors above the selected node
-  //   - nodeNode: 32 px, nodeNodeBetweenLayers: 64 px, padding: 16 px
-  // Per CONTEXT D-21 + GRAPH-07: the topmost ancestor (branch_root_type === 'ultimate')
-  // is pinned to the FIRST ELK layer via elk.layered.layering.layerConstraint
-  // (donor pattern from line 8882 of index.html).
   function buildELKGraph(graphData) {
     var selected = graphData.selected;
     var children = graphData.children || [];
 
-    // Edge → relationship sidecar. ELK doesn't reliably preserve custom
-    // fields through layout(), so we key by edge id and look up at render
-    // time. Reset on every build (called fresh per refresh / expand).
     state.edgeRelationships = {};
 
-    // Set of node IRIs that are edge-targets — only non-targets may carry the
-    // FIRST layerConstraint (ELK rejects layer constraints on nodes that are
-    // already ordered by inbound edges).
     var targetIds = new Set();
     var edges = [];
 
-    // ---------------------------------------------------------------
-    // New multi-path shape (graphData.nodes[] + graphData.edges[]) —
-    // emitted by /explore/api/entity-graph since the multi-parent +
-    // seeAlso BFS landed. Falls back to the legacy linear chain
-    // (graphData.ancestors[]) when the new fields are absent.
-    // ---------------------------------------------------------------
     var apiNodes = Array.isArray(graphData.nodes) ? graphData.nodes : null;
     var apiEdges = Array.isArray(graphData.edges) ? graphData.edges : null;
     var hasNewShape = apiNodes && apiEdges;
 
     if (hasNewShape) {
-      // Server-built edges with relationship typing (subClassOf | seeAlso).
       for (var ei = 0; ei < apiEdges.length; ei++) {
         var e = apiEdges[ei] || {};
         if (!e.source || !e.target) continue;
@@ -270,14 +209,11 @@
         var rel = e.relationship || 'subClassOf';
         edges.push({ id: eid, sources: [e.source], targets: [e.target] });
         state.edgeRelationships[eid] = rel;
-        // Only subClassOf edges count for layerConstraint suppression —
-        // seeAlso is a cross-link that doesn't define hierarchy.
         if (rel === 'subClassOf') {
           targetIds.add(e.target);
         }
       }
     } else {
-      // Legacy linear chain: ancestors[i] → ancestors[i+1] → selected.
       var ancestors = graphData.ancestors || [];
       for (var i = 0; i < ancestors.length - 1; i++) {
         var lid = 'e_' + i;
@@ -301,8 +237,6 @@
       }
     }
 
-    // Selected → each loaded child (always subClassOf — these come from
-    // the children-mode endpoint or expandedChildren cache).
     for (var ci = 0; ci < children.length; ci++) {
       var cid = 'e_child_' + ci;
       edges.push({
@@ -314,10 +248,6 @@
       targetIds.add(children[ci].iri);
     }
 
-    // Plan 11 Task 3: expanded grandchildren (and deeper) merged via
-    // graphData.expandedChildren[parentIri] = [...]. Selected node's children
-    // are already covered by the loop above (they flow into graphData.children),
-    // so skip parentIri === selected.iri to avoid duplicate edges.
     var extraNodes = [];
     var seenExtraIris = new Set();
     if (graphData.expandedChildren) {
@@ -345,13 +275,9 @@
       }
     }
 
-    // Build the full node list. Prefer the new nodes[] array when present
-    // (multi-path BFS already includes selected + all ancestors); fall back
-    // to legacy [selected + ancestors] composition.
     var baseNodes;
     if (hasNewShape) {
       baseNodes = apiNodes.slice();
-      // Defensive: ensure selected is in the list.
       var hasSelected = false;
       for (var nsi = 0; nsi < baseNodes.length; nsi++) {
         if (baseNodes[nsi] && baseNodes[nsi].iri === selected.iri) {
@@ -364,7 +290,6 @@
       var legacyAncestors = graphData.ancestors || [];
       baseNodes = [selected].concat(legacyAncestors);
     }
-    // Dedupe (children + expandedChildren extras may overlap with apiNodes).
     var seenIris = {};
     var allNodes = [];
     baseNodes.concat(children).concat(extraNodes).forEach(function (n) {
@@ -382,8 +307,6 @@
         height: 36,
         labels: [{ text: labelText }],
       };
-      // Donor pattern (index.html:8882): ultimate root pinned to FIRST layer
-      // when it's not already a target of some edge.
       if (n.branch_root_type === 'ultimate' && !targetIds.has(n.iri)) {
         node.layoutOptions = { 'elk.layered.layering.layerConstraint': 'FIRST' };
       }
@@ -409,9 +332,6 @@
     };
   }
 
-  // runLayout — instantiates ELK lazily (via loadELK) and runs elk.layout(spec).
-  // Returns a Promise that resolves to the laid-out spec; children carry x/y/width/height,
-  // edges carry sections[] with startPoint/endPoint/(bendPoints).
   function runLayout(spec) {
     return loadELK().then(function (ELK) {
       var elk = new ELK();
@@ -420,10 +340,6 @@
   }
 
   // ---------------- SVG renderer (Plan 08) ----------------
-  // buildEdgePath — copied VERBATIM from donor folio-enrich/frontend/index.html:8976-8990,
-  // simplified for D-04 (direction is always DOWN). Cubic bezier S-curve guarantees
-  // 90° vertical entry/exit at both endpoints.
-  // Per CONTEXT D-02 / D-08, GRAPH-08, and RESEARCH.md lines 692-703.
   function buildEdgePath(section) {
     var sp = section.startPoint;
     var ep = section.endPoint;
@@ -434,37 +350,47 @@
   var SVG_NS = 'http://www.w3.org/2000/svg';
 
   // _findUltimateRootIris — locate ALL IRIs marked branch_root_type==='ultimate'.
-  // Returns a Set so renderGraph can stamp every FOLIO-root node with the
-  // .graph-node-root class. Multi-root is the common case once the multi-path
-  // BFS is in play (e.g., Maritime Negligence has 6 ultimate roots — Area of
-  // Law, Industry and Market, Objectives, Asset Type, Service, Forums).
   function _findUltimateRootIris(graphData) {
     var roots = new Set();
-    // Prefer the new shape (graphData.nodes) — multi-root expected.
     var nodes = (graphData && graphData.nodes) || [];
     for (var i = 0; i < nodes.length; i++) {
       if (nodes[i] && nodes[i].branch_root_type === 'ultimate' && nodes[i].iri) {
         roots.add(nodes[i].iri);
       }
     }
-    // Legacy: ancestors[] linear chain — only one ultimate (the topmost).
     var ancestors = (graphData && graphData.ancestors) || [];
     for (var j = 0; j < ancestors.length; j++) {
       if (ancestors[j] && ancestors[j].branch_root_type === 'ultimate' && ancestors[j].iri) {
         roots.add(ancestors[j].iri);
       }
     }
-    // Edge case: selected entity has no ancestors → it IS the root.
     if (graphData && graphData.selected && graphData.selected.branch_root_type === 'ultimate' && graphData.selected.iri) {
       roots.add(graphData.selected.iri);
     }
     return roots;
   }
 
-  // _buildTypeMap — derive a per-IRI 'class' | 'property' map from the
-  // graphData payload. Per Plan 09: ancestors and the selected node share the
-  // selected node's type (single-type chain in v1.1); children carry their own
-  // `type` field (Plan 04 always sets it).
+  // _findAncillaryRootIris — locate all IRIs marked branch_root_type==='ancillary'.
+  // These are intermediate ancestor branch roots — styled with gray 3px border
+  // (matching folio-enrich .graph-node.branch-root-ancillary pattern).
+  function _findAncillaryRootIris(graphData) {
+    var roots = new Set();
+    var nodes = (graphData && graphData.nodes) || [];
+    for (var i = 0; i < nodes.length; i++) {
+      if (nodes[i] && nodes[i].branch_root_type === 'ancillary' && nodes[i].iri) {
+        roots.add(nodes[i].iri);
+      }
+    }
+    var ancestors = (graphData && graphData.ancestors) || [];
+    for (var j = 0; j < ancestors.length; j++) {
+      if (ancestors[j] && ancestors[j].branch_root_type === 'ancillary' && ancestors[j].iri) {
+        roots.add(ancestors[j].iri);
+      }
+    }
+    return roots;
+  }
+
+  // _buildTypeMap — derive a per-IRI 'class' | 'property' map from graphData.
   function _buildTypeMap(graphData) {
     var map = {};
     var selectedType = (graphData && graphData.selected && graphData.selected.type) || 'class';
@@ -486,13 +412,63 @@
     return map;
   }
 
-  // _mountGraph — actual DOM construction; called inside requestAnimationFrame
-  // by renderGraph so that #tab-panel-graph is visible (clientWidth > 0) before
-  // we measure or mount (RESEARCH.md Pitfall 6).
-  //
-  // opts.preserveZoom (Plan 11 Task 3): when true, skip the auto-fit call after
-  // mount and re-apply the existing state.transform instead. Used after
-  // expand() so the user does not lose their pan/zoom (D-26).
+  // renderMinimap — draws node rectangles + current viewport rect onto the
+  // #graph-minimap canvas. Ported from folio-enrich renderMinimap() pattern.
+  // No-op if the canvas or node positions are not available.
+  function renderMinimap() {
+    var canvas = document.getElementById('graph-minimap');
+    if (!canvas) return;
+    var ctx = canvas.getContext('2d');
+    var cw = canvas.width;
+    var ch = canvas.height;
+    ctx.clearRect(0, 0, cw, ch);
+
+    var positions = Object.values(state.nodePositions || {});
+    if (positions.length === 0) return;
+
+    var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (var i = 0; i < positions.length; i++) {
+      var p = positions[i];
+      if (p.x < minX) minX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.x + p.w > maxX) maxX = p.x + p.w;
+      if (p.y + p.h > maxY) maxY = p.y + p.h;
+    }
+    var gw = (maxX - minX) || 1;
+    var gh = (maxY - minY) || 1;
+    var scale = Math.min((cw - 8) / gw, (ch - 8) / gh);
+    var ox = (cw - gw * scale) / 2;
+    var oy = (ch - gh * scale) / 2;
+
+    // Draw node rectangles (blue-tinted fill)
+    ctx.fillStyle = 'rgba(59,130,246,0.35)';
+    for (var j = 0; j < positions.length; j++) {
+      var q = positions[j];
+      ctx.fillRect(
+        ox + (q.x - minX) * scale,
+        oy + (q.y - minY) * scale,
+        Math.max(q.w * scale, 2),
+        Math.max(q.h * scale, 2)
+      );
+    }
+
+    // Draw viewport rect
+    var vp = document.getElementById('graph-viewport');
+    if (vp && state.transform) {
+      var vpW = vp.clientWidth;
+      var vpH = vp.clientHeight;
+      var t = state.transform;
+      var rx = ox + (-t.x / t.scale - minX) * scale;
+      var ry = oy + (-t.y / t.scale - minY) * scale;
+      var rw = (vpW / t.scale) * scale;
+      var rh = (vpH / t.scale) * scale;
+      ctx.strokeStyle = 'rgba(107,114,128,0.5)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(rx, ry, rw, rh);
+    }
+  }
+
+  // _mountGraph — actual DOM construction.
   function _mountGraph(graphData, opts) {
     opts = opts || {};
     var preserveZoom = !!opts.preserveZoom;
@@ -504,7 +480,7 @@
     var children = layout.children || [];
     var edges = layout.edges || [];
 
-    // Compute bounds with 16 px padding (UI-SPEC §spacing).
+    // Compute bounds with 16 px padding.
     var maxX = 0;
     var maxY = 0;
     for (var i = 0; i < children.length; i++) {
@@ -517,20 +493,26 @@
     maxX += 16;
     maxY += 16;
 
-    // Reset pane (skeleton already cleared in renderGraph, but be defensive).
     pane.innerHTML = '';
     pane.removeAttribute('aria-busy');
 
     // Scaffolding: viewport > transform > (svg + nodes-div).
     var viewport = document.createElement('div');
     viewport.id = 'graph-viewport';
-    viewport.className = 'absolute inset-0 overflow-hidden';
+    // CSS owns cursor:grab; absolute+inset fill pane minus legend bar (28px).
+    viewport.style.position = 'absolute';
+    viewport.style.top = '0';
+    viewport.style.left = '0';
+    viewport.style.right = '0';
+    viewport.style.bottom = '28px';   // reserve space for legend bar
+    viewport.style.overflow = 'hidden';
 
     var xform = document.createElement('div');
     xform.id = 'graph-transform';
     xform.className = 'absolute top-0 left-0';
     xform.style.transformOrigin = '0 0';
 
+    // SVG layer: arrowhead defs + edge paths.
     var svg = document.createElementNS(SVG_NS, 'svg');
     svg.setAttribute('id', 'graph-svg');
     svg.setAttribute('width', String(maxX));
@@ -540,17 +522,27 @@
     svg.style.top = '0';
     svg.style.left = '0';
     svg.style.pointerEvents = 'none';
+    svg.style.overflow = 'visible';
 
-    // Plan 15 (Accessibility): expose the SVG as a labeled image to assistive
-    // tech per UI-SPEC §Interaction Contract row "Graph SVG". Format:
-    //   "Entity graph for {selected.label}, rooted at {topmost-ancestor.label},
-    //    showing {N} nodes"
-    // - rootLabel falls back to selected.label when there are no ancestors
-    //   (selected entity is itself a root, e.g. owl:Thing's direct child).
-    // - nodeCount comes from the laid-out children array (the canonical render
-    //   source). This is updated on every render because _mountGraph is the
-    //   sole entry point for SVG (re)construction (clearStates wipes the pane
-    //   on every refresh).
+    // Arrowhead marker for subClassOf edges — ported from folio-enrich.
+    // Color: blue-500 (#3b82f6) matching .graph-edge stroke.
+    var defs = document.createElementNS(SVG_NS, 'defs');
+    var marker = document.createElementNS(SVG_NS, 'marker');
+    marker.setAttribute('id', 'arrow-sub');
+    marker.setAttribute('viewBox', '0 0 10 10');
+    marker.setAttribute('refX', '9');
+    marker.setAttribute('refY', '5');
+    marker.setAttribute('markerWidth', '7');
+    marker.setAttribute('markerHeight', '7');
+    marker.setAttribute('orient', 'auto');
+    var arrowPath = document.createElementNS(SVG_NS, 'path');
+    arrowPath.setAttribute('d', 'M0 0 L10 5 L0 10z');
+    arrowPath.setAttribute('fill', '#3b82f6');
+    marker.appendChild(arrowPath);
+    defs.appendChild(marker);
+    svg.appendChild(defs);
+
+    // Accessibility label.
     svg.setAttribute('role', 'img');
     var _selectedLabel = (graphData.selected && graphData.selected.label) || '';
     var _rootLabel = '';
@@ -577,54 +569,35 @@
     nodesDiv.style.width = maxX + 'px';
     nodesDiv.style.height = maxY + 'px';
 
-    // Edges — defensive `(edge.sections || []).forEach` guard per Pitfall 5.
-    // Per Plan 09 Task 2: edges rely on the .graph-edge CSS rule (stroke,
-    // fill, stroke-width). Inline stroke attributes removed so the rule can
-    // own the styling.
+    // Edges.
     for (var ei = 0; ei < edges.length; ei++) {
       var edge = edges[ei] || {};
       var sections = edge.sections || [];
-      // Look up the relationship for this edge from the sidecar map built
-      // during buildELKGraph. Defaults to subClassOf so missing entries
-      // render as solid hierarchy edges (safe fallback).
       var rel = (state.edgeRelationships && state.edgeRelationships[edge.id]) || 'subClassOf';
       var edgeClass = 'graph-edge' + (rel === 'seeAlso' ? ' graph-edge--seealso' : '');
       for (var si = 0; si < sections.length; si++) {
         var section = sections[si];
         if (!section || !section.startPoint || !section.endPoint) continue;
-        var path = document.createElementNS(SVG_NS, 'path');
-        path.setAttribute('d', buildEdgePath(section));
-        path.setAttribute('class', edgeClass);
-        edgesGroup.appendChild(path);
+        var pathEl = document.createElementNS(SVG_NS, 'path');
+        pathEl.setAttribute('d', buildEdgePath(section));
+        pathEl.setAttribute('class', edgeClass);
+        // Arrowhead only on subClassOf hierarchy edges (not seeAlso dashed links).
+        if (rel !== 'seeAlso') {
+          pathEl.setAttribute('marker-end', 'url(#arrow-sub)');
+        }
+        edgesGroup.appendChild(pathEl);
       }
     }
 
     // Selected + root markers.
     var selectedIri = (graphData.selected && graphData.selected.iri) || null;
-    var rootIris = _findUltimateRootIris(graphData);
+    var ultimateRootIris = _findUltimateRootIris(graphData);
+    var ancillaryRootIris = _findAncillaryRootIris(graphData);
     var typeMap = _buildTypeMap(graphData);
 
-    // Nodes — DIVs positioned absolutely. Markup per Plan 09 Task 1 +
-    // Plan 11 Task 1/2 (children button on selected, hover badge on others):
-    //   <div class="graph-node [graph-node-selected] [graph-node-root] relative"
-    //        data-iri=... style="position:absolute;left:..;top:..;w:..;h:..;cursor:..;">
-    //     <div class="flex items-center gap-1 px-3 py-2 h-full bg-white border
-    //                 [border-blue-600 border-2 | border-gray-300] rounded [shadow-sm]">
-    //       <span class="text-gray-500 flex-shrink-0">{ICONS.tag|link}</span>
-    //       <span class="graph-node-label {label classes}"></span>
-    //       [<span class="ml-auto text-[11px] font-semibold uppercase tracking-wide
-    //                     text-gray-500 bg-gray-100 rounded px-1.5 py-0.5">ROOT</span>]
-    //     </div>
-    //     [<button class="graph-node-children-btn ..."> +N Children </button>]   ← selected w/ children
-    //     [<span class="graph-node-hover-badge ..."> +N </span>]                  ← non-selected w/ children
-    //   </div>
-    // Label text is set via textContent on the .graph-node-label span AFTER
-    // innerHTML assembly (XSS mitigation; RESEARCH.md Security row 2 / T-1-W2-03).
-    // Button/badge text are also set via textContent post-assembly for the same reason.
     var selectedChildCount = (graphData.selected && typeof graphData.selected.child_count === 'number')
       ? graphData.selected.child_count : 0;
-    // Build a map of IRI → child_count for non-selected nodes. Children carry
-    // child_count from the API (Plan 04). Ancestors do not — they get no badge.
+
     var childCountMap = {};
     var allChildrenForBadge = (graphData.children || []).slice();
     if (graphData.expandedChildren) {
@@ -641,73 +614,75 @@
       }
     }
 
+    // Reset node positions for minimap.
+    state.nodePositions = {};
+
     for (var ni = 0; ni < children.length; ni++) {
       var node = children[ni];
       if (!node) continue;
       var isSelected = !!(selectedIri && node.id === selectedIri);
-      var isRoot = !!(rootIris && rootIris.has && rootIris.has(node.id));
+      var isUltimateRoot = !!(ultimateRootIris && ultimateRootIris.has && ultimateRootIris.has(node.id));
+      var isAncillaryRoot = !!(ancillaryRootIris && ancillaryRootIris.has && ancillaryRootIris.has(node.id));
+      var isRoot = isUltimateRoot || isAncillaryRoot;
       var nodeType = typeMap[node.id] || 'class';
       var iconSvg = nodeType === 'property' ? ICONS.link : ICONS.tag;
 
+      // Store position for minimap.
+      state.nodePositions[node.id] = {
+        x: node.x || 0,
+        y: node.y || 0,
+        w: node.width || 0,
+        h: node.height || 0,
+      };
+
+      // Outer classes drive CSS-based border/bg overrides.
       var outerClasses = ['graph-node'];
       if (isSelected) outerClasses.push('graph-node-selected');
-      if (isRoot) outerClasses.push('graph-node-root');
+      if (isUltimateRoot) outerClasses.push('graph-node-root');
+      if (isAncillaryRoot && !isUltimateRoot) outerClasses.push('graph-node-ancillary');
 
-      var borderClass = isSelected ? 'border-blue-600 border-2' : 'border-gray-300';
-      var rootInnerClass = isRoot ? 'shadow-sm' : '';
-
+      // Label weight: bold for roots/selected, normal for others.
       var labelClass;
       if (isRoot) {
-        labelClass = 'graph-node-label text-base font-semibold leading-tight text-gray-900';
+        labelClass = 'graph-node-label text-xs font-bold leading-tight text-gray-900';
       } else if (isSelected) {
-        labelClass = 'graph-node-label text-sm font-semibold text-gray-900';
+        labelClass = 'graph-node-label text-xs font-semibold text-blue-900';
       } else {
-        labelClass = 'graph-node-label text-sm font-normal text-gray-700';
+        labelClass = 'graph-node-label text-xs font-normal text-gray-700';
       }
 
-      var rootBadgeHtml = isRoot
-        ? '<span class="ml-auto text-[11px] font-semibold uppercase tracking-wide text-gray-500 bg-gray-100 rounded px-1.5 py-0.5">ROOT</span>'
+      // Root label badge — only for ultimate roots (matches folio-enrich "ROOT" badge style).
+      var rootBadgeHtml = isUltimateRoot
+        ? '<span class="ml-auto flex-shrink-0 text-[10px] font-bold uppercase tracking-wide text-red-600 bg-red-50 border border-red-200 rounded px-1 py-0.5 ml-1">ROOT</span>'
         : '';
 
-      // Plan 11 Task 1: permanent +N Children button on selected node when
-      // child_count > 0. Rendered as a sibling of the inner styled wrapper so
-      // it sits below the label row. Click → expand(iri) with stopPropagation
-      // so it does not also fire the (future Plan 12) node-click navigation.
+      // +N Children button on selected node.
       var showChildrenBtn = isSelected && selectedChildCount > 0;
       var childrenBtnHtml = showChildrenBtn
         ? '<button type="button" class="graph-node-children-btn mt-1 self-start ' +
           'bg-blue-50 text-blue-700 border border-blue-200 rounded-md ' +
-          'px-2 py-1 text-sm font-semibold hover:bg-blue-100 ' +
+          'px-2 py-1 text-xs font-semibold hover:bg-blue-100 ' +
           'focus-visible:outline-none focus-visible:ring-2 ' +
           'focus-visible:ring-blue-500 focus-visible:ring-offset-1"></button>'
         : '';
 
-      // Plan 11 Task 2: hover-only +N badge for non-selected nodes that
-      // declare child_count > 0 in the payload. Visibility is owned by the
-      // CSS rule .graph-node:hover .graph-node-hover-badge { opacity: 1 }
-      // (added to styles.css alongside this change).
+      // Hover-only +N badge for non-selected nodes with children.
       var nodeChildCount = childCountMap[node.id];
       var showHoverBadge = !isSelected && typeof nodeChildCount === 'number' && nodeChildCount > 0;
       var hoverBadgeHtml = showHoverBadge
         ? '<span class="graph-node-hover-badge absolute -top-2 -right-2 ' +
           'bg-blue-50 text-blue-700 border border-blue-200 rounded-full ' +
-          'px-2 py-0.5 text-[11px] font-semibold ' +
+          'px-1.5 py-0.5 text-[10px] font-bold ' +
           'opacity-0 pointer-events-none transition-opacity duration-100 cursor-pointer"></span>'
         : '';
 
       var nodeDiv = document.createElement('div');
-      // 'relative flex flex-col' on the outer DIV: relative anchors the
-      // absolutely-positioned hover badge; flex-col stacks the inner styled
-      // wrapper above the +N Children button (Plan 11 Task 1).
       nodeDiv.className = outerClasses.join(' ') + ' relative flex flex-col';
       nodeDiv.setAttribute('data-iri', node.id);
       nodeDiv.style.position = 'absolute';
       nodeDiv.style.left = (node.x || 0) + 'px';
       nodeDiv.style.top = (node.y || 0) + 'px';
       nodeDiv.style.width = (node.width || 0) + 'px';
-      // Height: ELK gave us a fixed 36 px row; if we're rendering the +N
-      // Children button below, drop the inline height so the column flows
-      // naturally. Otherwise pin to ELK's measurement.
       if (showChildrenBtn) {
         nodeDiv.style.minHeight = (node.height || 0) + 'px';
       } else {
@@ -715,11 +690,11 @@
       }
       nodeDiv.style.cursor = isSelected ? 'default' : 'pointer';
 
+      // Inner wrapper: rounded-lg for polished look; border/bg overridden by CSS class rules.
       nodeDiv.innerHTML =
-        '<div class="flex items-center gap-1 px-3 py-2 h-full bg-white border ' +
-        borderClass + ' rounded ' + rootInnerClass + '">' +
-          '<span class="text-gray-500 flex-shrink-0">' + iconSvg + '</span>' +
-          '<span class="' + labelClass + '"></span>' +
+        '<div class="flex items-center gap-1 px-2 py-1.5 h-full bg-white border border-gray-300 rounded-lg">' +
+          '<span class="text-gray-400 flex-shrink-0">' + iconSvg + '</span>' +
+          '<span class="' + labelClass + ' truncate"></span>' +
           rootBadgeHtml +
         '</div>' +
         childrenBtnHtml +
@@ -732,10 +707,9 @@
       var labelSpan = nodeDiv.querySelector('.graph-node-label');
       if (labelSpan) {
         labelSpan.textContent = labelText;
+        labelSpan.title = labelText;  // tooltip for truncated labels
       }
 
-      // Plan 11 Task 1 wiring: set button text + aria-label via textContent /
-      // setAttribute (XSS mitigation), then bind click → expand.
       if (showChildrenBtn) {
         var childrenBtn = nodeDiv.querySelector('.graph-node-children-btn');
         if (childrenBtn) {
@@ -753,8 +727,6 @@
         }
       }
 
-      // Plan 11 Task 2 wiring: same pattern for the hover badge — text via
-      // textContent, click via stopPropagation + expand.
       if (showHoverBadge) {
         var hoverBadge = nodeDiv.querySelector('.graph-node-hover-badge');
         if (hoverBadge) {
@@ -775,20 +747,7 @@
       nodesDiv.appendChild(nodeDiv);
     }
 
-    // Plan 12 Task 2: delegated click listener on the .graph-nodes container.
-    // Clicking any non-selected graph node delegates to the existing tree
-    // navigation via window.selectNodeByIri(iri); selectNode dispatches
-    // 'entity:selected' which (Task 1's _onEntitySelected) refreshes the
-    // graph rooted at the new entity (D-11). The chain is non-cyclic because
-    // _onEntitySelected dedupes on (iri, type).
-    //
-    // Self-click on the selected node is a no-op (D-15 + UI-SPEC §Interaction
-    // Contract: re-rooting only happens via the tree).
-    //
-    // The +N Children button (Plan 11 Task 1) and hover badge (Plan 11
-    // Task 2) call e.stopPropagation() before invoking expand(), so they
-    // never reach this delegated handler — but the closest() guards below
-    // are a defensive belt-and-braces in case future markup omits the stop.
+    // Delegated click listener for graph node navigation.
     nodesDiv.addEventListener('click', function (ev) {
       var nodeEl = ev.target.closest && ev.target.closest('.graph-node');
       if (!nodeEl) return;
@@ -796,7 +755,6 @@
       if (ev.target.closest('.graph-node-hover-badge')) return;
       var iri = nodeEl.getAttribute('data-iri');
       if (!iri) return;
-      // Self-click → no-op (D-15).
       if (iri === state.currentIri) return;
       if (typeof window.selectNodeByIri === 'function') {
         window.selectNodeByIri(iri);
@@ -808,63 +766,80 @@
     xform.appendChild(svg);
     xform.appendChild(nodesDiv);
     viewport.appendChild(xform);
+
+    // Minimap canvas (bottom-right corner, above legend bar).
+    var minimapCanvas = document.createElement('canvas');
+    minimapCanvas.id = 'graph-minimap';
+    minimapCanvas.width = 140;
+    minimapCanvas.height = 90;
+    minimapCanvas.setAttribute('aria-hidden', 'true');
+    viewport.appendChild(minimapCanvas);
+
     pane.appendChild(viewport);
 
-    // Plan 10: wire pan/zoom listeners once and auto-fit-to-viewport on
-    // initial render. Defer fitGraph to the next animation frame so the
-    // viewport has its real dimensions (Pitfall 6: clientWidth==0 when the
-    // pane was previously display:none).
-    //
-    // Plan 11 Task 3: when preserveZoom is true (post-expand), skip fitGraph
-    // and re-apply the existing state.transform instead — the user keeps
-    // their current pan/zoom (D-26).
+    // Legend bar — ported from folio-enrich graph-modal-legend + folio-mapper legend footer.
+    var legend = document.createElement('div');
+    legend.id = 'graph-legend';
+    legend.innerHTML =
+      '<div class="graph-legend-item">' +
+        '<svg width="22" height="10" aria-hidden="true" style="flex-shrink:0">' +
+          '<line x1="0" y1="5" x2="15" y2="5" stroke="#3b82f6" stroke-width="2"/>' +
+          '<polygon points="13,2 20,5 13,8" fill="#3b82f6"/>' +
+        '</svg>' +
+        '<span>subClassOf</span>' +
+      '</div>' +
+      '<div class="graph-legend-item">' +
+        '<svg width="22" height="10" aria-hidden="true" style="flex-shrink:0">' +
+          '<line x1="0" y1="5" x2="22" y2="5" stroke="#8b5cf6" stroke-width="1.5" stroke-dasharray="4,2"/>' +
+        '</svg>' +
+        '<span>seeAlso</span>' +
+      '</div>' +
+      '<div class="graph-legend-item">' +
+        '<span style="display:inline-block;width:10px;height:10px;border-radius:2px;border:2px solid #3b82f6;background:#eff6ff;flex-shrink:0"></span>' +
+        '<span>Focus</span>' +
+      '</div>' +
+      '<div class="graph-legend-item">' +
+        '<span style="display:inline-block;width:10px;height:10px;border-radius:2px;border:3px solid #ef4444;background:#fef2f2;flex-shrink:0"></span>' +
+        '<span>Ultimate Ancestor</span>' +
+      '</div>' +
+      '<div class="graph-legend-item">' +
+        '<span style="display:inline-block;width:10px;height:10px;border-radius:2px;border:3px solid #6b7280;background:#f9fafb;flex-shrink:0"></span>' +
+        '<span>Ancillary Ancestor</span>' +
+      '</div>' +
+      '<span class="graph-legend-hint">Click to expand • Double-click to navigate • Scroll to zoom • Drag to pan</span>';
+    pane.appendChild(legend);
+
     wirePanZoom();
     if (preserveZoom) {
       applyTransform();
     } else {
       requestAnimationFrame(fitGraph);
     }
+    // Initial minimap render (deferred so layout is measured).
+    requestAnimationFrame(renderMinimap);
 
-    // Plan 14 boundary 4: SVG + nodes mounted, fit queued for next frame.
-    // Render phase ends here; fit-to-viewport runs on the next animation
-    // frame and is excluded from eg:render to keep the measurement focused
-    // on DOM construction work attributable to this code path. The eg:total
-    // measure spans eg:fetch:start (refreshFor entry) → eg:render:end
-    // (mount complete) — this is what the < 500 ms p50 budget gates on.
     _perfMark('eg:render:end');
     _perfMeasure('eg:render', 'eg:render:start', 'eg:render:end');
     _perfMeasure('eg:total', 'eg:fetch:start', 'eg:render:end');
   }
 
   // ---------------- Pan / Zoom (Plan 10) ----------------
-  // Donor port: folio-enrich/frontend/index.html:9054-9118 (transform tracking).
-  // Per CONTEXT D-16: drag-pan + scroll-zoom only (no buttons, no minimap).
-  // Per CONTEXT D-26 + UI-SPEC §Interaction Contract: zoom-to-fit on initial
-  // render; preserved (NOT re-fit) after expand() in Plan 11.
-  // Per UI-SPEC line 227: min zoom 0.2×, max zoom 4.0×.
 
-  // applyTransform — writes state.transform to #graph-transform's style.transform.
-  // Called after every pan/zoom mutation; safe no-op before the scaffold mounts.
   function applyTransform() {
     var el = document.getElementById('graph-transform');
     if (!el) return;
     var t = state.transform;
     el.style.transform = 'translate(' + t.x + 'px, ' + t.y + 'px) scale(' + t.scale + ')';
+    // Re-render minimap on every transform change so viewport rect stays current.
+    renderMinimap();
   }
 
-  // fitGraph — centers and scales the laid-out graph to fit the viewport with
-  // 16 px padding on every side. Algorithm per Plan 10 Task 1(b):
-  //   - Read viewport bounding rect; if 0×0, reschedule to next frame (Pitfall 6).
-  //   - Read graph bounds from state.graphData.layout.children.
-  //   - scale = min(available_w/gw, available_h/gh, 1) clamped to >= 0.2.
-  //   - Center via tx = (vw - gw*scale)/2; ty = (vh - gh*scale)/2.
   function fitGraph() {
     var vp = document.getElementById('graph-viewport');
     if (!vp) return;
     var rect = vp.getBoundingClientRect();
     var vw = rect.width;
     var vh = rect.height;
-    // Pitfall 6: pane may have been display:none — wait for layout.
     if (vw === 0 || vh === 0) {
       requestAnimationFrame(fitGraph);
       return;
@@ -897,9 +872,6 @@
     applyTransform();
   }
 
-  // _onWheel — direct port of donor pattern (RESEARCH lines 712-725).
-  // Zoom around the cursor position; clamp scale to [0.2, 4.0]; preventDefault
-  // to suppress page scroll while the cursor is over the graph viewport.
   function _onWheel(e) {
     e.preventDefault();
     var vp = document.getElementById('graph-viewport');
@@ -916,20 +888,18 @@
     applyTransform();
   }
 
-  // Pan handlers — drag-to-pan with pointer-tracking on document (so the user
-  // can drag past the viewport edge without losing the gesture). Ignores
-  // clicks that originate inside .graph-node — those become node-click handlers
-  // in Plan 12.
   var _panning = false;
   var _panStart = { x: 0, y: 0 };
   var _panStartXform = { x: 0, y: 0 };
 
   function _panMouseDown(e) {
-    if (e.button !== 0) return;            // left button only
+    if (e.button !== 0) return;
     if (e.target && e.target.closest && e.target.closest('.graph-node')) return;
     _panning = true;
     _panStart = { x: e.clientX, y: e.clientY };
     _panStartXform = { x: state.transform.x, y: state.transform.y };
+    var vp = document.getElementById('graph-viewport');
+    if (vp) vp.classList.add('graph-grabbing');
     document.addEventListener('mousemove', _panMouseMove);
     document.addEventListener('mouseup', _panMouseUp);
   }
@@ -943,13 +913,12 @@
 
   function _panMouseUp() {
     _panning = false;
+    var vp = document.getElementById('graph-viewport');
+    if (vp) vp.classList.remove('graph-grabbing');
     document.removeEventListener('mousemove', _panMouseMove);
     document.removeEventListener('mouseup', _panMouseUp);
   }
 
-  // wirePanZoom — attaches the wheel/mousedown listeners to #graph-viewport
-  // exactly once. Idempotent via dataset.panZoomWired flag, so re-renders
-  // (Plan 11 expand) don't double-bind.
   function wirePanZoom() {
     var vp = document.getElementById('graph-viewport');
     if (!vp || vp.dataset.panZoomWired === '1') return;
@@ -958,12 +927,6 @@
     vp.addEventListener('mousedown', _panMouseDown);
   }
 
-  // renderGraph — public-ish renderer. Defers DOM mount to the next animation
-  // frame so #tab-panel-graph is un-hidden before we measure (Pitfall 6).
-  // No-op if graphData has no layout (refreshFor failed before runLayout).
-  //
-  // opts.preserveZoom (Plan 11): forwarded to _mountGraph; when true, the
-  // post-mount step skips fitGraph and re-applies the existing transform.
   function renderGraph(graphData, opts) {
     if (!graphData || !graphData.layout) return;
     clearStates();
@@ -972,36 +935,20 @@
     });
   }
 
-  // ---------------- Public API stubs ----------------
-  // Each method is a stub that throws until the relevant plan implements it.
-  // The throws make accidental early-call regressions loud during plan execution.
+  // ---------------- Public API ----------------
 
   function init() {
-    // Real implementation: register the entity:selected listener.
-    // Subsequent plans add tab DOM wiring, modal DOM wiring, etc.
     document.addEventListener('entity:selected', _onEntitySelected);
-    // Seed lastSelected* from the URL so onTabActivated has a fallback when
-    // the tree DOM doesn't carry .tree-node.selected (deep-link case).
     var fromUrl = _readUrlSelection();
     if (fromUrl) {
       state.lastSelectedIri = fromUrl.iri;
       state.lastSelectedType = fromUrl.type;
     }
-    // Plan 13: bind Full screen button + modal close + scrim + ESC + focus
-    // trap (idempotent — safe to re-call after hot reload).
     _wireFullscreenChrome();
   }
 
   function _onEntitySelected(ev) {
-    // Plan 12 Task 1: real handler. Lazy-fetch (D-10): only refresh while the
-    // Graph tab is active. Dedupe (RESEARCH Pitfall 7 / T-1-W3-05): no-op if
-    // the iri/type already matches the rendered graph — this is what breaks
-    // the otherwise-infinite chain of selectNodeByIri → entity:selected →
-    // refreshFor → renderGraph → graph-node click → selectNodeByIri.
     var detail = (ev && ev.detail) || {};
-    // Always remember the latest selection (even when on Details tab) so a
-    // subsequent tab switch knows what to render. URL-hydrated deep-links
-    // also seed this via init() before any event fires.
     if (detail.iri) {
       state.lastSelectedIri = detail.iri;
       state.lastSelectedType = detail.type || 'class';
@@ -1016,21 +963,7 @@
     });
   }
 
-  // onTabActivated — called by unified_tree.js wireDetailTabs() when the user
-  // switches to the Entity Graph tab (D-05 / D-10 lazy fetch). Reads the
-  // currently-selected tree LI and either:
-  //   (a) renders the empty-state if nothing is selected (GRAPH-18),
-  //   (b) no-ops if the graph for that IRI is already loaded (preserves
-  //       pan/zoom on tab toggling — the user expects their view back), or
-  //   (c) calls refreshFor(iri, type) for first-time activation / new entity.
-  //
-  // Selector convention (per unified_tree.js selectNode at line 179):
-  //   <li class="tree-node selected" data-id="…" data-type="class|property">
   function onTabActivated() {
-    // Prefer the live tree DOM marker (natural click flow). Fall back to
-    // lastSelectedIri/Type, which is seeded by URL hydration at init() and
-    // refreshed by every entity:selected event — so deep-links and any
-    // selection that didn't apply a .tree-node.selected class still work.
     var iri = null;
     var type = 'class';
     var sel = document.querySelector('.tree-node.selected[data-id]');
@@ -1045,7 +978,6 @@
       showEmpty();
       return;
     }
-    // Already-loaded same graph → no-op (pan/zoom preserved per D-26).
     if (state.currentIri === iri && state.graphData && state.graphData.layout) {
       return;
     }
@@ -1057,25 +989,13 @@
   }
 
   function refreshFor(iri, type, force) {
-    // Plan 07 implementation: fetch /explore/api/entity-graph/{iri}, build ELK
-    // spec, run layout, store on state.graphData. Plan 08 will consume
-    // state.graphData.layout to draw the SVG.
-    //
-    // Dedupe per RESEARCH Pitfall 7: when called repeatedly with the same
-    // (iri, type) and we already have graphData, return the cached payload
-    // unless force=true (used by the Retry button in showError).
     if (!force && iri === state.currentIri && type === state.currentType && state.graphData) {
       return Promise.resolve(state.graphData);
     }
 
-    // Plan 14 boundary 1: mark the start of the fetch phase. Total time
-    // (eg:total) bridges this mark to eg:render:end inside _mountGraph.
     _perfMark('eg:fetch:start');
-
     showSkeleton();
 
-    // Reset state for a new selection (D-11): each selection is a fresh graph;
-    // pan/zoom resets and previously-expanded children are NOT preserved.
     state.transform = { x: 0, y: 0, scale: 1 };
     state.expandedIris = new Set();
     state.graphData = null;
@@ -1084,7 +1004,6 @@
     return fetch(url, { headers: { 'Accept': 'application/json' } })
       .then(function (res) {
         if (!res.ok) {
-          // Best-effort label for the error UI; falls back to the raw IRI.
           var errLabel = (state.graphData && state.graphData.selected && state.graphData.selected.label) || iri;
           showError(errLabel, function () { refreshFor(iri, type, true); });
           throw new Error('HTTP ' + res.status);
@@ -1092,7 +1011,6 @@
         return res.json();
       })
       .then(function (data) {
-        // Plan 14 boundary 2: fetch + JSON parse complete; pivot to ELK layout.
         _perfMark('eg:fetch:end');
         _perfMeasure('eg:fetch', 'eg:fetch:start', 'eg:fetch:end');
         _perfMark('eg:layout:start');
@@ -1102,16 +1020,10 @@
         state.currentType = type;
         var spec = buildELKGraph(data);
         return runLayout(spec).then(function (laid) {
-          // Stash layout on graphData so Plan 08's renderer can read it.
           state.graphData.layout = laid;
-          // Plan 14 boundary 3: ELK layout resolved; pivot to DOM render.
           _perfMark('eg:layout:end');
           _perfMeasure('eg:layout', 'eg:layout:start', 'eg:layout:end');
           _perfMark('eg:render:start');
-          // Plan 08: mount the SVG + DIV scaffold. renderGraph defers the DOM
-          // work to requestAnimationFrame, so the Promise still resolves
-          // synchronously after the layout completes (callers can chain
-          // post-render work via the resolved graphData).
           renderGraph(state.graphData);
           return state.graphData;
         });
@@ -1124,17 +1036,6 @@
       });
   }
 
-  // expand(iri) — Plan 11 Task 3.
-  // Fetches the children of `iri` via /explore/api/entity-graph/{iri}?mode=children,
-  // merges them into state.graphData (selected → graphData.children for backward-
-  // compat with Plan 07's edge construction; non-selected → graphData.expandedChildren[iri]),
-  // re-runs ELK layout, and re-renders WITHOUT auto-fitting so the user's pan/zoom
-  // is preserved (D-26).
-  //
-  // Idempotent: if `iri` is already in state.expandedIris, the existing
-  // graphData is returned without a re-fetch. The +N Children button on the
-  // selected node remains visible after expansion (D-09 says it is permanent),
-  // so a double-click should resolve immediately rather than re-issue the GET.
   function expand(iri) {
     if (!state.graphData) {
       return Promise.reject(new Error('No graph loaded'));
@@ -1151,12 +1052,7 @@
       })
       .then(function (data) {
         var fetchedChildren = (data && data.children) || [];
-        // Mark expanded BEFORE the merge so a concurrent re-entry dedupes.
         state.expandedIris.add(iri);
-        // Selected node's children flow into the legacy `children` field so
-        // buildELKGraph's existing selected→children edge loop picks them up.
-        // Other nodes' children go into expandedChildren[iri]; buildELKGraph
-        // (extended above) emits e_exp_* edges from the parent.
         if (state.graphData.selected && iri === state.graphData.selected.iri) {
           state.graphData.children = fetchedChildren;
         } else {
@@ -1166,8 +1062,6 @@
         var spec = buildELKGraph(state.graphData);
         return runLayout(spec).then(function (laid) {
           state.graphData.layout = laid;
-          // Plan 11 Task 3: preserveZoom skips fitGraph so the user keeps
-          // their current pan/zoom level (D-26).
           renderGraph(state.graphData, { preserveZoom: true });
           return state.graphData;
         });
@@ -1181,19 +1075,9 @@
   }
 
   function close() {
-    // Plan 13 (or wherever close becomes meaningful). No-op in skeleton.
+    // No-op.
   }
 
-  // toggleFullscreen — Plan 13.
-  // Per CONTEXT D-07 + RESEARCH.md Pattern 2 (DOM-Swap State Preservation):
-  // the SAME #entity-graph-pane DOM node is moved between #tab-panel-graph
-  // (in-pane host) and #graph-modal-host (modal host) via appendChild().
-  // appendChild on an existing node detaches it from its current parent and
-  // reattaches it to the new parent WITHOUT clone — so the SVG, all node
-  // DIVs, the pan/zoom transform, and every event listener survive the swap.
-  // This is what preserves the user's pan, zoom, and expanded children
-  // (state.transform + state.expandedIris are also unchanged because they
-  // live on the closure-scoped `state` object, not on any DOM attribute).
   function toggleFullscreen() {
     var modalRoot = document.getElementById('graph-modal-root');
     var modalHost = document.getElementById('graph-modal-host');
@@ -1202,20 +1086,13 @@
     var fsBtn = document.getElementById('tab-fullscreen');
     if (!modalRoot || !modalHost || !inPaneHost || !pane) return;
     if (state.isFullscreen) {
-      // Close: move pane back to in-pane host; hide modal; restore focus.
       inPaneHost.appendChild(pane);
       modalRoot.classList.add('hidden');
       modalRoot.setAttribute('aria-hidden', 'true');
       state.isFullscreen = false;
       if (fsBtn) fsBtn.focus();
-      // Re-apply transform: a paint nudge after the re-mount so the new host
-      // size is reflected. The viewport size changes (modal is much larger
-      // than in-pane), but per D-26 we preserve the user's zoom on toggle —
-      // the scale + translate persist through the swap because they live on
-      // #graph-transform (which moved with the pane).
       applyTransform();
     } else {
-      // Open: move pane into modal host; show modal; trap focus to close button.
       modalHost.appendChild(pane);
       modalRoot.classList.remove('hidden');
       modalRoot.setAttribute('aria-hidden', 'false');
@@ -1226,9 +1103,6 @@
     }
   }
 
-  // _wireFullscreenChrome — bind the Full screen button + modal close +
-  // scrim + ESC + focus-trap listeners. Idempotent via dataset flags so
-  // re-init (e.g. hot reload) does not double-bind. Called from init().
   function _wireFullscreenChrome() {
     var fsBtn = document.getElementById('tab-fullscreen');
     var closeBtn = document.getElementById('graph-modal-close');
@@ -1236,7 +1110,6 @@
     var panel = document.getElementById('graph-modal-panel');
     if (fsBtn && fsBtn.dataset.fsWired !== '1') {
       fsBtn.dataset.fsWired = '1';
-      // Hydrate the Heroicons arrows-pointing-out SVG.
       var iconHost = fsBtn.querySelector('.full-screen-icon-host');
       if (iconHost) iconHost.innerHTML = ICONS.arrowsPointingOut;
       fsBtn.addEventListener('click', toggleFullscreen);
@@ -1251,9 +1124,6 @@
       scrim.dataset.fsWired = '1';
       scrim.addEventListener('click', toggleFullscreen);
     }
-    // Global ESC handler — only acts when modal is open. Bound once to
-    // document; the isFullscreen guard makes it cheap when the modal is
-    // closed (the common case).
     if (!document.body.dataset.fsEscWired) {
       document.body.dataset.fsEscWired = '1';
       document.addEventListener('keydown', function (e) {
@@ -1264,11 +1134,6 @@
         }
       });
     }
-    // Focus trap — Tab/Shift+Tab cycles within the modal panel while open.
-    // The simple two-focusable case (close button + graph host) is enough
-    // for v1.1 because graph nodes are NOT individually tab-focusable
-    // (UI-SPEC §Interaction Contract). We query focusables fresh on each
-    // Tab so future additions to the panel header are picked up.
     if (panel && panel.dataset.fsTrapWired !== '1') {
       panel.dataset.fsTrapWired = '1';
       panel.addEventListener('keydown', function (e) {
@@ -1293,33 +1158,24 @@
   // ---------------- Export ----------------
   window.EntityGraph = {
     init: init,
-    loadELK: loadELK,                 // exposed so tests + later plans can preflight
+    loadELK: loadELK,
     refreshFor: refreshFor,
     expand: expand,
     close: close,
     toggleFullscreen: toggleFullscreen,
-    // Plan 12 Task 1: lifecycle hook called by unified_tree.js wireDetailTabs()
-    // when the Entity Graph tab is activated (D-05 / GRAPH-05 lazy fetch).
     onTabActivated: onTabActivated,
     showEmpty: showEmpty,
     showSkeleton: showSkeleton,
     showError: showError,
     clearStates: clearStates,
-    // Plan 10: pan/zoom + auto-fit. Exported so Plans 11/13 can re-call
-    // applyTransform after layout merges (preserve user's pan/zoom per D-26)
-    // and so the modal toggle can re-fit on resize.
     applyTransform: applyTransform,
     fitGraph: fitGraph,
+    renderMinimap: renderMinimap,
     ICONS: ICONS,
-    // Read-only state reference. Later plans mutate via internal closure;
-    // external readers see the current values.
     get state() { return state; },
   };
 
   // ---------------- Boot ----------------
-  // Run init() on DOMContentLoaded so the listener is registered before any
-  // tree click can dispatch 'entity:selected'. If the document is already
-  // interactive/complete, run immediately.
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
   } else {

@@ -78,7 +78,7 @@ html, body {
     .header-buttons {
         display: none;
     }
-    
+
     .mobile-menu {
         display: block;
     }
@@ -88,7 +88,7 @@ html, body {
     .header-buttons {
         display: flex;
     }
-    
+
     .mobile-menu {
         display: none;
     }
@@ -259,14 +259,14 @@ html, body {
     .tree-explorer-container {
         flex-direction: column;
     }
-    
+
     #tree-container {
         width: 100% !important;
         max-height: 300px;
         border-right: none;
         border-bottom: 1px solid #e2e8f0;
     }
-    
+
     #detail-container {
         width: 100% !important;
     }
@@ -295,55 +295,86 @@ html, body {
 
 /* ============================================================ */
 /* Phase 1 (milestone v1.1): Entity Graph node + edge styling.  */
-/* Plan 09 — closes GRAPH-15/16/17.                              */
+/* Visual polish pass — matches folio-enrich / folio-mapper     */
+/* reference implementations (ported to vanilla JS/CSS).        */
 /* ============================================================ */
 
+/* Dotted grid background for the graph canvas — matches the
+   folio-mapper ReactFlow BackgroundVariant.Dots pattern.
+   Applied to #entity-graph-pane via the template; uses an SVG
+   data-URI radial-gradient dot at 16px spacing. */
+#entity-graph-pane {
+    background-color: #f9fafb;
+    background-image: radial-gradient(circle, #d1d5db 1px, transparent 1px);
+    background-size: 16px 16px;
+}
+
+/* subClassOf edges — blue with arrowhead (blue-500 #3b82f6).
+   marker-end is set inline in entity_graph.js via url(#arrow-sub). */
 .graph-edge {
-    stroke: #9CA3AF;            /* Tailwind gray-400 — UI-SPEC §Color */
+    stroke: #3b82f6;
     fill: none;
-    stroke-width: 1.5;
+    stroke-width: 2;
+    opacity: 0.7;
 }
 
-/* rdfs:seeAlso edges — dashed purple to distinguish lateral relationships
-   from hierarchy (subClassOf). Matches the folio-mapper / folio-enrich
-   visual convention. Color: Tailwind purple-500 (#a855f7) with a softer
-   alpha so it reads as supplementary, not primary. */
+/* rdfs:seeAlso edges — dashed purple, no arrowhead (lateral link). */
 .graph-edge--seealso {
-    stroke: #a855f7;            /* Tailwind purple-500 */
-    stroke-dasharray: 6 4;
-    stroke-width: 1.25;
-    opacity: 0.85;
+    stroke: #8b5cf6;
+    stroke-dasharray: 6 3;
+    stroke-width: 1.5;
+    opacity: 0.7;
 }
 
+/* Base node — hover shadow. Positioning is inline from ELK. */
 .graph-node {
-    /* Positioning is set inline; this rule only owns the hover/transition layer. */
-    transition: box-shadow 0.12s ease-out;
+    transition: filter 0.12s ease-out;
     user-select: none;
 }
 
-/* Selected-node outer glow — UI-SPEC §Color row 2 (D-20).
-   Targets the inner styled wrapper (the DIV with bg-white border ...) where
-   the visible border lives, so the glow visually "hugs" the border. */
-.graph-node-selected > div {
-    box-shadow: 0 0 12px rgba(37, 99, 235, 0.35);
+.graph-node:hover {
+    filter: drop-shadow(0 0 6px rgba(59, 130, 246, 0.4));
 }
 
-/* Reduced-motion: drop the box-shadow transition on selection swaps. */
+/* Focus / selected node: blue border + blue tinted bg */
+.graph-node-selected > div {
+    border-color: #3b82f6 !important;
+    border-width: 2px !important;
+    background-color: #eff6ff !important;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18);
+}
+
+/* Branch root — ultimate ancestor: red 3px border (matches folio-enrich) */
+.graph-node-root > div {
+    border-color: #ef4444 !important;
+    border-width: 3px !important;
+    background-color: #fef2f2 !important;
+}
+
+/* Branch root that is ALSO the selected node: blue wins for focus clarity */
+.graph-node-selected.graph-node-root > div {
+    border-color: #3b82f6 !important;
+    border-width: 3px !important;
+    background-color: #eff6ff !important;
+}
+/* Ancillary ancestor branch root: gray 3px border (matches folio-enrich
+   .graph-node.branch-root-ancillary pattern). */
+.graph-node-ancillary > div {
+    border-color: #6b7280 !important;
+    border-width: 3px !important;
+    background-color: #f9fafb !important;
+}
+
+/* Reduced-motion: drop transitions */
 @media (prefers-reduced-motion: reduce) {
     .graph-node {
         transition: none;
+        filter: none;
     }
 }
 
 /* ============================================================ */
 /* Phase 1 (milestone v1.1): hover-only +N expansion badge.     */
-/* Plan 11 — D-22: hover-only +N badge on subsequently-revealed */
-/* (and ancestor) nodes whose child_count > 0. Badge fades in   */
-/* over 120 ms when the user hovers the parent .graph-node.    */
-/* The badge starts at opacity:0 + pointer-events:none via      */
-/* Tailwind utilities in entity_graph.js; this rule only owns   */
-/* the hover override (Tailwind cannot express :hover on a      */
-/* parent affecting a child via pure utilities).                */
 /* ============================================================ */
 
 .graph-node:hover .graph-node-hover-badge {
@@ -351,7 +382,6 @@ html, body {
     pointer-events: auto;
 }
 
-/* Reduced-motion: badge appears instantly (per UI-SPEC §Motion). */
 @media (prefers-reduced-motion: reduce) {
     .graph-node-hover-badge {
         transition: none;
@@ -359,12 +389,73 @@ html, body {
 }
 
 /* ============================================================ */
+/* Entity Graph canvas: graph-viewport cursor states            */
+/* ============================================================ */
+
+#graph-viewport {
+    cursor: grab;
+}
+
+#graph-viewport.graph-grabbing {
+    cursor: grabbing;
+}
+
+/* ============================================================ */
+/* Entity Graph: minimap (canvas-based, bottom-right corner).   */
+/* Ported from folio-enrich graph-minimap pattern.              */
+/* ============================================================ */
+
+#graph-minimap {
+    position: absolute;
+    bottom: 40px;   /* sits above the legend bar */
+    right: 12px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    pointer-events: none;
+    z-index: 10;
+}
+
+/* ============================================================ */
+/* Entity Graph: legend strip (bottom of graph canvas).         */
+/* Ported from folio-enrich graph-modal-legend + folio-mapper   */
+/* legend footer pattern.                                       */
+/* ============================================================ */
+
+#graph-legend {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 6px 12px;
+    background: rgba(255, 255, 255, 0.95);
+    border-top: 1px solid #e5e7eb;
+    font-size: 11px;
+    color: #6b7280;
+    flex-shrink: 0;
+    z-index: 10;
+    flex-wrap: wrap;
+}
+
+.graph-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    white-space: nowrap;
+}
+
+.graph-legend-hint {
+    margin-left: auto;
+    color: #9ca3af;
+    font-size: 10.5px;
+}
+
+/* ============================================================ */
 /* Phase 1 (milestone v1.1): Entity Graph full-screen modal.    */
-/* Plan 13 — D-07: full-screen modal with scrim + panel.        */
-/* 200 ms ease-out-quint open transition per UI-SPEC §Motion.   */
-/* The .hidden Tailwind utility (display:none) gates visibility */
-/* — when removed, the scrim and panel fade/scale in via the    */
-/* opacity + transform transitions below.                       */
 /* ============================================================ */
 
 #graph-modal-root.hidden { display: none; }
@@ -381,7 +472,6 @@ html, body {
                 transform 200ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* Reduced-motion: modal opens/closes instantly (per UI-SPEC §Motion). */
 @media (prefers-reduced-motion: reduce) {
     #graph-modal-root #graph-modal-scrim,
     #graph-modal-root #graph-modal-panel {
