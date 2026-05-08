@@ -69,20 +69,20 @@ def _resolve_iri(folio: FOLIO, iri: str):
     return None, None
 
 
-# redirect GET / to /docs
+# redirect GET / to /explore/tree (the human-facing FOLIO ontology explorer)
 @router.get(
     "/",
     tags=["documentation"],
-    summary="API Documentation",
-    description="Redirects to the Swagger UI documentation",
-    status_code=status.HTTP_301_MOVED_PERMANENTLY,
+    summary="FOLIO Ontology Explorer",
+    description="Redirects to the interactive ontology explorer at /explore/tree",
+    status_code=status.HTTP_302_FOUND,
     responses={
-        status.HTTP_301_MOVED_PERMANENTLY: {
-            "description": "Redirect to API documentation",
+        status.HTTP_302_FOUND: {
+            "description": "Redirect to the FOLIO Ontology Explorer",
             "headers": {
                 "Location": {
-                    "description": "URL to the API documentation",
-                    "schema": {"type": "string", "example": "/docs"},
+                    "description": "URL to the explorer page",
+                    "schema": {"type": "string", "example": "/explore/tree"},
                 }
             },
         }
@@ -90,19 +90,23 @@ def _resolve_iri(folio: FOLIO, iri: str):
 )
 async def root_redirect() -> Response:
     """
-    Redirects the user to the API documentation (Swagger UI).
+    Redirects the user to the FOLIO Ontology Explorer at /explore/tree —
+    the interactive tree + entity-graph UI for browsing FOLIO classes
+    and properties.
 
-    This endpoint performs a 301 (permanent) redirect to the /docs endpoint,
-    which serves the interactive API documentation.
+    API consumers can still reach the OpenAPI / Swagger documentation
+    directly at /docs.
 
-    Use this endpoint when accessing the API root to quickly navigate to the
-    documentation interface.
+    This is a 302 (temporary) redirect rather than 301 so the default
+    landing page can change again without browsers aggressively caching
+    the old target.
 
     HTTP Status Codes:
-    - 301 Moved Permanently: Redirect to the API documentation
+    - 302 Found: Redirect to the ontology explorer
     """
     return Response(
-        status_code=status.HTTP_301_MOVED_PERMANENTLY, headers={"Location": "/docs"}
+        status_code=status.HTTP_302_FOUND,
+        headers={"Location": "/explore/tree"},
     )
 
 
