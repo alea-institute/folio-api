@@ -593,7 +593,6 @@
     var selectedIri = (graphData.selected && graphData.selected.iri) || null;
     var ultimateRootIris = _findUltimateRootIris(graphData);
     var ancillaryRootIris = _findAncillaryRootIris(graphData);
-    var typeMap = _buildTypeMap(graphData);
 
     var selectedChildCount = (graphData.selected && typeof graphData.selected.child_count === 'number')
       ? graphData.selected.child_count : 0;
@@ -624,8 +623,6 @@
       var isUltimateRoot = !!(ultimateRootIris && ultimateRootIris.has && ultimateRootIris.has(node.id));
       var isAncillaryRoot = !!(ancillaryRootIris && ancillaryRootIris.has && ancillaryRootIris.has(node.id));
       var isRoot = isUltimateRoot || isAncillaryRoot;
-      var nodeType = typeMap[node.id] || 'class';
-      var iconSvg = nodeType === 'property' ? ICONS.link : ICONS.tag;
 
       // Store position for minimap.
       state.nodePositions[node.id] = {
@@ -644,17 +641,15 @@
       // Label weight: bold for roots/selected, normal for others.
       var labelClass;
       if (isRoot) {
-        labelClass = 'graph-node-label text-xs font-bold leading-tight text-gray-900';
+        labelClass = 'graph-node-label text-xs font-bold text-gray-900';
       } else if (isSelected) {
         labelClass = 'graph-node-label text-xs font-semibold text-blue-900';
       } else {
         labelClass = 'graph-node-label text-xs font-normal text-gray-700';
       }
 
-      // Root label badge — only for ultimate roots (matches folio-enrich "ROOT" badge style).
-      var rootBadgeHtml = isUltimateRoot
-        ? '<span class="ml-auto flex-shrink-0 text-[10px] font-bold uppercase tracking-wide text-red-600 bg-red-50 border border-red-200 rounded px-1 py-0.5 ml-1">ROOT</span>'
-        : '';
+      // Root nodes are visually distinguished by a thick border (CSS classes above).
+      // No text badge — folio-enrich omits ROOT labels entirely.
 
       // +N Children button on selected node.
       var showChildrenBtn = isSelected && selectedChildCount > 0;
@@ -691,11 +686,12 @@
       nodeDiv.style.cursor = isSelected ? 'default' : 'pointer';
 
       // Inner wrapper: rounded-lg for polished look; border/bg overridden by CSS class rules.
+      // No leading icon, no ROOT badge — matches folio-enrich which uses label text only.
+      // white-space:nowrap (via .graph-node CSS) keeps the label on one line.
+      // flex:1 + text-align:center on the label span centers text like folio-enrich.
       nodeDiv.innerHTML =
-        '<div class="flex items-center gap-1 px-2 py-1.5 h-full bg-white border border-gray-300 rounded-lg">' +
-          '<span class="text-gray-400 flex-shrink-0">' + iconSvg + '</span>' +
-          '<span class="' + labelClass + ' truncate"></span>' +
-          rootBadgeHtml +
+        '<div class="flex items-center px-2 py-1.5 h-full bg-white border border-gray-300 rounded-lg">' +
+          '<span class="' + labelClass + '" style="flex:1;text-align:center;overflow:hidden;text-overflow:ellipsis;"></span>' +
         '</div>' +
         childrenBtnHtml +
         hoverBadgeHtml;

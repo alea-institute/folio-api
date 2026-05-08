@@ -8,6 +8,9 @@
 {% block header_title %}FOLIO Ontology Explorer{% endblock %}
 {% block header_subtitle %}Navigate FOLIO classes and properties{% endblock %}
 
+{# Full-bleed layout: no container constraint or padding on <main> for this page #}
+{% block main_class %}{% endblock %}
+
 {% block header %}
 <header class="bg-[--color-primary] py-2 text-white">
     <div class="container mx-auto px-4">
@@ -26,18 +29,6 @@
 
 {% block extra_head %}
 <style>
-    /* Tree pages span the full vertical gap between header and footer, and use
-       the full viewport width. Override base.html main padding + container max-width
-       so no gutters appear at wide viewports. Tailwind utilities win on specificity,
-       hence !important throughout. */
-    main {
-        padding-top: 0 !important;
-        padding-bottom: 0 !important;
-        padding-left: 0 !important;
-        padding-right: 0 !important;
-        max-width: none !important;
-    }
-
     /* Hide native browser clear button on search inputs (we use a custom one) */
     #explore-search-input::-webkit-search-cancel-button { -webkit-appearance: none; display: none; }
     #explore-search-input::-webkit-search-decoration { -webkit-appearance: none; }
