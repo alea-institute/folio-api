@@ -324,11 +324,20 @@ html, body {
 
 /* Base node — hover shadow. Positioning is inline from ELK.
    white-space: nowrap prevents label wrapping; label width is sized by ELK
-   via labelText.length * 7.5 + 32 (matching folio-enrich's formula). */
+   via labelText.length * 7.5 + 32 (matching folio-enrich's formula).
+   cursor: grab signals nodes are draggable; overridden to grabbing during drag
+   via document.body.style.cursor and nodeEl.style.cursor in the drag handler. */
 .graph-node {
     transition: filter 0.12s ease-out;
     user-select: none;
     white-space: nowrap;
+    cursor: grab;
+}
+
+/* The +N children button and hover-badge keep their pointer cursor. */
+.graph-node-children-btn,
+.graph-node-hover-badge {
+    cursor: pointer !important;
 }
 
 .graph-node:hover {

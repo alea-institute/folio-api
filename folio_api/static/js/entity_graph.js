@@ -42,6 +42,9 @@
     lastSelectedType: null,
     // Node positions for minimap rendering: { iri: { x, y, w, h } }
     nodePositions: {},
+    // Live node map shared between _mountGraph and drag handlers: { iri: { x, y, w, h } }
+    // Updated in-place when a node is dragged.
+    liveNodeMap: {},
   };
 
   function _readUrlSelection() {
@@ -592,15 +595,20 @@
     nodesDiv.style.height = maxY + 'px';
 
     // Build node position map for recenterSection (id → {x, y, w, h}).
+    // Also populate state.liveNodeMap so drag handlers can read/write positions.
     var nodeMap = {};
+    state.liveNodeMap = {};
     for (var nmi = 0; nmi < children.length; nmi++) {
       var nm = children[nmi];
       if (nm && nm.id) {
-        nodeMap[nm.id] = { x: nm.x || 0, y: nm.y || 0, w: nm.width || 0, h: nm.height || 0 };
+        var nmEntry = { x: nm.x || 0, y: nm.y || 0, w: nm.width || 0, h: nm.height || 0 };
+        nodeMap[nm.id] = nmEntry;
+        state.liveNodeMap[nm.id] = nmEntry;
       }
     }
 
-    // Edges.
+    // Edges. Tag each path with data-src and data-tgt so drag handlers can
+    // efficiently find and redraw only the edges incident to the dragged node.
     for (var ei = 0; ei < edges.length; ei++) {
       var edge = edges[ei] || {};
       var sections = edge.sections || [];
@@ -614,6 +622,11 @@
         var pathEl = document.createElementNS(SVG_NS, 'path');
         pathEl.setAttribute('d', buildEdgePath(centeredSection));
         pathEl.setAttribute('class', edgeClass);
+        // Tag source and target IRIs for efficient incident-edge lookup during drag.
+        var edgeSrc = edge.sources && edge.sources[0];
+        var edgeTgt = edge.targets && edge.targets[0];
+        if (edgeSrc) pathEl.setAttribute('data-src', edgeSrc);
+        if (edgeTgt) pathEl.setAttribute('data-tgt', edgeTgt);
         // Arrowhead only on subClassOf hierarchy edges (not seeAlso dashed links).
         if (rel !== 'seeAlso') {
           pathEl.setAttribute('marker-end', 'url(#arrow-sub)');
@@ -716,7 +729,7 @@
       } else {
         nodeDiv.style.height = (node.height || 0) + 'px';
       }
-      nodeDiv.style.cursor = isSelected ? 'default' : 'pointer';
+      nodeDiv.style.cursor = 'grab';
 
       // Inner wrapper: rounded-lg for polished look; border/bg overridden by CSS class rules.
       // No leading icon, no ROOT badge — matches folio-enrich which uses label text only.
@@ -773,11 +786,26 @@
         }
       }
 
+      // Wire drag on this node (per-node mousedown captured via IIFE).
+      nodeDiv.addEventListener('mousedown', (function (capturedNodeEl, capturedIri) {
+        return function (e) {
+          if (e.button !== 0) return;
+          // Don't start drag on the +N children button or hover badge.
+          if (e.target.closest && (
+            e.target.closest('.graph-node-children-btn') ||
+            e.target.closest('.graph-node-hover-badge')
+          )) return;
+          _nodeDragStart(e, capturedNodeEl, capturedIri, edgesGroup);
+        };
+      })(nodeDiv, node.id));
+
       nodesDiv.appendChild(nodeDiv);
     }
 
     // Delegated click listener for graph node navigation.
+    // Suppresses click if a drag just finished (mouse moved > 3px).
     nodesDiv.addEventListener('click', function (ev) {
+      if (_dragState.wasDragged) return;   // suppress post-drag click
       var nodeEl = ev.target.closest && ev.target.closest('.graph-node');
       if (!nodeEl) return;
       if (ev.target.closest('.graph-node-children-btn')) return;
@@ -835,7 +863,7 @@
         '<span style="display:inline-block;width:10px;height:10px;border-radius:2px;border:3px solid #6b7280;background:#f9fafb;flex-shrink:0"></span>' +
         '<span>Ancillary Ancestor</span>' +
       '</div>' +
-      '<span class="graph-legend-hint">Click to expand • Double-click to navigate • Scroll to zoom • Drag to pan</span>';
+      '<span class="graph-legend-hint">Click to select • Drag node to rearrange • Scroll to zoom • Drag canvas to pan</span>';
     pane.appendChild(legend);
 
     wirePanZoom();
@@ -954,6 +982,136 @@
     vp.dataset.panZoomWired = '1';
     vp.addEventListener('wheel', _onWheel, { passive: false });
     vp.addEventListener('mousedown', _panMouseDown);
+  }
+
+  // ---------------- Node drag-to-rearrange (client-side only) ----------------
+  // State is module-level so _nodeDragMove/_nodeDragUp can be removed from
+  // document without passing them as arguments.
+
+  var _dragState = {
+    active: false,
+    nodeEl: null,        // DOM div being dragged
+    iri: null,           // IRI of the dragged node
+    edgesGroup: null,    // SVG <g> containing all edge <path>s
+    startClientX: 0,
+    startClientY: 0,
+    startNodeX: 0,       // ELK x coordinate at drag start
+    startNodeY: 0,       // ELK y coordinate at drag start
+    wasDragged: false,   // set to true once mouse moves > 3px
+  };
+
+  function _nodeDragStart(e, nodeEl, iri, edgesGroup) {
+    e.stopPropagation();   // prevent pan handler from also activating
+    _dragState.active = true;
+    _dragState.nodeEl = nodeEl;
+    _dragState.iri = iri;
+    _dragState.edgesGroup = edgesGroup;
+    _dragState.startClientX = e.clientX;
+    _dragState.startClientY = e.clientY;
+    var pos = state.liveNodeMap[iri];
+    _dragState.startNodeX = pos ? pos.x : 0;
+    _dragState.startNodeY = pos ? pos.y : 0;
+    _dragState.wasDragged = false;
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'grabbing';
+    document.addEventListener('mousemove', _nodeDragMove);
+    document.addEventListener('mouseup', _nodeDragUp);
+  }
+
+  function _nodeDragMove(e) {
+    if (!_dragState.active) return;
+    var dx = e.clientX - _dragState.startClientX;
+    var dy = e.clientY - _dragState.startClientY;
+    // Only activate drag mode once mouse moves more than 3 px (avoids click suppression on micro-jitter).
+    if (!_dragState.wasDragged && Math.abs(dx) < 3 && Math.abs(dy) < 3) return;
+    _dragState.wasDragged = true;
+
+    // Scale deltas by inverse of viewport zoom so node moves 1:1 with mouse.
+    var scale = state.transform.scale || 1;
+    var newX = _dragState.startNodeX + dx / scale;
+    var newY = _dragState.startNodeY + dy / scale;
+
+    // Update live position map (used by recenterSection when redrawing edges).
+    var pos = state.liveNodeMap[_dragState.iri];
+    if (pos) {
+      pos.x = newX;
+      pos.y = newY;
+    }
+    // Also update the minimap position map.
+    var miniPos = state.nodePositions[_dragState.iri];
+    if (miniPos) {
+      miniPos.x = newX;
+      miniPos.y = newY;
+    }
+
+    // Move the node DOM element via CSS transform (avoids reflow of position properties).
+    var offsetX = newX - _dragState.startNodeX;
+    var offsetY = newY - _dragState.startNodeY;
+    _dragState.nodeEl.style.transform = 'translate(' + offsetX + 'px,' + offsetY + 'px)';
+
+    // Redraw only the incident edges (edges where data-src or data-tgt === dragged IRI).
+    _redrawIncidentEdges(_dragState.iri, _dragState.edgesGroup);
+
+    // Update minimap to reflect new position.
+    renderMinimap();
+  }
+
+  function _nodeDragUp() {
+    if (!_dragState.active) return;
+    _dragState.active = false;
+    document.body.style.userSelect = '';
+    document.body.style.cursor = '';
+    document.removeEventListener('mousemove', _nodeDragMove);
+    document.removeEventListener('mouseup', _nodeDragUp);
+
+    // Commit final position: convert transform to actual left/top, clear transform.
+    var nodeEl = _dragState.nodeEl;
+    if (nodeEl && _dragState.wasDragged) {
+      var pos = state.liveNodeMap[_dragState.iri];
+      if (pos) {
+        nodeEl.style.left = pos.x + 'px';
+        nodeEl.style.top = pos.y + 'px';
+      }
+      nodeEl.style.transform = '';
+      // Restore grab cursor now that drag is complete.
+      nodeEl.style.cursor = 'grab';
+    }
+
+    // Clear wasDragged flag after a tick so the click handler (which fires after
+    // mouseup) can read it, then reset it.
+    setTimeout(function () { _dragState.wasDragged = false; }, 0);
+  }
+
+  // _redrawIncidentEdges — update d attribute on all <path>s in edgesGroup
+  // whose data-src or data-tgt matches the given IRI, using the current
+  // state.liveNodeMap positions. Only these paths are touched — O(edges) but
+  // each update is a single setAttribute call.
+  function _redrawIncidentEdges(iri, edgesGroup) {
+    if (!edgesGroup) return;
+    // Attribute value selectors (double-quoted) do NOT need CSS.escape —
+    // special chars like `:`, `/`, `#` are literal inside quoted values.
+    // We only need to escape embedded double-quotes (rare in IRIs but safe to handle).
+    var safeIri = iri.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    var paths = edgesGroup.querySelectorAll('path[data-src="' + safeIri + '"],path[data-tgt="' + safeIri + '"]');
+    for (var i = 0; i < paths.length; i++) {
+      var pathEl = paths[i];
+      var src = pathEl.getAttribute('data-src');
+      var tgt = pathEl.getAttribute('data-tgt');
+      var srcPos = src && state.liveNodeMap[src];
+      var tgtPos = tgt && state.liveNodeMap[tgt];
+      if (!srcPos || !tgtPos) continue;
+      var section = {
+        startPoint: null,
+        endPoint: null,
+      };
+      // Replicate recenterSection logic inline using liveNodeMap.
+      var srcCx = srcPos.x + srcPos.w / 2;
+      var tgtCx = tgtPos.x + tgtPos.w / 2;
+      var downward = (tgtPos.y + tgtPos.h / 2) >= (srcPos.y + srcPos.h / 2);
+      section.startPoint = { x: srcCx, y: downward ? srcPos.y + srcPos.h : srcPos.y };
+      section.endPoint   = { x: tgtCx, y: downward ? tgtPos.y : tgtPos.y + tgtPos.h };
+      pathEl.setAttribute('d', buildEdgePath(section));
+    }
   }
 
   function renderGraph(graphData, opts) {
