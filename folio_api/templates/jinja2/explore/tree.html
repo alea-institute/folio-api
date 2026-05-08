@@ -211,12 +211,14 @@
 
     <!-- Detail Panel -->
     <div id="detail-container" class="w-full md:w-3/5 lg:w-2/3 p-3 bg-gray-50 max-w-full md:h-[calc(100vh-124px)] flex flex-col overflow-y-auto">
-        <div id="detail-tabs" role="tablist" aria-label="Detail view" class="flex border-b border-gray-300 mb-3 -mx-3 px-3 bg-white sticky top-0 z-20">
-            <button id="tab-details" role="tab" type="button" aria-selected="true" aria-controls="tab-panel-details" tabindex="0" class="px-4 py-2 text-sm font-semibold border-b-2 border-blue-600 bg-white text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2">Details</button>
-            <button id="tab-graph" role="tab" type="button" aria-selected="false" aria-controls="tab-panel-graph" tabindex="-1" class="px-4 py-2 text-sm font-semibold border-b-2 border-transparent bg-gray-100 text-gray-600 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2">Entity Graph</button>
+        <div id="detail-tabs" role="tablist" aria-label="Detail view" class="relative grid grid-cols-2 border-b border-gray-300 mb-3 -mx-3 bg-white sticky top-0 z-20">
+            <button id="tab-details" role="tab" type="button" aria-selected="true" aria-controls="tab-panel-details" tabindex="0" class="text-center px-4 py-3 text-sm font-semibold border-b-2 border-blue-600 bg-white text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2">Details</button>
+            <button id="tab-graph" role="tab" type="button" aria-selected="false" aria-controls="tab-panel-graph" tabindex="-1" class="text-center px-4 py-3 text-sm font-semibold border-b-2 border-transparent bg-gray-100 text-gray-600 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2">Entity Graph</button>
+            <!-- Fullscreen button absolutely positioned so the two real tabs split
+                 the strip 50/50 regardless of whether this button is visible. -->
             <button id="tab-fullscreen" type="button"
                     aria-label="Open graph in full screen"
-                    class="ml-auto px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 hidden
+                    class="absolute right-2 top-1/2 -translate-y-1/2 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50 rounded hidden
                            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500
                            focus-visible:ring-offset-2 inline-flex items-center gap-1">
                 <span class="full-screen-icon-host"></span>

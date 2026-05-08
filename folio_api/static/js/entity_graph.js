@@ -238,8 +238,12 @@
   // (donor pattern from line 8882 of index.html).
   function buildELKGraph(graphData) {
     var selected = graphData.selected;
-    var ancestors = graphData.ancestors || [];
     var children = graphData.children || [];
+
+    // Edge → relationship sidecar. ELK doesn't reliably preserve custom
+    // fields through layout(), so we key by edge id and look up at render
+    // time. Reset on every build (called fresh per refresh / expand).
+    state.edgeRelationships = {};
 
     // Set of node IRIs that are edge-targets — only non-targets may carry the
     // FIRST layerConstraint (ELK rejects layer constraints on nodes that are
@@ -247,32 +251,66 @@
     var targetIds = new Set();
     var edges = [];
 
-    // Ancestor chain edges: ancestors[i] → ancestors[i+1] (root-first).
-    for (var i = 0; i < ancestors.length - 1; i++) {
-      edges.push({
-        id: 'e_' + i,
-        sources: [ancestors[i].iri],
-        targets: [ancestors[i + 1].iri],
-      });
-      targetIds.add(ancestors[i + 1].iri);
+    // ---------------------------------------------------------------
+    // New multi-path shape (graphData.nodes[] + graphData.edges[]) —
+    // emitted by /explore/api/entity-graph since the multi-parent +
+    // seeAlso BFS landed. Falls back to the legacy linear chain
+    // (graphData.ancestors[]) when the new fields are absent.
+    // ---------------------------------------------------------------
+    var apiNodes = Array.isArray(graphData.nodes) ? graphData.nodes : null;
+    var apiEdges = Array.isArray(graphData.edges) ? graphData.edges : null;
+    var hasNewShape = apiNodes && apiEdges;
+
+    if (hasNewShape) {
+      // Server-built edges with relationship typing (subClassOf | seeAlso).
+      for (var ei = 0; ei < apiEdges.length; ei++) {
+        var e = apiEdges[ei] || {};
+        if (!e.source || !e.target) continue;
+        var eid = 'e_api_' + ei;
+        var rel = e.relationship || 'subClassOf';
+        edges.push({ id: eid, sources: [e.source], targets: [e.target] });
+        state.edgeRelationships[eid] = rel;
+        // Only subClassOf edges count for layerConstraint suppression —
+        // seeAlso is a cross-link that doesn't define hierarchy.
+        if (rel === 'subClassOf') {
+          targetIds.add(e.target);
+        }
+      }
+    } else {
+      // Legacy linear chain: ancestors[i] → ancestors[i+1] → selected.
+      var ancestors = graphData.ancestors || [];
+      for (var i = 0; i < ancestors.length - 1; i++) {
+        var lid = 'e_' + i;
+        edges.push({
+          id: lid,
+          sources: [ancestors[i].iri],
+          targets: [ancestors[i + 1].iri],
+        });
+        state.edgeRelationships[lid] = 'subClassOf';
+        targetIds.add(ancestors[i + 1].iri);
+      }
+      if (ancestors.length > 0) {
+        var lastAnc = ancestors[ancestors.length - 1];
+        edges.push({
+          id: 'e_anc_sel',
+          sources: [lastAnc.iri],
+          targets: [selected.iri],
+        });
+        state.edgeRelationships['e_anc_sel'] = 'subClassOf';
+        targetIds.add(selected.iri);
+      }
     }
-    // Last ancestor → selected.
-    if (ancestors.length > 0) {
-      var lastAnc = ancestors[ancestors.length - 1];
-      edges.push({
-        id: 'e_anc_sel',
-        sources: [lastAnc.iri],
-        targets: [selected.iri],
-      });
-      targetIds.add(selected.iri);
-    }
-    // Selected → each loaded child.
+
+    // Selected → each loaded child (always subClassOf — these come from
+    // the children-mode endpoint or expandedChildren cache).
     for (var ci = 0; ci < children.length; ci++) {
+      var cid = 'e_child_' + ci;
       edges.push({
-        id: 'e_child_' + ci,
+        id: cid,
         sources: [selected.iri],
         targets: [children[ci].iri],
       });
+      state.edgeRelationships[cid] = 'subClassOf';
       targetIds.add(children[ci].iri);
     }
 
@@ -291,11 +329,13 @@
         for (var xi = 0; xi < expChildren.length; xi++) {
           var xc = expChildren[xi];
           if (!xc || !xc.iri) continue;
+          var xid = 'e_exp_' + parentIri + '_' + xi;
           edges.push({
-            id: 'e_exp_' + parentIri + '_' + xi,
+            id: xid,
             sources: [parentIri],
             targets: [xc.iri],
           });
+          state.edgeRelationships[xid] = 'subClassOf';
           targetIds.add(xc.iri);
           if (!seenExtraIris.has(xc.iri)) {
             seenExtraIris.add(xc.iri);
@@ -305,7 +345,34 @@
       }
     }
 
-    var allNodes = [selected].concat(ancestors).concat(children).concat(extraNodes);
+    // Build the full node list. Prefer the new nodes[] array when present
+    // (multi-path BFS already includes selected + all ancestors); fall back
+    // to legacy [selected + ancestors] composition.
+    var baseNodes;
+    if (hasNewShape) {
+      baseNodes = apiNodes.slice();
+      // Defensive: ensure selected is in the list.
+      var hasSelected = false;
+      for (var nsi = 0; nsi < baseNodes.length; nsi++) {
+        if (baseNodes[nsi] && baseNodes[nsi].iri === selected.iri) {
+          hasSelected = true;
+          break;
+        }
+      }
+      if (!hasSelected) baseNodes.unshift(selected);
+    } else {
+      var legacyAncestors = graphData.ancestors || [];
+      baseNodes = [selected].concat(legacyAncestors);
+    }
+    // Dedupe (children + expandedChildren extras may overlap with apiNodes).
+    var seenIris = {};
+    var allNodes = [];
+    baseNodes.concat(children).concat(extraNodes).forEach(function (n) {
+      if (n && n.iri && !seenIris[n.iri]) {
+        seenIris[n.iri] = true;
+        allNodes.push(n);
+      }
+    });
     var elkChildren = allNodes.map(function (n) {
       var labelText = n.label || '';
       var w = Math.max(180, labelText.length * 7.5 + 32);
@@ -366,21 +433,32 @@
 
   var SVG_NS = 'http://www.w3.org/2000/svg';
 
-  // _findUltimateRootIri — locate the IRI of the ancestor with branch_root_type==='ultimate'
-  // so renderGraph can stamp it with the .graph-node-root class (Plan 09 styles it).
-  function _findUltimateRootIri(graphData) {
-    var ancestors = (graphData && graphData.ancestors) || [];
-    for (var i = 0; i < ancestors.length; i++) {
-      if (ancestors[i] && ancestors[i].branch_root_type === 'ultimate') {
-        return ancestors[i].iri;
+  // _findUltimateRootIris — locate ALL IRIs marked branch_root_type==='ultimate'.
+  // Returns a Set so renderGraph can stamp every FOLIO-root node with the
+  // .graph-node-root class. Multi-root is the common case once the multi-path
+  // BFS is in play (e.g., Maritime Negligence has 6 ultimate roots — Area of
+  // Law, Industry and Market, Objectives, Asset Type, Service, Forums).
+  function _findUltimateRootIris(graphData) {
+    var roots = new Set();
+    // Prefer the new shape (graphData.nodes) — multi-root expected.
+    var nodes = (graphData && graphData.nodes) || [];
+    for (var i = 0; i < nodes.length; i++) {
+      if (nodes[i] && nodes[i].branch_root_type === 'ultimate' && nodes[i].iri) {
+        roots.add(nodes[i].iri);
       }
     }
-    // Fallback: the ELK selected node itself can be marked as ultimate when a class
-    // has no ancestors (root entity). Surface that via graphData.selected if present.
-    if (graphData && graphData.selected && graphData.selected.branch_root_type === 'ultimate') {
-      return graphData.selected.iri;
+    // Legacy: ancestors[] linear chain — only one ultimate (the topmost).
+    var ancestors = (graphData && graphData.ancestors) || [];
+    for (var j = 0; j < ancestors.length; j++) {
+      if (ancestors[j] && ancestors[j].branch_root_type === 'ultimate' && ancestors[j].iri) {
+        roots.add(ancestors[j].iri);
+      }
     }
-    return null;
+    // Edge case: selected entity has no ancestors → it IS the root.
+    if (graphData && graphData.selected && graphData.selected.branch_root_type === 'ultimate' && graphData.selected.iri) {
+      roots.add(graphData.selected.iri);
+    }
+    return roots;
   }
 
   // _buildTypeMap — derive a per-IRI 'class' | 'property' map from the
@@ -506,19 +584,24 @@
     for (var ei = 0; ei < edges.length; ei++) {
       var edge = edges[ei] || {};
       var sections = edge.sections || [];
+      // Look up the relationship for this edge from the sidecar map built
+      // during buildELKGraph. Defaults to subClassOf so missing entries
+      // render as solid hierarchy edges (safe fallback).
+      var rel = (state.edgeRelationships && state.edgeRelationships[edge.id]) || 'subClassOf';
+      var edgeClass = 'graph-edge' + (rel === 'seeAlso' ? ' graph-edge--seealso' : '');
       for (var si = 0; si < sections.length; si++) {
         var section = sections[si];
         if (!section || !section.startPoint || !section.endPoint) continue;
         var path = document.createElementNS(SVG_NS, 'path');
         path.setAttribute('d', buildEdgePath(section));
-        path.setAttribute('class', 'graph-edge');
+        path.setAttribute('class', edgeClass);
         edgesGroup.appendChild(path);
       }
     }
 
     // Selected + root markers.
     var selectedIri = (graphData.selected && graphData.selected.iri) || null;
-    var rootIri = _findUltimateRootIri(graphData);
+    var rootIris = _findUltimateRootIris(graphData);
     var typeMap = _buildTypeMap(graphData);
 
     // Nodes — DIVs positioned absolutely. Markup per Plan 09 Task 1 +
@@ -562,7 +645,7 @@
       var node = children[ni];
       if (!node) continue;
       var isSelected = !!(selectedIri && node.id === selectedIri);
-      var isRoot = !!(rootIri && node.id === rootIri);
+      var isRoot = !!(rootIris && rootIris.has && rootIris.has(node.id));
       var nodeType = typeMap[node.id] || 'class';
       var iconSvg = nodeType === 'property' ? ICONS.link : ICONS.tag;
 

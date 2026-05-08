@@ -304,6 +304,17 @@ html, body {
     stroke-width: 1.5;
 }
 
+/* rdfs:seeAlso edges — dashed purple to distinguish lateral relationships
+   from hierarchy (subClassOf). Matches the folio-mapper / folio-enrich
+   visual convention. Color: Tailwind purple-500 (#a855f7) with a softer
+   alpha so it reads as supplementary, not primary. */
+.graph-edge--seealso {
+    stroke: #a855f7;            /* Tailwind purple-500 */
+    stroke-dasharray: 6 4;
+    stroke-width: 1.25;
+    opacity: 0.85;
+}
+
 .graph-node {
     /* Positioning is set inline; this rule only owns the hover/transition layer. */
     transition: box-shadow 0.12s ease-out;
