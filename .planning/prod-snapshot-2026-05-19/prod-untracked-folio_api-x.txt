@@ -1,0 +1,2 @@
+-rw-rw-r-- 1 ubuntu ubuntu 0 Apr 16  2025 folio_api/x
+---

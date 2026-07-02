@@ -1,0 +1,32 @@
+1fd309b fix: move root catch-all router last so /connections route is reachable
+508e661 fix: publish folio-mcp to PyPI, remove local path override
+8d1169b docs: add benchmark-backed LLM recommendations, update default to gpt-5.4
+f434f69 feat: expand benchmark to 20 model configs including gpt-5-mini/nano, gemini variants
+c9419f1 feat: add LLM search benchmark script with multi-provider results
+91ff9e0 fix: use gpt-5.4 as default, bump folio-python to >=0.3.2
+65208a2 feat: multi-provider LLM support with effort/tier config, bump to v0.4.0
+2224f11 feat: add all 5 LLM providers, effort/tier config support
+a92e75d chore: bump folio-python[search] to >=0.3.0 (alea-llm-client 0.3.0)
+2133b90 Merge pull request #4 from alea-institute/fix/search-preflabel-matching
+26899bb docs: Mark plan as completed with all checkboxes
+8ea5df2 docs: Add plan for prefLabel search fix with downstream assessment
+dee83f6 feat: Highlight preferred_label matches in tree and typeahead UI
+eaed9ac feat: Add preferred_label and match_field to tree search node data
+af414ee fix: Add preferred_label (skos:prefLabel) to all search endpoints
+46575a8 Merge pull request #3 from damienriehl/unified-explorer-and-ui-improvements
+23a96b5 Exclude hidden property branches from search results
+b007d7d Style Search button to match header; hide internal/deprecated properties
+a238e4a Update explorer UI text: heading, tip, and placeholder copy
+624af9c Redesign search UI: Explore FOLIO heading, Search button, Google-style Clear
+47b9164 Revert "Redesign search UI with Search/Clear button toggle"
+2f668d4 Redesign search UI with Search/Clear button toggle
+2752d75 Increase NOUNS/VERBS section header padding for comfortable spacing
+5b4e3d8 Use curated root class list to include missing branches and exclude sandbox
+da9fb79 Consolidate nav buttons into single Browse button
+6cf3d4f Increase alternative label pill size to match preferred label
+afc8123 Add unified ontology explorer combining classes and properties
+8a483d5 Compact translation rows to single-line layout
+81b7649 Add OWL Object Property support with full UI parity
+458420b minor ui enhancements for small screens
+---HEAD-SHA---
+1fd309b38eeab8d2290c78979cff0fa6e165a607

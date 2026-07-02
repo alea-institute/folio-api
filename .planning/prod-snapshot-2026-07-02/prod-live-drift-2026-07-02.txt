@@ -1,0 +1,86 @@
+### GIT STATE ###
+HEAD 1fd309b38eeab8d2290c78979cff0fa6e165a607 fix: move root catch-all router last so /connections route is reachable
+12	1
+### DIFF: config.json ###
+diff --git a/config.json b/config.json
+index 84ecef3..c062729 100644
+--- a/config.json
++++ b/config.json
+@@ -6,10 +6,8 @@
+     "path": "FOLIO.owl"
+   },
+   "llm": {
+-    "type": "openai",
+-    "model": "gpt-5.4",
+-    "effort": "low",
+-    "tier": "flex"
++    "type": "grok",
++    "model": "grok-4-fast-non-reasoning"
+   },
+   "api": {
+     "title": "FOLIO API",
+### DIFF: docker-compose.yml ###
+diff --git a/docker-compose.yml b/docker-compose.yml
+index 0294b59..23fbce4 100644
+--- a/docker-compose.yml
++++ b/docker-compose.yml
+@@ -11,6 +11,7 @@ services:
+     environment:
+       - PORT=${PORT:-8000}
+       - OPENAI_API_KEY=${OPENAI_API_KEY}
++      - XAI_API_KEY=${XAI_API_KEY}
+       - PYTHONPATH=/app
+     healthcheck:
+       test: ["CMD", "curl", "-f", "http://localhost:${PORT:-8000}/info/health"]
+### DIFF: docker/Caddyfile ###
+diff --git a/docker/Caddyfile b/docker/Caddyfile
+index 7816685..97bccd8 100644
+--- a/docker/Caddyfile
++++ b/docker/Caddyfile
+@@ -20,9 +20,28 @@ folio.openlegalstandard.org {
+         # Remove the Server header
+         -Server
+     }
+-    # Add rate limiting
+-    @api {
+-        path /search/* /taxonomy/*
++}
++
++soli.openlegalstandard.org {
++    encode gzip
++    reverse_proxy api:{$PORT}
++    tls {
++        protocols tls1.2 tls1.3
++    }
++    log {
++        output file /var/log/caddy/access.log
++        format json
++    }
++    header {
++        # Enable HTTP Strict Transport Security (HSTS)
++        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
++        # Enable Cross-Site Filter (XSS Protection)
++        X-XSS-Protection "1; mode=block"
++        # Disable clients from inferring the MIME type
++        X-Content-Type-Options "nosniff"
++        # Prevent clickjacking
++        X-Frame-Options "SAMEORIGIN"
++        # Remove the Server header
++        -Server
+     }
+-    rate_limit @api 100r/m
+ }
+### DIFF: docker/Dockerfile ###
+diff --git a/docker/Dockerfile b/docker/Dockerfile
+index 5fa03aa..4d079ba 100644
+--- a/docker/Dockerfile
++++ b/docker/Dockerfile
+@@ -36,7 +36,7 @@ COPY --chown=app:app pyproject.toml ./
+ COPY --chown=app:app README.md ./
+ 
+ # Install dependencies
+-RUN bash -l -c "uv sync --upgrade && uv venv && uv run python"
++RUN bash -l -c "uv sync --upgrade && uv run python"
+ 
+ # Copy application code
+ COPY --chown=app:app folio_api folio_api

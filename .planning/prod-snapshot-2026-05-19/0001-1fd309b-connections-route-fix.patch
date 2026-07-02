@@ -1,0 +1,36 @@
+From 1fd309b38eeab8d2290c78979cff0fa6e165a607 Mon Sep 17 00:00:00 2001
+From: Ubuntu <ubuntu@ip-172-31-33-183.us-east-2.compute.internal>
+Date: Mon, 16 Mar 2026 23:23:32 +0000
+Subject: [PATCH] fix: move root catch-all router last so /connections route is
+ reachable
+
+The /{iri} catch-all in root.router was intercepting /connections requests
+before they could reach the connections router, returning 404.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+---
+ folio_api/api.py | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/folio_api/api.py b/folio_api/api.py
+index ca1c2ed..ea31475 100644
+--- a/folio_api/api.py
++++ b/folio_api/api.py
+@@ -249,12 +249,13 @@ def get_app() -> FastAPI:
+ 
+     # Attach the routes
+     app_instance.include_router(folio_api.routes.info.router)
+-    app_instance.include_router(folio_api.routes.root.router)
+     app_instance.include_router(folio_api.routes.search.router)
+     app_instance.include_router(folio_api.routes.taxonomy.router)
+     app_instance.include_router(folio_api.routes.properties.router)
+     app_instance.include_router(folio_api.routes.explore.router)
+     app_instance.include_router(folio_api.routes.connections.router)
++    # root.router has /{iri} catch-all, so it must be registered last
++    app_instance.include_router(folio_api.routes.root.router)
+ 
+     # Mount FOLIO MCP server at /mcp
+     from folio_mcp.server import mcp as folio_mcp_server
+-- 
+2.43.0
+
