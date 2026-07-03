@@ -45,11 +45,23 @@ RUN uv sync --no-install-project --frozen
 COPY --chown=app:app folio_api folio_api
 COPY --chown=app:app config.json.example ./config.json.example
 
+# Bake the example config in as the default. Local dev/compose overrides via
+# bind-mount; container-only deploys (Railway, Fly, plain `docker run`) get a
+# working config out of the box. Placeholder ${OPENAI_API_KEY} is handled
+# defensively in api.py:initialize_folio.
+RUN cp config.json.example config.json
+
 # Install the project package now that source is available
 RUN uv sync --frozen
 
 # Set default port
 ENV PORT=8000
+
+# Force Python stdout/stderr to flush immediately so container logs (Docker,
+# Railway, Fly, etc.) actually surface uvicorn startup output and tracebacks.
+# Without this, output is block-buffered when stdout is a pipe — the worst
+# possible default for debugging a deploy that's silently failing.
+ENV PYTHONUNBUFFERED=1
 
 # Define healthcheck
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \

@@ -98,8 +98,10 @@ async def lifespan_handler(app_instance: FastAPI):
     set_shared_folio(app_instance.state.folio)
 
     # log it
+    llm = app_instance.state.folio.llm
     app_instance.state.logger.info(
-        "FOLIO instance initialized with llm %s", app_instance.state.folio.llm.model
+        "FOLIO instance initialized with llm %s",
+        llm.model if llm is not None else "<disabled>",
     )
 
     yield
@@ -149,17 +151,35 @@ def initialize_folio(folio_config: Dict[str, Any], llm_config: Dict[str, Any]) -
     llm_api_key = llm_config.get(
         "api_key", os.getenv(_API_KEY_ENV_VARS.get(llm_engine, "OPENAI_API_KEY"))
     )
+    # Treat un-substituted "${ENV_VAR}" placeholders as missing so the literal
+    # string isn't passed to the LLM client as a key. Falls back to env var.
+    if isinstance(llm_api_key, str) and llm_api_key.startswith("${") and llm_api_key.endswith("}"):
+        llm_api_key = os.getenv(_API_KEY_ENV_VARS.get(llm_engine, "OPENAI_API_KEY"))
     llm_effort = llm_config.get("effort", None)
     llm_tier = llm_config.get("tier", None)
 
-    # Create the LLM
+    # Create the LLM. The provider's client (e.g. alea_llm_client.OpenAIModel)
+    # raises ValueError at construction if no api_key can be resolved from
+    # init kwargs / env vars / key file. That hard-depends startup on a key,
+    # which prevents read-only deploys (the entity graph + tree browsing don't
+    # need an LLM). Skip LLM construction entirely when no key is available;
+    # /search and other LLM-backed routes will fail at call time, which is the
+    # right failure mode — startup succeeds, the app serves what it can.
     llm_cls = _LLM_CLASSES.get(llm_engine)
-    if llm_cls is not None:
+    if llm_cls is not None and llm_api_key:
         llm_args: Dict[str, Any] = {"model": llm_model, "api_key": llm_api_key}
         if llm_endpoint is not None:
             llm_args["endpoint"] = llm_endpoint
         llm = llm_cls(**llm_args)
     else:
+        if llm_cls is not None:
+            logging.getLogger("folio_api").warning(
+                "LLM disabled: no api_key resolved for engine %r; "
+                "/search and other LLM-backed routes will return errors. "
+                "Set %s env var or config.llm.api_key to enable.",
+                llm_engine,
+                _API_KEY_ENV_VARS.get(llm_engine, "OPENAI_API_KEY"),
+            )
         llm = None
 
     return FOLIO(

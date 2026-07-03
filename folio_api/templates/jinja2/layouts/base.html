@@ -56,7 +56,7 @@
     </div>
     {% endblock %}
     
-    <main class="container mx-auto px-4 py-4 max-w-[1600px] flex-grow">
+    <main class="{% block main_class %}container mx-auto px-4 py-4 max-w-[1600px]{% endblock %} flex-grow">
         {% block content %}{% endblock %}
     </main>
     

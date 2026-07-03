@@ -1,0 +1,10 @@
+{
+  "servers": [
+    {
+      "name": "folio-api (FastAPI)",
+      "cwd": ".",
+      "command": "uv run uvicorn folio_api.api:app --host 127.0.0.1 --port 9596",
+      "url": "http://127.0.0.1:9596"
+    }
+  ]
+}

@@ -8,6 +8,9 @@
 {% block header_title %}FOLIO Ontology Explorer{% endblock %}
 {% block header_subtitle %}Navigate FOLIO classes and properties{% endblock %}
 
+{# Full-bleed layout: no container constraint or padding on <main> for this page #}
+{% block main_class %}{% endblock %}
+
 {% block header %}
 <header class="bg-[--color-primary] py-2 text-white">
     <div class="container mx-auto px-4">
@@ -26,10 +29,6 @@
 
 {% block extra_head %}
 <style>
-    /* Tree pages span the full vertical gap between header and footer (override base.html
-       main py-4 — Tailwind's utility class wins on specificity, hence !important). */
-    main { padding-top: 0 !important; padding-bottom: 0 !important; }
-
     /* Hide native browser clear button on search inputs (we use a custom one) */
     #explore-search-input::-webkit-search-cancel-button { -webkit-appearance: none; display: none; }
     #explore-search-input::-webkit-search-decoration { -webkit-appearance: none; }
@@ -147,7 +146,7 @@
 {% block navbar %}{% endblock %}
 
 {% block content %}
-<div class="flex flex-col md:flex-row tree-explorer-container bg-white rounded-lg shadow-md overflow-hidden -mx-4 mt-0" style="min-height: calc(100vh - 124px);">
+<div class="flex flex-col md:flex-row tree-explorer-container bg-white rounded-lg shadow-md overflow-hidden mt-0" style="min-height: calc(100vh - 124px);">
     <!-- Tree Panel -->
     <div id="tree-container" class="w-full md:w-2/5 lg:w-1/3 p-2 md:h-[calc(100vh-124px)] md:overflow-hidden flex flex-col">
         <div class="mb-1 sticky top-0 z-10 bg-white">
@@ -211,18 +210,60 @@
 
     <!-- Detail Panel -->
     <div id="detail-container" class="w-full md:w-3/5 lg:w-2/3 p-3 bg-gray-50 max-w-full md:h-[calc(100vh-124px)] flex flex-col overflow-y-auto">
-        <div id="class-details">
-            <div class="flex items-center justify-center h-full text-gray-500">
-                <div class="text-center">
-                    <svg class="w-16 h-16 mx-auto text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                    </svg>
-                    <h3 class="mt-2 text-xl font-medium">Search or Browse Items</h3>
-                    <p class="mt-1">Expand or search the categories to view item details.</p>
+        <div id="detail-tabs" role="tablist" aria-label="Detail view" class="relative grid grid-cols-2 border-b border-gray-300 mb-3 -mx-3 bg-white sticky top-0 z-20">
+            <button id="tab-details" role="tab" type="button" aria-selected="true" aria-controls="tab-panel-details" tabindex="0" class="text-center px-4 py-3 text-sm font-semibold border-b-2 border-blue-600 bg-white text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2">Details</button>
+            <button id="tab-graph" role="tab" type="button" aria-selected="false" aria-controls="tab-panel-graph" tabindex="-1" class="text-center px-4 py-3 text-sm font-semibold border-b-2 border-transparent bg-gray-100 text-gray-600 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2">Entity Graph</button>
+            <!-- Fullscreen button absolutely positioned so the two real tabs split
+                 the strip 50/50 regardless of whether this button is visible. -->
+            <button id="tab-fullscreen" type="button"
+                    aria-label="Open graph in full screen"
+                    class="absolute right-2 top-1/2 -translate-y-1/2 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50 rounded hidden
+                           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500
+                           focus-visible:ring-offset-2 inline-flex items-center gap-1">
+                <span class="full-screen-icon-host"></span>
+                <span>Full screen</span>
+            </button>
+        </div>
+        <div id="tab-panels" class="flex-grow flex flex-col overflow-hidden">
+            <div id="tab-panel-details" role="tabpanel" aria-labelledby="tab-details" class="flex-grow overflow-y-auto">
+                <div id="class-details">
+                    <div class="flex items-center justify-center h-full text-gray-500">
+                        <div class="text-center">
+                            <svg class="w-16 h-16 mx-auto text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                            </svg>
+                            <h3 class="mt-2 text-xl font-medium">Search or Browse Items</h3>
+                            <p class="mt-1">Expand or search the categories to view item details.</p>
+                        </div>
+                    </div>
                 </div>
+            </div>
+            <div id="tab-panel-graph" role="tabpanel" aria-labelledby="tab-graph" class="flex-grow overflow-hidden hidden" hidden>
+                <div id="entity-graph-pane" class="w-full h-full relative"></div>
             </div>
         </div>
     </div>
+</div>
+
+<!-- Phase 1 (milestone v1.1) Plan 13: Full-screen graph modal shell.
+     Hidden by default. entity_graph.js DOM-swaps #entity-graph-pane into
+     #graph-modal-host on Full screen click (D-07 — preserves pan/zoom +
+     expanded children because the same DOM nodes are moved, not cloned). -->
+<div id="graph-modal-root" class="hidden fixed inset-0 z-50" aria-hidden="true">
+  <div id="graph-modal-scrim" class="fixed inset-0 bg-black/50"></div>
+  <div id="graph-modal-panel" role="dialog" aria-modal="true" aria-labelledby="graph-modal-title"
+       class="fixed inset-4 bg-white rounded-lg shadow-2xl flex flex-col">
+    <header class="h-14 border-b border-gray-200 px-4 flex items-center justify-between flex-shrink-0">
+      <h2 id="graph-modal-title" class="text-base font-semibold text-gray-900">Entity Graph</h2>
+      <button id="graph-modal-close" type="button" aria-label="Close full-screen graph"
+              class="w-8 h-8 rounded hover:bg-gray-100
+                     focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500
+                     flex items-center justify-center">
+        <span class="x-mark-icon-host"></span>
+      </button>
+    </header>
+    <div id="graph-modal-host" class="flex-grow relative"></div>
+  </div>
 </div>
 {% endblock %}
 
@@ -232,6 +273,7 @@
 </script>
 <script src="/static/js/split_pane.js"></script>
 <script src="/static/js/unified_tree.js"></script>
+<script src="/static/js/entity_graph.js"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         if (typeof initSplitPane === 'function') {
