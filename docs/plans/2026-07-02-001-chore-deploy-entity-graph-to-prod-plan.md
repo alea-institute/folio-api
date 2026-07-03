@@ -1,9 +1,22 @@
 ---
 title: Ship Entity Graph (v1.1) from DEV to PROD
 type: chore
-status: active
+status: done
 date: 2026-07-02
+completed: 2026-07-03
 ---
+
+## ✅ SHIPPED 2026-07-03
+
+- **PR #18 merged** → `alea-institute/main` at `07de6cf`.
+- **PROD deployed** on `13.59.153.110:/home/ubuntu/src/folio-api` — `git reset --hard origin/main`,
+  drift preserved (Grok in `config.json`, `soli` block in `Caddyfile`, `XAI_API_KEY` in compose),
+  `docker compose up -d --build`. Container healthy.
+- **Rollback prepared:** branch `prod-pre-v1.1-2026-07-02` (1fd309b), image `folio-api-api:pre-v1.1`,
+  drift backups in `~/prod-backup-2026-07-02/` on the box.
+- **Verified live:** `folio.` + `soli.openlegalstandard.org` → health 200, `/` → 302 `/explore/tree`;
+  FOLIO 2.0.0 loaded with `grok-4-fast-non-reasoning`; Entity Graph tab renders (nodes/edges,
+  legend, drag/zoom/pan) via chrome-devtools MCP.
 
 # Ship Entity Graph (v1.1) from DEV → PROD
 
