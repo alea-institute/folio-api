@@ -271,9 +271,9 @@
 <script>
     {{ typeahead_js_source|safe }}
 </script>
-<script src="/static/js/split_pane.js"></script>
-<script src="/static/js/unified_tree.js"></script>
-<script src="/static/js/entity_graph.js"></script>
+<script src="/static/js/split_pane.js?v={{ asset_version }}"></script>
+<script src="/static/js/unified_tree.js?v={{ asset_version }}"></script>
+<script src="/static/js/entity_graph.js?v={{ asset_version }}"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         if (typeof initSplitPane === 'function') {
