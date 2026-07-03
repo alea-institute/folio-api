@@ -38,6 +38,42 @@ from folio_api.api_config import load_config
 _DEFAULT_LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
 
+class CachedStaticFiles(StaticFiles):
+    """StaticFiles that sets an explicit ``Cache-Control`` header.
+
+    Without it, Starlette serves static assets with only ``ETag`` /
+    ``Last-Modified``, so browsers apply *heuristic* freshness and can keep
+    serving a stale ``.js``/``.css`` long after a deploy (this is exactly what
+    broke the Entity Graph for returning visitors: new HTML, but a cached old
+    ``unified_tree.js`` with no graph wiring). Paired with ``?v=`` cache-busting
+    on asset URLs, a deploy now changes the URL and browsers revalidate.
+    """
+
+    def file_response(self, *args: Any, **kwargs: Any):
+        response = super().file_response(*args, **kwargs)
+        response.headers.setdefault(
+            "Cache-Control", "public, max-age=3600, must-revalidate"
+        )
+        return response
+
+
+def _compute_asset_version(directory: Path) -> str:
+    """Cache-busting token = newest static-asset mtime (integer seconds).
+
+    Appended to asset URLs as ``?v=``; changes whenever any static file is
+    rebuilt/redeployed, so returning browsers fetch the new asset instead of a
+    stale cached copy.
+    """
+    try:
+        latest = max(
+            (p.stat().st_mtime for p in directory.rglob("*") if p.is_file()),
+            default=0.0,
+        )
+        return str(int(latest))
+    except Exception:
+        return "0"
+
+
 @asynccontextmanager
 async def lifespan_handler(app_instance: FastAPI):
     """Context manager to handle the lifespan events of the FastAPI app
@@ -263,7 +299,13 @@ def get_app() -> FastAPI:
                 "Failed to create static directory: %s" % static_dir
             ) from e
 
-    app_instance.mount("/static", StaticFiles(directory=static_dir), name="static")
+    # Cache-busting token derived from the newest static asset mtime; exposed to
+    # templates as `asset_version` and appended to asset URLs as `?v=`.
+    asset_version = _compute_asset_version(static_dir)
+
+    app_instance.mount(
+        "/static", CachedStaticFiles(directory=static_dir), name="static"
+    )
 
     # Initialize Jinja2 templates
     templates_dir = Path(__file__).parent / "templates" / "jinja2"
@@ -279,6 +321,9 @@ def get_app() -> FastAPI:
 
     # Store templates instance in app state
     app_instance.state.templates = Jinja2Templates(directory=templates_dir)
+
+    # Expose the cache-busting token to all templates (used as ?v= on assets).
+    app_instance.state.templates.env.globals["asset_version"] = asset_version
 
     # INTERIM FIX: Register strip_folio_prefix Jinja2 filter for human-readable property labels.
     # Remove this once https://github.com/alea-institute/FOLIO/pull/5 is merged and

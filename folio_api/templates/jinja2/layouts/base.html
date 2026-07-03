@@ -13,8 +13,8 @@
     <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
     <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="preload" href="/static/css/styles.css" as="style">
-    <link rel="preload" href="/static/js/copy_iri.js" as="script">
+    <link rel="preload" href="/static/css/styles.css?v={{ asset_version }}" as="style">
+    <link rel="preload" href="/static/js/copy_iri.js?v={{ asset_version }}" as="script">
     
     <!-- Critical scripts loaded with high priority -->
     <script src="https://cdn.tailwindcss.com?plugins=forms,typography,aspect-ratio"></script>
@@ -22,7 +22,7 @@
     <script src="/static/js/vendor/typeahead.bundle.min.js"></script>
     
     <!-- All styles -->
-    <link rel="stylesheet" href="/static/css/styles.css">
+    <link rel="stylesheet" href="/static/css/styles.css?v={{ asset_version }}">
     
     {% block extra_head %}{% endblock %}
     
@@ -65,7 +65,7 @@
     {% include "components/footer.html" %}
     
     <!-- Global Scripts -->
-    <script src="/static/js/copy_iri.js"></script>
+    <script src="/static/js/copy_iri.js?v={{ asset_version }}"></script>
     
     <!-- Page specific scripts -->
     {% block scripts %}{% endblock %}
