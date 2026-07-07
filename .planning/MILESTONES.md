@@ -27,6 +27,23 @@ Record of shipped milestones. Active milestone is tracked in `STATE.md` and `ROA
 
 ---
 
-## v1.1 — Entity Graph (active)
+## v1.1 — Entity Graph ✓
 
-**Status:** Defining — see `REQUIREMENTS.md`, `ROADMAP.md`, and `phases/01-entity-graph/CONTEXT.md`.
+**Shipped:** 2026-07-03 to production (`folio.openlegalstandard.org`) — PRs #18 (entity graph) + #19 (static cache-busting)
+**Theme:** Ancestor-rooted, interactive entity graph on `/explore/tree`, ported from folio-enrich (elkjs + cubic-bezier SVG), plus a static-asset cache-busting fix so deploys never serve stale JS/CSS.
+
+**What shipped:**
+- **Entity Graph tab** on `/explore/tree` — ancestor-rooted hierarchical graph (elkjs layout, cubic-bezier SVG edges), lazy-loaded on tab activation (GRAPH-01…05).
+- Full-screen pop-out modal with preserved state; click-a-node to select the IRI in the left tree; `+N Children` expansion merging into the live graph.
+- Multi-path ancestry + `rdfs:seeAlso` edges; 50/50 detail|graph tab split; node drag-to-rearrange with live edge redraws.
+- **Static-asset cache-busting** (PR #19, `d03b226`): `?v=<newest-mtime>` URL stamping + `CachedStaticFiles` sending `Cache-Control: public, max-age=3600, must-revalidate`; regression tests in `tests/test_static_cache.py`. Also folded prod deploy drift into the repo (XAI_API_KEY in compose, `soli.openlegalstandard.org` Caddy block; dropped the `rate_limit` directive that required an absent Caddy plugin).
+
+**Prod deploy mechanism (bare-metal EC2):** `13.59.153.110:/home/ubuntu/src/folio-api` — SSH (key `soli-api.pem`), preserve server-local drift, `git fetch origin && git reset --hard origin/main`, re-apply drift, `docker compose up -d --build` (`./run.sh prod`). Documented in `docs/plans/2026-07-02-001-chore-deploy-entity-graph-to-prod-plan.md`. Cache-busting verified live on both prod and dev 2026-07-07 (versioned URLs + Cache-Control headers present).
+
+**Archived plans:** `.planning/archive/v1.1/01-entity-graph/`
+
+**Key learnings carried forward:**
+- Starlette `StaticFiles` sends no `Cache-Control` by default → heuristic browser freshness serves stale JS after deploys. Version-stamp asset URLs AND set explicit `Cache-Control` together.
+- FastAPI-on-Hetzner/EC2 deploys carry server-local drift (LLM provider config, extra vhosts, env vars). Folding that drift into the repo (as PR #19 began) removes a recurring manual re-apply step and deploy risk.
+
+---

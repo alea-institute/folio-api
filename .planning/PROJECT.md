@@ -34,16 +34,18 @@ The taxonomy must be browsable, searchable, and visually clear — users come he
 - ✓ Compact tree-page header — milestone v1.0
 - ✓ Segmented expand/collapse pattern (Expand to depth-N, Expand all, Collapse one level, Collapse all) — milestone v1.0
 - ✓ Alternative Labels exclude non-English translations — milestone v1.0 (PR #16)
+- ✓ **GRAPH-01**: Selected entity renders in an ancestor-rooted hierarchical graph (cubic-bezier SVG) in the right detail pane — milestone v1.1 (PR #18)
+- ✓ **GRAPH-02**: Graph pops to a full-screen modal and back without losing state — milestone v1.1 (PR #18)
+- ✓ **GRAPH-03**: Clicking any node selects that IRI in the left tree and refreshes the graph — milestone v1.1 (PR #18)
+- ✓ **GRAPH-04**: Hidden children expand via a `+N Children` affordance, merging into the live graph — milestone v1.1 (PR #18)
+- ✓ **GRAPH-05**: Graph contents lazy-load only when the `Entity Graph` tab is activated — milestone v1.1 (PR #18)
+- ✓ Static-asset cache-busting (`?v=<mtime>` stamping + `Cache-Control: public, max-age=3600, must-revalidate`) so deploys never serve stale JS/CSS — milestone v1.1 (PR #19)
 
 ### Active
 
-<!-- Current scope: milestone v1.1 (Entity Graph) -->
+<!-- No active milestone — v1.1 shipped to prod 2026-07-03; next milestone TBD -->
 
-- [ ] **GRAPH-01**: User can view selected entity in an ancestor-rooted hierarchical graph (cubic-bezier SVG) inside the right detail pane
-- [ ] **GRAPH-02**: User can pop the graph out to a full-screen modal and back without losing graph state
-- [ ] **GRAPH-03**: User can click any node in the graph to select that IRI in the left tree (graph then refreshes)
-- [ ] **GRAPH-04**: User can expand a node's hidden children via a `+N Children` affordance, merging them into the live graph
-- [ ] **GRAPH-05**: Graph contents lazy-load only when the user activates the `Entity Graph` tab — not on every entity selection
+_None — v1.1 (Entity Graph) shipped to production 2026-07-03. Awaiting next-milestone definition._
 
 ### Out of Scope
 
