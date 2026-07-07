@@ -168,9 +168,14 @@ headers; allowed responses carry `X-RateLimit-Remaining`.
 | Key | Description | Default |
 |---|---|---|
 | `enabled` | Toggle limiting on/off | `true` |
-| `storage_uri` | `memory://` (per-process) or `redis://host:6379` for multi-worker/replica | `memory://` |
-| `trusted_proxy_hops` | Reverse-proxy hops to trust for `X-Forwarded-For` (the rightmost N entries); set `0` if exposed with no proxy | `1` |
+| `storage_uri` | `memory://` (per-process) or `redis://host:6379` for multi-worker/replica (requires the `limits[async-redis]` extra) | `memory://` |
+| `trusted_proxy_hops` | Reverse-proxy hops to trust for `X-Forwarded-For` (the rightmost N entries); set `0` to always key on the socket IP | `1` |
 | `tiers` | Map of path prefix → limit string or list; `default` is the fallback | see table above |
+
+`X-Forwarded-For` is only honored when the socket peer is a private/loopback
+address (i.e. plausibly our own Caddy/Traefik) — a direct internet client can
+never spoof the header to rotate rate-limit buckets, even if the app port is
+accidentally exposed without a proxy.
 
 ### LLM Configuration
 

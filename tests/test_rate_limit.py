@@ -187,6 +187,39 @@ def test_spoofed_leftmost_xff_is_ignored():
     assert r2.status_code == 429  # same real client -> still limited
 
 
+def test_xff_ignored_when_socket_peer_is_public():
+    """A direct internet client (public socket peer) must not be able to
+    spoof X-Forwarded-For — its own socket IP is the key. This closes the
+    bucket-rotation bypass if the app port is ever exposed without a proxy."""
+    scope = {
+        "client": ("203.0.113.200", 5000),  # public peer = not our proxy
+        "headers": [(b"x-forwarded-for", b"1.1.1.1")],
+    }
+    assert client_ip_from_scope(scope, trusted_proxy_hops=1) == "203.0.113.200"
+
+
+def test_xff_trusted_when_socket_peer_is_private():
+    """Our reverse proxy connects from the docker network (private range)."""
+    scope = {
+        "client": ("172.18.0.5", 5000),  # docker bridge = plausible proxy
+        "headers": [(b"x-forwarded-for", b"spoofed, 198.51.100.9")],
+    }
+    assert client_ip_from_scope(scope, trusted_proxy_hops=1) == "198.51.100.9"
+
+
+def test_multiple_xff_header_lines_joined_in_order():
+    """A client-smuggled separate XFF line must not shadow the proxy-written
+    one: all lines are joined in wire order and the rightmost entry wins."""
+    scope = {
+        "client": ("172.18.0.5", 5000),
+        "headers": [
+            (b"x-forwarded-for", b"9.9.9.9"),  # client-sent forged line
+            (b"x-forwarded-for", b"198.51.100.9"),  # proxy-appended line
+        ],
+    }
+    assert client_ip_from_scope(scope, trusted_proxy_hops=1) == "198.51.100.9"
+
+
 def test_client_ip_from_scope_rightmost_with_one_hop():
     scope = {
         "client": ("172.17.0.1", 5000),
@@ -236,6 +269,35 @@ def test_config_defaults_when_absent():
 
 def test_config_can_disable():
     assert RateLimitConfig({"enabled": False}).enabled is False
+
+
+def test_config_rejects_empty_tier():
+    """An empty tier list would silently mean 'unlimited' — refuse it."""
+    with pytest.raises(ValueError):
+        RateLimitConfig({"tiers": {"/search/": [], "default": ["1/minute"]}})
+
+
+def test_exempt_prefix_respects_segment_boundary():
+    """/mcp exempts /mcp and /mcp/..., but NOT /mcp-evil (over-exemption)."""
+    cfg = RateLimitConfig(None)
+    assert cfg.is_exempt("/mcp") is True
+    assert cfg.is_exempt("/mcp/tools") is True
+    assert cfg.is_exempt("/mcp-evil") is False
+    assert cfg.is_exempt("/docs") is True
+    assert cfg.is_exempt("/docsomething") is False
+
+
+def test_header_pair_reports_same_tightest_limit():
+    """X-RateLimit-Limit and -Remaining must describe the SAME limit item:
+    with 3/minute + 100/hour, after one request the tightest is the minute
+    bucket (2 remaining) and the Limit header must name the minute limit."""
+    client = _make_client(
+        {"tiers": {"/search/": ["3/minute", "100/hour"], "default": ["100/minute"]}}
+    )
+    r = client.get("/search/prefix?query=x")
+    assert r.status_code == 200
+    assert r.headers["X-RateLimit-Remaining"] == "2"
+    assert "minute" in r.headers["X-RateLimit-Limit"]
 
 
 if __name__ == "__main__":
