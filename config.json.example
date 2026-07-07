@@ -27,6 +27,17 @@
     "bind_ip": "0.0.0.0",
     "bind_port": 8000,
     "cors_origins": ["*"],
-    "log_level": "info"
+    "log_level": "info",
+    "_rate_limit_note": "App-level IP rate limiting. Tightest tier on paid /search/llm/* routes. trusted_proxy_hops=1 trusts one reverse proxy (Caddy/Traefik) for X-Forwarded-For; set 0 if exposed with no proxy. For multi-worker/replica deploys set storage_uri to redis://host:6379 (memory:// is per-process).",
+    "rate_limit": {
+      "enabled": true,
+      "storage_uri": "memory://",
+      "trusted_proxy_hops": 1,
+      "tiers": {
+        "/search/llm/": ["10/minute", "100/hour"],
+        "/search/": ["60/minute", "1000/hour"],
+        "default": ["240/minute"]
+      }
+    }
   }
 }

@@ -26,6 +26,16 @@
     "cors_origins": [
       "*"
     ],
-    "log_level": "info"
+    "log_level": "info",
+    "rate_limit": {
+      "enabled": true,
+      "storage_uri": "memory://",
+      "trusted_proxy_hops": 1,
+      "tiers": {
+        "/search/llm/": ["10/minute", "100/hour"],
+        "/search/": ["60/minute", "1000/hour"],
+        "default": ["240/minute"]
+      }
+    }
   }
 }

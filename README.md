@@ -146,7 +146,31 @@ The API can be configured using the `config.json` file. The main configuration s
 
 - `folio`: Settings for the FOLIO ontology source (GitHub repository or HTTP URL)
 - `llm`: Configuration for the LLM model used for semantic searches
-- `api`: API metadata, binding options, and CORS settings
+- `api`: API metadata, binding options, CORS settings, and `rate_limit`
+
+### Rate Limiting
+
+The API rate-limits by client IP at the application layer (`api.rate_limit` in
+`config.json`), so the protection is portable across every deploy target
+(Caddy on bare-metal, Traefik/Coolify on dev, Railway) instead of living in one
+proxy's config. Tiers are matched by path prefix (longest match wins):
+
+| Tier | Default limit | Applies to |
+|---|---|---|
+| `/search/llm/` | `10/minute`, `100/hour` | Paid LLM semantic-search routes (real OpenAI/XAI cost) — tightest |
+| `/search/` | `60/minute`, `1000/hour` | Non-LLM search routes — moderate |
+| `default` | `240/minute` | Everything else — generous |
+
+Health (`/info/health`), static assets, docs, and `/mcp` are exempt. Exceeding
+a limit returns **HTTP 429** with a `Retry-After` header and `X-RateLimit-*`
+headers; allowed responses carry `X-RateLimit-Remaining`.
+
+| Key | Description | Default |
+|---|---|---|
+| `enabled` | Toggle limiting on/off | `true` |
+| `storage_uri` | `memory://` (per-process) or `redis://host:6379` for multi-worker/replica | `memory://` |
+| `trusted_proxy_hops` | Reverse-proxy hops to trust for `X-Forwarded-For` (the rightmost N entries); set `0` if exposed with no proxy | `1` |
+| `tiers` | Map of path prefix → limit string or list; `default` is the fallback | see table above |
 
 ### LLM Configuration
 
@@ -232,9 +256,10 @@ Caddy provides:
 
 - **Automatic HTTPS**: TLS certificates are automatically managed in production
 - **Security headers**: HSTS, XSS protection, and other security headers
-- **Rate limiting**: Prevents abuse of the API
 - **Gzip compression**: Reduces bandwidth usage
 - **Structured logging**: JSON logs for better monitoring
+
+Rate limiting is enforced at the application layer (see [Rate Limiting](#rate-limiting)) rather than in Caddy, so it travels with the app across all deploy targets.
 
 ## Contributing
 
