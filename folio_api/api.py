@@ -34,6 +34,7 @@ import folio_api.routes.properties
 import folio_api.routes.explore
 import folio_api.routes.connections
 from folio_api.api_config import load_config
+from folio_api.rate_limit import RateLimitConfig, RateLimitMiddleware
 
 _DEFAULT_LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
@@ -189,7 +190,11 @@ def initialize_folio(folio_config: Dict[str, Any], llm_config: Dict[str, Any]) -
     )
     # Treat un-substituted "${ENV_VAR}" placeholders as missing so the literal
     # string isn't passed to the LLM client as a key. Falls back to env var.
-    if isinstance(llm_api_key, str) and llm_api_key.startswith("${") and llm_api_key.endswith("}"):
+    if (
+        isinstance(llm_api_key, str)
+        and llm_api_key.startswith("${")
+        and llm_api_key.endswith("}")
+    ):
         llm_api_key = os.getenv(_API_KEY_ENV_VARS.get(llm_engine, "OPENAI_API_KEY"))
     llm_effort = llm_config.get("effort", None)
     llm_tier = llm_config.get("tier", None)
@@ -276,6 +281,18 @@ def get_app() -> FastAPI:
         },
         lifespan=lifespan_handler,
     )
+
+    # App-level rate limiting (portable across Caddy/Traefik/Coolify/Railway).
+    # Added before CORS so that CORS ends up the OUTERMOST middleware and its
+    # headers are applied even to a 429 — browsers can then read the rejection.
+    # Tiers/limits come from config.json ``api.rate_limit`` (module defaults if
+    # absent). See folio_api/rate_limit.py for the design rationale.
+    rate_limit_config = RateLimitConfig(api_config.get("rate_limit"))
+    if rate_limit_config.enabled:
+        app_instance.add_middleware(
+            RateLimitMiddleware,  # type: ignore
+            config=rate_limit_config,
+        )
 
     # Enable CORS as this is a public API by default.
     app_instance.add_middleware(
