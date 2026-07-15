@@ -23,6 +23,26 @@ For example, you can view the `Lessor` class:
 
 The FOLIO API allows users to interact with the FOLIO ontology, providing endpoints for searching, retrieving class information, and exploring the taxonomy.
 
+FOLIO models 18,000+ legal concepts — areas of law, document artifacts, actors and players, legal entities, events, industries, forums and venues, and more — along with the OWL object properties that relate them. The API exposes that ontology over HTTP so it can be queried by prefix, label, or definition; browsed by taxonomy branch or property tree; searched semantically with an LLM; traversed as a graph of subject-property-object connections; and served for any concept in JSON, JSON-LD, Markdown, OWL XML, or HTML.
+
+## Who it's for
+
+The FOLIO API is built for anyone who needs a shared, machine-readable vocabulary for law. A few of the people it serves:
+
+- **Priya, a legal-tech engineer.** She's wiring FOLIO into her firm's matter-intake product and needs stable identifiers and clean payloads. She resolves a concept by IRI to `.../jsonld` for her RDF store and to plain JSON for her app, uses `/search/prefix` to power an autocomplete field, and calls `/connections` to pull the subject-property-object triples that tell her how a `Lessor` relates to a `Lease`. Open CORS and a self-descriptive OpenAPI spec at `/openapi.json` mean she can integrate without standing up any infrastructure of her own.
+- **Marcus, a knowledge engineer / taxonomist.** He curates FOLIO itself and needs to see the ontology as it really is. He works from the interactive `/explore/tree` explorer and the `/properties` tree to inspect class and property hierarchies, uses `/taxonomy/{branch}` with `max_depth` to walk a branch node by node, and reads the ancestor-rooted entity graph to check that a concept sits under the right parents before proposing a change.
+- **Dana, on a law firm's data & KM team.** Her team classifies incoming documents and matters against a controlled vocabulary. She uses the LLM-backed `/search/llm/document-artifacts` and `/search/llm/area-of-law` endpoints to map free-text descriptions onto FOLIO concepts, then browses `/taxonomy/document_artifact` and `/taxonomy/industry` to validate the results against the canonical taxonomy — so every document lands on a stable IRI the whole firm agrees on.
+- **Dr. Alvarez, a legal researcher.** She studies how areas of law overlap and needs interoperable, citable definitions. She queries `/taxonomy/area_of_law` and `/search/definition` to find concepts by their meaning rather than their name, exports them as OWL XML or JSON-LD for use in her own knowledge base, and links to the human-readable HTML rendering of each class in her writing.
+
+## Use cases
+
+- **Autocomplete and lookup** — power type-ahead and concept pickers with `/search/prefix` (label prefix or substring) and resolve any selected concept by IRI.
+- **Document and matter classification** — map free text to FOLIO concepts with the LLM-backed `/search/llm/*` endpoints (areas of law, document artifacts, industries, events, legal authorities, and more), then confirm against the canonical `/taxonomy/*` branches.
+- **Taxonomy browsing and curation** — explore class and property hierarchies interactively via `/explore/tree` and `/properties`, or programmatically via `/taxonomy/{branch}` with configurable `max_depth`.
+- **Semantic graph traversal** — discover how concepts relate through `/connections`, which returns subject-property-object triples between FOLIO concepts.
+- **Interoperability and data exchange** — retrieve any concept as JSON, JSON-LD, Markdown, OWL XML, or HTML to feed RDF stores, knowledge graphs, documentation, or downstream applications.
+- **Definition-based discovery** — find concepts by the content of their definitions (not just their labels) with `/search/definition`.
+
 ## Swagger UI and OpenAPI Specification
 
 The Swagger UI documentation can be found at [https://folio.openlegalstandard.org/docs](https://folio.openlegalstandard.org/docs).
