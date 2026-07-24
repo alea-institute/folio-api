@@ -20,6 +20,23 @@ Information Ontology), maintained by the **ALEA Institute**, originating from th
 | folio-python[search], fastapi, folio-mcp | MIT |
 | `limits` (>=3.13,<6; pinned to 5.8.0 in `uv.lock`) | MIT |
 | uvicorn, jinja2 | BSD-3-Clause |
+| starlette, pydantic | BSD-3-Clause / MIT (pulled by FastAPI; imported directly) |
+| alea-llm-client | MIT (ALEA Institute) — backs the `/search/llm/*` routes |
+
+**Undeclared direct import.** `folio_api` imports `alea_llm_client` directly but
+`pyproject.toml` does not list it; it resolves today only as a transitive of
+`folio-python[search]`. Licensing is clean (MIT, same authors), but the manifest
+should declare it — flagged rather than changed here, since dependency edits are
+out of scope for a docs pass.
+
+### Dev dependencies
+
+| Component | License |
+|-----------|---------|
+| pytest, pytest-asyncio, pytest-cov | MIT / Apache-2.0 |
+| black, pylint | MIT / GPL-2.0-or-later (pylint is a dev-only tool, never linked or redistributed) |
+| sphinx, myst-parser, sphinx-book-theme, sphinxcontrib-mermaid | BSD-2-Clause / MIT |
+| hatchling (build backend) | MIT |
 
 `limits` (https://github.com/alisaifee/limits, MIT) is the rate-limiting
 primitive behind `folio_api/rate_limit.py` — the same engine `slowapi` /

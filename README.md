@@ -23,6 +23,28 @@ For example, you can view the `Lessor` class:
 
 The FOLIO API allows users to interact with the FOLIO ontology, providing endpoints for searching, retrieving class information, and exploring the taxonomy.
 
+### What it serves
+
+| Surface | Endpoints | Notes |
+|---------|-----------|-------|
+| **Class retrieval** | `/{iri}` in JSON, JSON-LD, Markdown, OWL XML, HTML | one IRI, five representations |
+| **Search** | `/search/prefix`, `/search/label`, `/search/definition`, `/search/llm/*` | prefix/substring, label content, definition content, and LLM-assisted area-of-law search |
+| **Structured query** | `/query/concepts`, `/query/properties` | filterable queries over classes and object properties |
+| **Taxonomy explorer** | `/taxonomy/*`, `/explore/*` | branch listing, tree data, node paths, tree search, and the unified class + property explorer |
+| **Object properties** | `/properties/*` | property tree, node data, rendered details |
+| **Entity graph** | `/connections`, ancestor-rooted graph | subject-property-object triples between concepts (v1.1) |
+| **MCP** | `/mcp` | the `folio-mcp` server mounted in-process for LLM tool use |
+| **Ops** | `/info/health`, `/docs`, `/openapi.json` | health check, Swagger UI, OpenAPI spec |
+
+### Who it's for
+
+- **Application developers** embedding a legal taxonomy — search, resolve, and render FOLIO concepts without hosting an ontology.
+- **LLM/agent builders** — the mounted `/mcp` server and the `/search/llm/*` routes give a model tool-level access to FOLIO.
+- **Ontologists and the FOLIO community** — a browsable explorer over classes, properties, and their connections.
+- **Downstream FOLIO tooling** (folio-enrich, folio-insights, folio-mapper, alea-intake) — the shared HTTP contract when a local `folio-python` install is not an option.
+
+Typical use cases: resolve a label to a FOLIO IRI; render a concept as JSON-LD for a knowledge graph; walk a taxonomy branch for a picker UI; ask which triples connect two concepts; classify a matter's area of law.
+
 ## Swagger UI and OpenAPI Specification
 
 The Swagger UI documentation can be found at [https://folio.openlegalstandard.org/docs](https://folio.openlegalstandard.org/docs).
@@ -272,7 +294,9 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
-The FOLIO Python library is released under the MIT License. See the [LICENSE](LICENSE) file for details.
+The FOLIO API is released under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+The FOLIO ontology this API serves is licensed **CC-BY 4.0** — consumers must attribute it. Every dependency and its license is inventoried in [THIRD-PARTY.md](THIRD-PARTY.md).
 
 ## Support
 
