@@ -6,7 +6,7 @@ import logging
 import logging.config
 import os
 from collections import defaultdict
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from typing import Any, Dict
 from pathlib import Path
 
@@ -141,7 +141,15 @@ async def lifespan_handler(app_instance: FastAPI):
         llm.model if llm is not None else "<disabled>",
     )
 
-    yield
+    # The MCP server is mounted as a sub-application (see get_app()), but Starlette
+    # does not forward ASGI lifespan events to mounted sub-apps. Its streamable-HTTP
+    # session manager needs its own lifespan entered explicitly here, or every
+    # request 500s with "Task group is not initialized."
+    mcp_app = app_instance.state.mcp_app
+    async with AsyncExitStack() as mcp_stack:
+        await mcp_stack.enter_async_context(mcp_app.router.lifespan_context(mcp_app))
+
+        yield
 
     # log shutdown
     app_instance.state.logger.info("Shutting down API")
@@ -364,10 +372,20 @@ def get_app() -> FastAPI:
     # root.router has /{iri} catch-all, so it must be registered last
     app_instance.include_router(folio_api.routes.root.router)
 
-    # Mount FOLIO MCP server at /mcp
+    # Mount the FOLIO MCP server at the app root, relying on its own default
+    # streamable_http_path ("/mcp") to define the live endpoint. Mounting the
+    # sub-app AT "/mcp" instead (i.e. Mount("/mcp", mcp_app) with the default
+    # inner path) would nest it at "/mcp/mcp", and even correcting the inner
+    # path to "/" would still require a trailing slash on every request
+    # (Starlette's Mount regex is "<path>/{path:path}", which never matches
+    # the bare mount path with nothing after it). Stash the sub-app on state
+    # so lifespan_handler can enter its session-manager lifespan (Starlette
+    # does not cascade ASGI lifespan events into mounted sub-apps).
     from folio_mcp.server import mcp as folio_mcp_server
 
-    app_instance.mount("/mcp", folio_mcp_server.streamable_http_app())
+    mcp_app = folio_mcp_server.streamable_http_app()
+    app_instance.state.mcp_app = mcp_app
+    app_instance.mount("/", mcp_app)
 
     return app_instance
 
