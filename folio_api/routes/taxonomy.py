@@ -1134,8 +1134,8 @@ async def search_taxonomy_tree(request: Request, query: str) -> JSONResponse:
             tree["root_nodes"].append(node_iri)
 
     root_classes = [
-        folio[iri_id] for iri_id in ROOT_CLASS_IRI_IDS
-        if folio[iri_id] is not None
+        cls for iri_id in ROOT_CLASS_IRI_IDS
+        if (cls := folio[iri_id]) is not None
     ]
     tree["hidden_root_count"] = sum(
         cls.iri not in tree["root_nodes"] for cls in root_classes

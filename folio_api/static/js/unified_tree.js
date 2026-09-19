@@ -105,7 +105,7 @@ function renderTreeNode(node, container, sectionType) {
 }
 
 function loadTreeNodes(nodeId, container, sectionType) {
-    if (nodeId === '#' && document.getElementById('explore-search-input')?.dataset.filtering === 'true') return;
+    if (nodeId === '#' && isSearchFilterActive()) return;
     if (container.children('.tree-node').length > 0) return;
     container.append('<li class="loading-indicator"><span>Loading...</span></li>');
 
@@ -114,7 +114,7 @@ function loadTreeNodes(nodeId, container, sectionType) {
         .then(r => { if (!r.ok) throw new Error('Network error'); return r.json(); })
         .then(data => {
             // A full-root request may have started before search mode was enabled.
-            if (nodeId === '#' && document.getElementById('explore-search-input')?.dataset.filtering === 'true') return;
+            if (nodeId === '#' && isSearchFilterActive()) return;
             container.find('.loading-indicator').remove();
             container.children('.tree-node').remove();
             data.forEach(node => {
@@ -130,12 +130,16 @@ function loadTreeNodes(nodeId, container, sectionType) {
             setupNodeClickHandlers();
         })
         .catch(() => {
-            if (nodeId === '#' && document.getElementById('explore-search-input')?.dataset.filtering === 'true') return;
+            if (nodeId === '#' && isSearchFilterActive()) return;
             container.find('.loading-indicator').html('<span class="text-red-500">Error loading. Try again.</span>');
         });
 }
 
 // ---------- Retained search context ----------
+function isSearchFilterActive() {
+    return document.getElementById('explore-search-input')?.dataset.filtering === 'true';
+}
+
 // Accept either a native container or a jQuery wrapper, as callers use both.
 function mergeChildrenIntoContainer(container, sectionType, fetchedChildren) {
     const list = $(container);
@@ -183,6 +187,11 @@ function mergeChildrenIntoContainer(container, sectionType, fetchedChildren) {
     setupNodeClickHandlers();
 }
 
+function siblingsCountLabel(row, count) {
+    const text = '+' + count + ' siblings';
+    return { text, ariaLabel: text + ' ' + row.attr('data-branch-label') };
+}
+
 function refreshSiblingsRow(container, sectionType, nodeId) {
     const list = $(container);
     const row = list.children('.siblings-row');
@@ -211,10 +220,11 @@ function refreshSiblingsRow(container, sectionType, nodeId) {
     if (hidden !== undefined) {
         hidden = Math.max(0, hidden);
         if (hidden === 0) { row.remove(); return; }
-        // Preserve a native control and its handlers if U4 puts one in the row.
+        // Preserve the native control and its handlers.
         const control = row.find('button').first();
-        (control.length ? control : row).text('+' + hidden + ' siblings');
-        if (control.length) control.attr('aria-label', '+' + hidden + ' siblings ' + row.attr('data-branch-label'));
+        const label = siblingsCountLabel(row, hidden);
+        (control.length ? control : row).text(label.text);
+        if (control.length) control.attr('aria-label', label.ariaLabel);
     }
     list.append(row);
 }
@@ -256,14 +266,15 @@ function appendSiblingsRow(container, sectionType, parentId, parentLabel, hidden
         'data-type': sectionType,
         'data-branch-label': parentId === '#' ? 'at the top level' : 'under ' + parentLabel
     });
+    const label = siblingsCountLabel(row, hidden);
     $('<button type="button" class="siblings-toggle"></button>').attr({
         'aria-expanded': 'false',
-        'aria-label': '+' + hidden + ' siblings ' + row.attr('data-branch-label')
-    }).text('+' + hidden + ' siblings').appendTo(row);
+        'aria-label': label.ariaLabel
+    }).text(label.text).appendTo(row);
     $(container).append(row);
 }
 
-// U5 hook: reveal retained siblings before selecting a node hidden by this row.
+// Reveal retained siblings before selecting a node hidden by this row.
 function showSiblingsRowContext(row) {
     row = $(row);
     row.parent().children('.tree-node-context').show();
@@ -282,10 +293,10 @@ async function toggleSiblingsRow(row) {
         const context = container.children('.tree-node-context');
         context.hide();
         row.data('siblingsOpen', false);
-        const text = '+' + context.length + ' siblings';
-        button.text(text).attr({
+        const label = siblingsCountLabel(row, context.length);
+        button.text(label.text).attr({
             'aria-expanded': 'false',
-            'aria-label': text + ' ' + row.attr('data-branch-label')
+            'aria-label': label.ariaLabel
         });
     } else if (row.data('siblingsLoaded')) {
         showSiblingsRowContext(row);
@@ -331,12 +342,12 @@ function toggleNode(li) {
     const expandIcon = li.find('> .node-content .expand-icon');
 
     if (li.hasClass('collapsed')) {
-        if (document.getElementById('explore-search-input')?.dataset.filtering === 'true' && expandIcon.prop('disabled')) return;
+        if (isSearchFilterActive() && expandIcon.prop('disabled')) return;
         li.removeClass('collapsed').addClass('expanded');
         expandIcon.addClass('expanded');
         childrenContainer.slideDown(200);
         const renderedCount = childrenContainer.children('.tree-node').length;
-        if (document.getElementById('explore-search-input')?.dataset.filtering === 'true') {
+        if (isSearchFilterActive()) {
             const tree = lastSearchTrees[sectionType];
             const node = tree && tree.nodes && tree.nodes[nodeId];
             const needsChildren = li.hasClass('tree-node-context')
@@ -389,7 +400,7 @@ function selectNode(li, updateUrl) {
 }
 
 function ensureNodeVisible(li) {
-    if (document.getElementById('explore-search-input')?.dataset.filtering === 'true') {
+    if (isSearchFilterActive()) {
         li.add(li.parents('.tree-node')).each(function() {
             const node = $(this);
             const row = node.parent().children('.siblings-row');
@@ -478,7 +489,7 @@ function selectNodeByIri(iri) {
         return;
     }
 
-    if (document.getElementById('explore-search-input')?.dataset.filtering === 'true') {
+    if (isSearchFilterActive()) {
         return revealAndSelectInSearch(iri);
     }
 
@@ -519,7 +530,7 @@ function selectNodeByIri(iri) {
 async function revealAndSelectInSearch(iri) {
     const searchTrees = lastSearchTrees;
     const stillSearching = () => lastSearchTrees === searchTrees &&
-        document.getElementById('explore-search-input')?.dataset.filtering === 'true';
+        isSearchFilterActive();
     try {
         let sectionType = ['class', 'property'].find(type => searchTrees[type]?.nodes?.[iri]);
         let targetData;
@@ -902,7 +913,7 @@ function applyContextStyles() {
 
 // ---------- Expand / Collapse all ----------
 function expandAllNodes() {
-    if (document.getElementById('explore-search-input')?.dataset.filtering === 'true') {
+    if (isSearchFilterActive()) {
         $('.tree-node.collapsed').filter('.tree-node-match, .tree-node-context')
             .slice(0, 50).each(function() { toggleNode($(this)); });
         return;
@@ -924,7 +935,7 @@ function collapseAllNodes() {
 // Expand one ply deeper than the current frontier.
 // First click expands depth 0 (top branches); each subsequent click drills one more level.
 function expandOneMoreLevel() {
-    if (document.getElementById('explore-search-input')?.dataset.filtering === 'true') {
+    if (isSearchFilterActive()) {
         $('.tree-node.collapsed:visible').filter('.tree-node-match, .tree-node-context')
             .slice(0, 50).each(function() { toggleNode($(this)); });
         return;
