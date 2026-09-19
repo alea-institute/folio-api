@@ -417,6 +417,7 @@ async def get_property_path(request: Request, iri: str) -> JSONResponse:
 async def search_property_tree(request: Request, query: str) -> JSONResponse:
     """Search for properties and return a filtered tree structure."""
     folio: FOLIO = request.app.state.folio
+    property_children = getattr(request.app.state, "property_children", None)
 
     if not query or len(query) < 2:
         return JSONResponse(content={"matches": [], "tree": {}})
@@ -510,6 +511,7 @@ async def search_property_tree(request: Request, query: str) -> JSONResponse:
                 "children": [],
                 "is_match": is_match,
                 "match_field": _get_match_field(prop, query_lower) if is_match else None,
+                "child_count": len(_get_child_properties(folio, prop.iri, property_children)),
             }
 
     # Build parent-child relationships
@@ -527,6 +529,10 @@ async def search_property_tree(request: Request, query: str) -> JSONResponse:
 
         if is_top_level:
             tree["root_nodes"].append(node_iri)
+
+    tree["hidden_root_count"] = sum(
+        prop.iri not in tree["root_nodes"] for prop in _get_root_properties(folio)
+    )
 
     matches.sort(key=lambda x: x["label"].lower())
 
