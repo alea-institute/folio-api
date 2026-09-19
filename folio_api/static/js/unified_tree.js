@@ -892,6 +892,8 @@ function applyContextStyles() {
     style.textContent = `
         .tree-node-context > .node-content { color: var(--color-text-muted) !important; font-weight: 400 !important; }
         .tree-error-row, .siblings-row { list-style: none; color: var(--color-text-muted); font-size: 0.85em; padding: 3px 6px; }
+        .siblings-toggle { min-height: 32px; padding: 4px 8px; display: inline-flex; align-items: center; cursor: pointer; background: transparent; border: 0; color: inherit; font: inherit; }
+        .siblings-toggle:focus-visible { outline: 2px solid var(--color-primary, rgb(24,70,120)); outline-offset: 2px; }
         .tree-retry { color: inherit; cursor: pointer; background: transparent; border: 1px solid currentColor; border-radius: 3px; padding: 1px 6px; }
         .tree-retry:disabled { opacity: 0.6; cursor: wait; }
     `;
@@ -1240,7 +1242,7 @@ function renderFilteredNode(nodeId, treeData, container, sectionType) {
             renderFilteredNode(childId, treeData, childrenContainer, sectionType);
         });
         const hidden = (node.child_count || 0) - $(childrenContainer).children('.tree-node').length;
-        if (!node.is_match) appendSiblingsRow(childrenContainer, sectionType, nodeId, node.label, hidden);
+        if (!node.is_match || isExpanded) appendSiblingsRow(childrenContainer, sectionType, nodeId, node.label, hidden);
     }
 }
 
