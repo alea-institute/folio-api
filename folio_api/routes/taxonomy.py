@@ -1107,6 +1107,7 @@ async def search_taxonomy_tree(request: Request, query: str) -> JSONResponse:
                 "children": [],
                 "is_match": is_match,
                 "match_field": _get_match_field(cls, query_lower) if is_match else None,
+                "child_count": len(cls.parent_class_of),
             }
 
     # Step 2: Build parent-child relationships
@@ -1131,6 +1132,14 @@ async def search_taxonomy_tree(request: Request, query: str) -> JSONResponse:
         # If this is a top-level node, add to root_nodes
         if is_top_level:
             tree["root_nodes"].append(node_iri)
+
+    root_classes = [
+        folio[iri_id] for iri_id in ROOT_CLASS_IRI_IDS
+        if folio[iri_id] is not None
+    ]
+    tree["hidden_root_count"] = sum(
+        cls.iri not in tree["root_nodes"] for cls in root_classes
+    )
 
     # Sort matches alphabetically by label
     matches.sort(key=lambda x: x["label"].lower())
