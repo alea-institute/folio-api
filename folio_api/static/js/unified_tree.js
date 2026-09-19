@@ -34,6 +34,8 @@ const nodeDataCache = new Map();
 const MAX_CACHE_SIZE = 200;
 let isLoadingTree = false;
 let lastSearchTrees = { class: null, property: null };
+let searchGeneration = 0;
+let revealGeneration = 0;
 
 // ---------- Cache helper ----------
 async function getNodeData(nodeId, sectionType) {
@@ -230,6 +232,8 @@ function refreshSiblingsRow(container, sectionType, nodeId) {
 }
 
 async function fetchAndMergeChildren(nodeId, container, sectionType, { control } = {}) {
+    const generation = searchGeneration;
+    const stillSearching = () => generation === searchGeneration && isSearchFilterActive();
     const list = $(container);
     const activatedControl = $(control);
     list.children('.tree-error-row').remove();
@@ -238,13 +242,16 @@ async function fetchAndMergeChildren(nodeId, container, sectionType, { control }
     activatedControl.prop('disabled', true);
     try {
         const response = await fetch(SECTIONS[sectionType].treeDataEndpoint + '?node_id=' + encodeURIComponent(nodeId));
+        if (!stillSearching()) return false;
         if (!response.ok) throw new Error('Network error');
         const children = await response.json();
+        if (!stillSearching()) return false;
         if (!Array.isArray(children)) throw new Error('Invalid child list');
         mergeChildrenIntoContainer(list, sectionType, children);
         indicator.remove();
         return true;
     } catch (_) {
+        if (!stillSearching()) return false;
         const errorRow = $('<li class="tree-error-row"><span>Error loading. </span><button type="button" class="tree-retry">Retry</button></li>');
         errorRow.find('.tree-retry').on('click', function(event) {
             event.stopPropagation();
@@ -254,6 +261,7 @@ async function fetchAndMergeChildren(nodeId, container, sectionType, { control }
         refreshSiblingsRow(list, sectionType, nodeId);
         return false;
     } finally {
+        indicator.remove();
         activatedControl.prop('disabled', false);
     }
 }
@@ -352,7 +360,8 @@ function toggleNode(li) {
             const node = tree && tree.nodes && tree.nodes[nodeId];
             const needsChildren = li.hasClass('tree-node-context')
                 ? li.hasClass('has-children') && renderedCount === 0
-                : li.hasClass('tree-node-match') && renderedCount < (node?.child_count || 0);
+                : li.hasClass('tree-node-match') && !childrenContainer.children('.siblings-row').length &&
+                    renderedCount < (node?.child_count || 0);
             if (needsChildren) {
                 fetchAndMergeChildren(nodeId, childrenContainer, sectionType, { control: expandIcon });
             }
@@ -366,6 +375,7 @@ function toggleNode(li) {
             });
         }, 250);
     } else {
+        if (isSearchFilterActive() && expandIcon.prop('disabled')) return;
         li.removeClass('expanded').addClass('collapsed');
         expandIcon.removeClass('expanded');
         childrenContainer.slideUp(200);
@@ -528,8 +538,11 @@ function selectNodeByIri(iri) {
 
 // Reveal details links through the same child and sibling controls as search browsing.
 async function revealAndSelectInSearch(iri) {
+    const generation = ++revealGeneration;
+    const search = searchGeneration;
     const searchTrees = lastSearchTrees;
-    const stillSearching = () => lastSearchTrees === searchTrees &&
+    const stillSearching = () => generation === revealGeneration && search === searchGeneration &&
+        lastSearchTrees === searchTrees &&
         isSearchFilterActive();
     try {
         let sectionType = ['class', 'property'].find(type => searchTrees[type]?.nodes?.[iri]);
@@ -539,6 +552,7 @@ async function revealAndSelectInSearch(iri) {
             try {
                 targetData = await getNodeData(iri, sectionType);
             } catch (error) {
+                if (!stillSearching()) return;
                 if (error.message !== 'Failed to fetch node data: 404') throw error;
                 sectionType = 'property';
                 targetData = await getNodeData(iri, sectionType);
@@ -914,7 +928,9 @@ function applyContextStyles() {
 // ---------- Expand / Collapse all ----------
 function expandAllNodes() {
     if (isSearchFilterActive()) {
-        $('.tree-node.collapsed').filter('.tree-node-match, .tree-node-context')
+        const collapsed = $('.tree-node.collapsed');
+        collapsed.not('.tree-node-match, .tree-node-context').each(function() { toggleNode($(this)); });
+        collapsed.filter('.tree-node-match, .tree-node-context')
             .slice(0, 50).each(function() { toggleNode($(this)); });
         return;
     }
@@ -936,7 +952,9 @@ function collapseAllNodes() {
 // First click expands depth 0 (top branches); each subsequent click drills one more level.
 function expandOneMoreLevel() {
     if (isSearchFilterActive()) {
-        $('.tree-node.collapsed:visible').filter('.tree-node-match, .tree-node-context')
+        const collapsed = $('.tree-node.collapsed:visible');
+        collapsed.not('.tree-node-match, .tree-node-context').each(function() { toggleNode($(this)); });
+        collapsed.filter('.tree-node-match, .tree-node-context')
             .slice(0, 50).each(function() { toggleNode($(this)); });
         return;
     }
@@ -1086,6 +1104,7 @@ function setupSearch() {
     function doSearch() {
         const query = input.value;
         if (query && query.length >= 2) {
+            searchGeneration++;
             if (input.dataset.filtering === 'true') {
                 lastSearchTrees = { class: null, property: null };
             } else {
@@ -1095,6 +1114,7 @@ function setupSearch() {
         } else if (query.length > 0 && query.length < 2) {
             alert('Please enter at least 2 characters for search');
         } else {
+            searchGeneration++;
             resetTreeSearch();
         }
     }
@@ -1130,6 +1150,7 @@ function searchUnified(query) {
         .then(r => r.json()).catch(() => ({ matches: [], tree: {} }));
 
     Promise.all([classSearch, propSearch]).then(([classData, propData]) => {
+        searchGeneration++;
         lastSearchTrees = { class: classData.tree || null, property: propData.tree || null };
         const classMatches = classData.matches || [];
         const propMatches = propData.matches || [];
@@ -1298,6 +1319,7 @@ function addFilterModeControls(totalCount, query, classCount, propCount) {
 }
 
 function clearFilterMode() {
+    searchGeneration++;
     lastSearchTrees = { class: null, property: null };
     // Hide inline clear button and match count
     const clearBtn = document.getElementById('explore-search-clear');
@@ -1330,6 +1352,7 @@ function clearFilterMode() {
 }
 
 function resetTreeSearch() {
+    searchGeneration++;
     const input = document.getElementById('explore-search-input');
     const isFilterMode = input && input.dataset.filtering === 'true';
     if (isFilterMode) {
