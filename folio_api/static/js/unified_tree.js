@@ -197,12 +197,20 @@ function refreshSiblingsRow(container, sectionType, nodeId) {
             hidden = node.child_count - list.children('.tree-node').length;
         }
     }
+    // Keep row-initiated reveals hideable, including after a successful Retry.
+    if (row.data('siblingsRequested') && list.children('.tree-node-context').length) {
+        if (!row.data('siblingsLoaded')) showSiblingsRowContext(row);
+        row.data('siblingsLoaded', true);
+        list.append(row);
+        return;
+    }
     if (hidden !== undefined) {
         hidden = Math.max(0, hidden);
         if (hidden === 0) { row.remove(); return; }
         // Preserve a native control and its handlers if U4 puts one in the row.
         const control = row.find('button').first();
         (control.length ? control : row).text('+' + hidden + ' siblings');
+        if (control.length) control.attr('aria-label', '+' + hidden + ' siblings ' + row.attr('data-branch-label'));
     }
     list.append(row);
 }
@@ -236,9 +244,65 @@ async function fetchAndMergeChildren(nodeId, container, sectionType, { control }
     }
 }
 
+// Native sibling controls retain direct context children so reopening never fetches.
+function appendSiblingsRow(container, sectionType, parentId, parentLabel, hidden) {
+    if (hidden <= 0) return;
+    const row = $('<li class="siblings-row"></li>').attr({
+        'data-parent-id': parentId,
+        'data-type': sectionType,
+        'data-branch-label': parentId === '#' ? 'at the top level' : 'under ' + parentLabel
+    });
+    $('<button type="button" class="siblings-toggle"></button>').attr({
+        'aria-expanded': 'false',
+        'aria-label': '+' + hidden + ' siblings ' + row.attr('data-branch-label')
+    }).text('+' + hidden + ' siblings').appendTo(row);
+    $(container).append(row);
+}
+
+// U5 hook: reveal retained siblings before selecting a node hidden by this row.
+function showSiblingsRowContext(row) {
+    row = $(row);
+    row.parent().children('.tree-node-context').show();
+    row.data('siblingsOpen', true);
+    row.children('.siblings-toggle').text('Hide siblings').attr({
+        'aria-expanded': 'true',
+        'aria-label': 'Hide siblings ' + row.attr('data-branch-label')
+    });
+}
+
+async function toggleSiblingsRow(row) {
+    const button = row.children('.siblings-toggle');
+    const container = row.parent();
+    if (button.prop('disabled')) return;
+    if (row.data('siblingsOpen')) {
+        const context = container.children('.tree-node-context');
+        context.hide();
+        row.data('siblingsOpen', false);
+        const text = '+' + context.length + ' siblings';
+        button.text(text).attr({
+            'aria-expanded': 'false',
+            'aria-label': text + ' ' + row.attr('data-branch-label')
+        });
+    } else if (row.data('siblingsLoaded')) {
+        showSiblingsRowContext(row);
+    } else {
+        row.data('siblingsRequested', true);
+        const success = await fetchAndMergeChildren(row.attr('data-parent-id'), container,
+            row.attr('data-type'), { control: button });
+        if (success && row.parent().length) {
+            row.data('siblingsLoaded', true);
+            showSiblingsRowContext(row);
+        }
+    }
+}
+
 // ---------- Click handlers ----------
 function setupNodeClickHandlers() {
     try {
+        $('.siblings-toggle').off('click.unified').on('click.unified', function(e) {
+            e.stopPropagation();
+            toggleSiblingsRow($(this).closest('.siblings-row'));
+        });
         $('.expand-icon').off('click.unified').on('click.unified', function(e) {
             e.stopPropagation();
             const li = $(this).closest('li');
@@ -263,10 +327,21 @@ function toggleNode(li) {
     const expandIcon = li.find('> .node-content .expand-icon');
 
     if (li.hasClass('collapsed')) {
+        if (document.getElementById('explore-search-input')?.dataset.filtering === 'true' && expandIcon.prop('disabled')) return;
         li.removeClass('collapsed').addClass('expanded');
         expandIcon.addClass('expanded');
         childrenContainer.slideDown(200);
-        if (childrenContainer.children('.tree-node').length === 0) {
+        const renderedCount = childrenContainer.children('.tree-node').length;
+        if (document.getElementById('explore-search-input')?.dataset.filtering === 'true') {
+            const tree = lastSearchTrees[sectionType];
+            const node = tree && tree.nodes && tree.nodes[nodeId];
+            const needsChildren = li.hasClass('tree-node-context')
+                ? li.hasClass('has-children') && renderedCount === 0
+                : li.hasClass('tree-node-match') && renderedCount < (node?.child_count || 0);
+            if (needsChildren) {
+                fetchAndMergeChildren(nodeId, childrenContainer, sectionType, { control: expandIcon });
+            }
+        } else if (renderedCount === 0) {
             loadTreeNodes(nodeId, childrenContainer, sectionType);
         }
         setTimeout(function() {
@@ -707,6 +782,11 @@ function applyContextStyles() {
 
 // ---------- Expand / Collapse all ----------
 function expandAllNodes() {
+    if (document.getElementById('explore-search-input')?.dataset.filtering === 'true') {
+        $('.tree-node.collapsed').filter('.tree-node-match, .tree-node-context')
+            .slice(0, 50).each(function() { toggleNode($(this)); });
+        return;
+    }
     $('.tree-node.collapsed').each(function() { toggleNode($(this)); });
 }
 
@@ -724,6 +804,11 @@ function collapseAllNodes() {
 // Expand one ply deeper than the current frontier.
 // First click expands depth 0 (top branches); each subsequent click drills one more level.
 function expandOneMoreLevel() {
+    if (document.getElementById('explore-search-input')?.dataset.filtering === 'true') {
+        $('.tree-node.collapsed:visible').filter('.tree-node-match, .tree-node-context')
+            .slice(0, 50).each(function() { toggleNode($(this)); });
+        return;
+    }
     let maxExpandedDepth = -1;
     $('.tree-node.expanded').each(function() {
         const k = $(this).parents('.tree-node').length;
@@ -776,7 +861,7 @@ function setupTreeControls() {
 // ---------- Keyboard navigation ----------
 function setupKeyboardNavigation() {
     document.addEventListener('keydown', function(event) {
-        if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') return;
+        if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA' || document.activeElement.tagName === 'BUTTON') return;
         const selectedNode = document.querySelector('.tree-node.selected');
         if (!selectedNode) return;
 
@@ -997,14 +1082,16 @@ function searchUnified(query) {
 function renderFilteredTree(treeData, container, sectionType, query) {
     if (!treeData || !treeData.root_nodes) return;
     treeData.root_nodes.forEach(nodeId => {
-        renderFilteredNode(nodeId, treeData, container, sectionType, true);
+        renderFilteredNode(nodeId, treeData, container, sectionType);
     });
+    appendSiblingsRow(container, sectionType, '#', '', treeData.hidden_root_count || 0);
 }
 
-function renderFilteredNode(nodeId, treeData, container, sectionType, isExpanded) {
+function renderFilteredNode(nodeId, treeData, container, sectionType) {
     const node = treeData.nodes[nodeId];
     if (!node) return;
-    const hasChildren = node.children && node.children.length > 0;
+    const hasChildren = (node.child_count || 0) > 0 || (node.children && node.children.length > 0);
+    const isExpanded = (node.children || []).some(childId => hasMatchDescendant(childId, treeData));
     const nodeClass = hasChildren ? (isExpanded ? 'has-children expanded' : 'has-children collapsed') : '';
     const isMatch = node.is_match ? 'tree-node-match' : '';
     const expandIcon = hasChildren
@@ -1025,13 +1112,13 @@ function renderFilteredNode(nodeId, treeData, container, sectionType, isExpanded
         (hasChildren ? '<ul class="children-container" style="display:' + (isExpanded ? 'block' : 'none') + ';"></ul>' : '');
     container.appendChild(li);
 
-    if (hasChildren && isExpanded) {
+    if (hasChildren) {
         const childrenContainer = li.querySelector('.children-container');
-        node.children.forEach(childId => {
-            const childNode = treeData.nodes[childId];
-            const shouldExpand = childNode && (childNode.is_match || hasMatchDescendant(childId, treeData));
-            renderFilteredNode(childId, treeData, childrenContainer, sectionType, shouldExpand);
+        (node.children || []).forEach(childId => {
+            renderFilteredNode(childId, treeData, childrenContainer, sectionType);
         });
+        const hidden = (node.child_count || 0) - $(childrenContainer).children('.tree-node').length;
+        appendSiblingsRow(childrenContainer, sectionType, nodeId, node.label, hidden);
     }
 }
 
