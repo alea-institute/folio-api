@@ -33,6 +33,7 @@ const SECTIONS = {
 const nodeDataCache = new Map();
 const MAX_CACHE_SIZE = 200;
 let isLoadingTree = false;
+let lastSearchTrees = { class: null, property: null };
 
 // ---------- Cache helper ----------
 async function getNodeData(nodeId, sectionType) {
@@ -130,6 +131,111 @@ function loadTreeNodes(nodeId, container, sectionType) {
         });
 }
 
+// ---------- Retained search context ----------
+// Accept either a native container or a jQuery wrapper, as callers use both.
+function mergeChildrenIntoContainer(container, sectionType, fetchedChildren) {
+    const list = $(container);
+    const existingIds = new Set(list.children('.tree-node').map(function() {
+        return this.dataset.id;
+    }).get());
+
+    fetchedChildren.forEach(node => {
+        const id = String(node.id);
+        if (existingIds.has(id)) return;
+        const li = document.createElement('li');
+        li.className = 'tree-node tree-node-context' + (node.children ? ' has-children collapsed' : '');
+        li.dataset.id = id;
+        li.dataset.type = sectionType;
+        const content = document.createElement('div');
+        content.className = 'node-content';
+        content.innerHTML = node.children
+            ? '<span class="expand-icon"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 3 11 8 6 13"></polyline></svg></span>'
+            : '<span class="leaf-indicator"><span class="leaf-dot"></span></span>';
+        const label = document.createElement('span');
+        label.className = 'node-label';
+        label.textContent = node.text;
+        content.appendChild(label);
+        li.appendChild(content);
+        if (node.children) {
+            const children = document.createElement('ul');
+            children.className = 'children-container';
+            children.style.display = 'none';
+            li.appendChild(children);
+        }
+
+        const sortLabel = String(node.text).toLowerCase();
+        const next = list.children('.tree-node').get().find(existing => {
+            // Preferred-label annotations and query highlighting are presentation only.
+            const existingLabel = $(existing).children('.node-content').children('.node-label').clone();
+            existingLabel.find('.preflabel-annotation').remove();
+            return sortLabel.localeCompare(existingLabel.text().trim().toLowerCase()) < 0;
+        });
+        if (next) next.before(li);
+        else list.append(li);
+        existingIds.add(id);
+    });
+
+    refreshSiblingsRow(list, sectionType);
+    setupNodeClickHandlers();
+}
+
+function refreshSiblingsRow(container, sectionType, nodeId) {
+    const list = $(container);
+    const row = list.children('.siblings-row');
+    if (!row.length) return;
+    if (nodeId === undefined) nodeId = list.parent('.tree-node').attr('data-id') || '#';
+    const tree = lastSearchTrees[sectionType];
+    let hidden;
+    if (nodeId === '#' && tree && Number.isInteger(tree.hidden_root_count)) {
+        // Search roots can include promoted nodes outside the full-tree root list.
+        const originalRoots = new Set((tree.root_nodes || []).map(String));
+        const revealedRoots = list.children('.tree-node').get().filter(node => !originalRoots.has(node.dataset.id)).length;
+        hidden = tree.hidden_root_count - revealedRoots;
+    } else {
+        const node = tree && tree.nodes && tree.nodes[nodeId];
+        if (node && Number.isInteger(node.child_count)) {
+            hidden = node.child_count - list.children('.tree-node').length;
+        }
+    }
+    if (hidden !== undefined) {
+        hidden = Math.max(0, hidden);
+        if (hidden === 0) { row.remove(); return; }
+        // Preserve a native control and its handlers if U4 puts one in the row.
+        const control = row.find('button').first();
+        (control.length ? control : row).text('+' + hidden + ' siblings');
+    }
+    list.append(row);
+}
+
+async function fetchAndMergeChildren(nodeId, container, sectionType, { control } = {}) {
+    const list = $(container);
+    const activatedControl = $(control);
+    list.children('.tree-error-row').remove();
+    const indicator = $('<li class="loading-indicator"><span>Loading...</span></li>');
+    list.append(indicator);
+    activatedControl.prop('disabled', true);
+    try {
+        const response = await fetch(SECTIONS[sectionType].treeDataEndpoint + '?node_id=' + encodeURIComponent(nodeId));
+        if (!response.ok) throw new Error('Network error');
+        const children = await response.json();
+        if (!Array.isArray(children)) throw new Error('Invalid child list');
+        mergeChildrenIntoContainer(list, sectionType, children);
+        indicator.remove();
+        return true;
+    } catch (_) {
+        const errorRow = $('<li class="tree-error-row"><span>Error loading. </span><button type="button" class="tree-retry">Retry</button></li>');
+        errorRow.find('.tree-retry').on('click', function(event) {
+            event.stopPropagation();
+            fetchAndMergeChildren(nodeId, list, sectionType, { control });
+        });
+        indicator.replaceWith(errorRow);
+        refreshSiblingsRow(list, sectionType, nodeId);
+        return false;
+    } finally {
+        activatedControl.prop('disabled', false);
+    }
+}
+
 // ---------- Click handlers ----------
 function setupNodeClickHandlers() {
     try {
@@ -164,7 +270,7 @@ function toggleNode(li) {
             loadTreeNodes(nodeId, childrenContainer, sectionType);
         }
         setTimeout(function() {
-            childrenContainer.find('> li:not(.selected):not(.tree-node-highlighted):not(.tree-node-match) > .node-content').css({
+            childrenContainer.find('> li:not(.selected):not(.tree-node-highlighted):not(.tree-node-match):not(.tree-node-context) > .node-content').css({
                 'background-color': 'white',
                 'color': 'var(--color-text-default, rgb(16, 16, 16))'
             });
@@ -586,6 +692,19 @@ function applyArrowStyles() {
     document.head.appendChild(s);
 }
 
+function applyContextStyles() {
+    if (document.getElementById('unified-tree-context-styles')) return;
+    const style = document.createElement('style');
+    style.id = 'unified-tree-context-styles';
+    style.textContent = `
+        .tree-node-context > .node-content { color: var(--color-text-muted) !important; font-weight: 400 !important; }
+        .tree-error-row, .siblings-row { list-style: none; color: var(--color-text-muted); font-size: 0.85em; padding: 3px 6px; }
+        .tree-retry { color: inherit; cursor: pointer; background: transparent; border: 1px solid currentColor; border-radius: 3px; padding: 1px 6px; }
+        .tree-retry:disabled { opacity: 0.6; cursor: wait; }
+    `;
+    document.head.appendChild(style);
+}
+
 // ---------- Expand / Collapse all ----------
 function expandAllNodes() {
     $('.tree-node.collapsed').each(function() { toggleNode($(this)); });
@@ -791,6 +910,7 @@ function searchUnified(query) {
         .then(r => r.json()).catch(() => ({ matches: [], tree: {} }));
 
     Promise.all([classSearch, propSearch]).then(([classData, propData]) => {
+        lastSearchTrees = { class: classData.tree || null, property: propData.tree || null };
         const classMatches = classData.matches || [];
         const propMatches = propData.matches || [];
         const totalMatches = classMatches.length + propMatches.length;
@@ -956,6 +1076,7 @@ function addFilterModeControls(totalCount, query, classCount, propCount) {
 }
 
 function clearFilterMode() {
+    lastSearchTrees = { class: null, property: null };
     // Hide inline clear button and match count
     const clearBtn = document.getElementById('explore-search-clear');
     if (clearBtn) clearBtn.style.display = 'none';
@@ -1027,6 +1148,7 @@ function initializeUnifiedTree() {
 
     applyTreeStyles();
     applyArrowStyles();
+    applyContextStyles();
     setupSectionHeaders();
 
     // Load both sections eagerly
