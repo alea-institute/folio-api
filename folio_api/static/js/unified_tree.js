@@ -105,6 +105,7 @@ function renderTreeNode(node, container, sectionType) {
 }
 
 function loadTreeNodes(nodeId, container, sectionType) {
+    if (nodeId === '#' && document.getElementById('explore-search-input')?.dataset.filtering === 'true') return;
     if (container.children('.tree-node').length > 0) return;
     container.append('<li class="loading-indicator"><span>Loading...</span></li>');
 
@@ -112,6 +113,8 @@ function loadTreeNodes(nodeId, container, sectionType) {
     fetch(cfg.treeDataEndpoint + '?node_id=' + encodeURIComponent(nodeId))
         .then(r => { if (!r.ok) throw new Error('Network error'); return r.json(); })
         .then(data => {
+            // A full-root request may have started before search mode was enabled.
+            if (nodeId === '#' && document.getElementById('explore-search-input')?.dataset.filtering === 'true') return;
             container.find('.loading-indicator').remove();
             container.children('.tree-node').remove();
             data.forEach(node => {
@@ -127,6 +130,7 @@ function loadTreeNodes(nodeId, container, sectionType) {
             setupNodeClickHandlers();
         })
         .catch(() => {
+            if (nodeId === '#' && document.getElementById('explore-search-input')?.dataset.filtering === 'true') return;
             container.find('.loading-indicator').html('<span class="text-red-500">Error loading. Try again.</span>');
         });
 }
@@ -359,12 +363,12 @@ function toggleNode(li) {
 
 function selectNode(li, updateUrl) {
     if (updateUrl === undefined) updateUrl = true;
+    ensureNodeVisible(li);
     $('.tree-node.selected').removeClass('selected');
     li.addClass('selected');
     const nodeId = li.data('id');
     const sectionType = li.data('type');
     loadDetails(nodeId, sectionType, updateUrl);
-    ensureNodeVisible(li);
 
     // Phase 1 (entity-graph): notify subscribers (entity_graph.js) that the
     // user picked a new entity. Custom event keeps unified_tree.js unaware
@@ -385,6 +389,22 @@ function selectNode(li, updateUrl) {
 }
 
 function ensureNodeVisible(li) {
+    if (document.getElementById('explore-search-input')?.dataset.filtering === 'true') {
+        li.add(li.parents('.tree-node')).each(function() {
+            const node = $(this);
+            const row = node.parent().children('.siblings-row');
+            if (node.hasClass('tree-node-context') && this.style.display === 'none' &&
+                row.length && !row.data('siblingsOpen')) {
+                showSiblingsRowContext(row);
+            }
+        });
+        const cfg = SECTIONS[li.attr('data-type')];
+        const root = document.getElementById(cfg.rootListId);
+        root.style.display = '';
+        const section = document.getElementById(cfg.sectionId);
+        section.style.display = '';
+        section.querySelector('.section-chevron')?.classList.remove('collapsed');
+    }
     li.parents('li.tree-node').each(function() {
         const parent = $(this);
         if (parent.hasClass('collapsed')) toggleNode(parent);
@@ -458,6 +478,10 @@ function selectNodeByIri(iri) {
         return;
     }
 
+    if (document.getElementById('explore-search-input')?.dataset.filtering === 'true') {
+        return revealAndSelectInSearch(iri);
+    }
+
     // Node not in DOM — try both path APIs in parallel to find it
     const classPath = fetch(SECTIONS.class.pathEndpoint + encodeURIComponent(extractIdFromIri(iri)))
         .then(r => r.ok ? r.json() : null).catch(() => null);
@@ -489,6 +513,100 @@ function selectNodeByIri(iri) {
             loadDetails(iri, 'class', true);
         }
     });
+}
+
+// Reveal details links through the same child and sibling controls as search browsing.
+async function revealAndSelectInSearch(iri) {
+    const searchTrees = lastSearchTrees;
+    const stillSearching = () => lastSearchTrees === searchTrees &&
+        document.getElementById('explore-search-input')?.dataset.filtering === 'true';
+    try {
+        let sectionType = ['class', 'property'].find(type => searchTrees[type]?.nodes?.[iri]);
+        let targetData;
+        if (!sectionType) {
+            sectionType = 'class';
+            try {
+                targetData = await getNodeData(iri, sectionType);
+            } catch (error) {
+                if (error.message !== 'Failed to fetch node data: 404') throw error;
+                sectionType = 'property';
+                targetData = await getNodeData(iri, sectionType);
+            }
+        }
+        if (!stillSearching()) return;
+        const root = $('#' + SECTIONS[sectionType].rootListId);
+        const findNode = id => root.find('.tree-node').filter(function() {
+            return this.dataset.id === id;
+        }).first();
+        const chain = [iri];
+        const visited = new Set();
+        let current = iri;
+        let ancestor = null;
+        while (true) {
+            if (visited.has(current)) throw new Error('Cycle in node parent chain');
+            visited.add(current);
+            const data = current === iri && targetData ? targetData : await getNodeData(current, sectionType);
+            if (!stillSearching()) return;
+            const parents = data.parents || [];
+            if (!parents.length) break;
+            // Check all parents: endpoint label order can differ from the search path.
+            const candidates = parents.map(parent => ({
+                iri: parent.iri,
+                inDom: findNode(parent.iri).length > 0,
+                inTree: !!searchTrees[sectionType]?.nodes?.[parent.iri]
+            }));
+            const shown = candidates.find(parent => parent.inDom) || candidates.find(parent => parent.inTree);
+            if (shown) {
+                ancestor = shown.iri;
+                break;
+            }
+            current = parents[0].iri;
+            chain.unshift(current);
+        }
+
+        let parent = ancestor === null ? $() : findNode(ancestor);
+        if (ancestor !== null && !parent.length) return;
+        for (const nextId of chain) {
+            if (!stillSearching()) return;
+            const container = parent.length ? parent.children('.children-container') : root;
+            const findChild = () => container.children('.tree-node').filter(function() {
+                return this.dataset.id === nextId;
+            }).first();
+            let next = findChild();
+            if (!next.length) {
+                if (parent.hasClass('tree-node-match') || parent.hasClass('tree-node-context')) {
+                    // Await the merge before toggling to avoid a second, unawaited fetch.
+                    const success = await fetchAndMergeChildren(parent.attr('data-id'), container, sectionType,
+                        { control: parent.children('.node-content').find('.expand-icon') });
+                    if (!stillSearching() || !success) return;
+                } else {
+                    let row = container.children('.siblings-row');
+                    if (!parent.length && !row.length) {
+                        // Empty search sections are not rendered, including their root row.
+                        appendSiblingsRow(container, sectionType, '#', '', searchTrees[sectionType]?.hidden_root_count || 1);
+                        setupNodeClickHandlers();
+                        row = container.children('.siblings-row');
+                    }
+                    if (!row.length) return;
+                    row.data('siblingsRequested', true);
+                    const success = await fetchAndMergeChildren(parent.attr('data-id') || '#', container, sectionType,
+                        { control: row.find('button') });
+                    if (!stillSearching() || !success) return;
+                    row.data('siblingsLoaded', true);
+                    showSiblingsRowContext(row);
+                }
+                next = findChild();
+            }
+            if (!next.length) return;
+            if (parent.hasClass('collapsed')) toggleNode(parent);
+            parent = next;
+        }
+        if (!stillSearching()) return;
+        selectNode(parent, true);
+        parent[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } catch (error) {
+        console.warn('Unable to reveal search node:', error);
+    }
 }
 // ============================================================
 // Phase 1: Detail-pane tab strip (Details | Entity Graph)
@@ -955,7 +1073,11 @@ function setupSearch() {
     function doSearch() {
         const query = input.value;
         if (query && query.length >= 2) {
-            resetTreeSearch();
+            if (input.dataset.filtering === 'true') {
+                lastSearchTrees = { class: null, property: null };
+            } else {
+                resetTreeSearch();
+            }
             searchUnified(query);
         } else if (query.length > 0 && query.length < 2) {
             alert('Please enter at least 2 characters for search');
