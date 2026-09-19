@@ -1240,7 +1240,7 @@ function renderFilteredNode(nodeId, treeData, container, sectionType) {
             renderFilteredNode(childId, treeData, childrenContainer, sectionType);
         });
         const hidden = (node.child_count || 0) - $(childrenContainer).children('.tree-node').length;
-        appendSiblingsRow(childrenContainer, sectionType, nodeId, node.label, hidden);
+        if (!node.is_match) appendSiblingsRow(childrenContainer, sectionType, nodeId, node.label, hidden);
     }
 }
 
