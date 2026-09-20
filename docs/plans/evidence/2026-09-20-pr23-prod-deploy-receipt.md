@@ -50,6 +50,17 @@
 
 ## Note
 
-An earlier probe in this session fired ~12 rapid search requests and tripped the
-app-level rate limiter, which briefly blocked this machine's IP. That was the limiter
-working as designed, not an outage. Do not load-test PROD to confirm a feature exists.
+An earlier probe in this session fired ~12 rapid search requests, after which every
+request from this machine returned curl `000` for several minutes, and the session
+wrongly reported a production outage. Production was never down.
+
+**The cause was never established, and the rate-limiter explanation first given here
+was wrong.** Source refutes it twice: the limiter answers with an HTTP 429 plus
+`Retry-After` (`folio_api/rate_limit.py:328-338`), not a dropped connection, and
+`/taxonomy/tree/search` matches neither `/search/llm/` nor `/search/` under
+longest-prefix tier matching (`folio_api/rate_limit.py:57`, `:143-146`), so it fell to
+the `default` 240/minute tier that twelve requests cannot trip.
+
+Do not load-test PROD to confirm a feature exists. Full triage method, including why
+the three third-party probers cited as corroboration proved nothing:
+`docs/solutions/developer-experience/prod-reachability-triage-timeout-vs-refusal.md`.
