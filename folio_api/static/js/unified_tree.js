@@ -54,7 +54,7 @@ let restoringHistory = false;
 let selectionGeneration = 0;
 let detailsPending = false;
 let restoreRequests = null;
-let historySaveTimer;
+let historySaveToken = 0;
 const branchLoads = new WeakMap();
 
 function occurrencePath(node) {
@@ -173,15 +173,15 @@ function writeView(mode, url = ontologyUrl(window.location.href)) {
 
 function saveViewSoon(generation = searchGeneration) {
     if (navigationBusy || restoringHistory) return;
-    clearTimeout(historySaveTimer);
-    historySaveTimer = setTimeout(() => {
-        if (generation === searchGeneration) writeView('replace');
-    }, 0);
+    const token = ++historySaveToken;
+    queueMicrotask(() => {
+        if (token === historySaveToken && generation === searchGeneration) writeView('replace');
+    });
 }
 
 function beginNavigation(restoring = false) {
     if (!restoring) writeView('replace');
-    clearTimeout(historySaveTimer);
+    historySaveToken++;
     $('.children-container').each(function() {
         if ($(this).children('.loading-indicator').length && !$(this).children('.tree-node').length) {
             setNodeExpanded($(this).parent('.tree-node'), false);
