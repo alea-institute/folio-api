@@ -1456,6 +1456,7 @@ async function resetTreeSearch() {
         document.getElementById('explore-search-input').value = '';
         return;
     }
+    const interruptedRestore = restoringHistory;
     const generation = beginNavigation();
     try {
         await clearFilterMode(generation);
@@ -1465,7 +1466,14 @@ async function resetTreeSearch() {
     } catch (_) {
         if (generation !== searchGeneration) return;
         finishNavigation(generation);
-        resumeSelection(generation);
+        if (interruptedRestore) {
+            const recovery = restoreHistory(history.state);
+            const recoveryGeneration = searchGeneration;
+            await recovery;
+            if (recoveryGeneration !== searchGeneration || restoringHistory) return;
+        } else {
+            resumeSelection(generation);
+        }
         historyNotice('The full tree could not be loaded. Please try again.');
     }
 }
