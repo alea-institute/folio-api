@@ -43,10 +43,200 @@ function ontologyUrl(value) {
 // Cache and state
 const nodeDataCache = new Map();
 const MAX_CACHE_SIZE = 200;
-let isLoadingTree = false;
 let lastSearchTrees = { class: null, property: null };
 let searchGeneration = 0;
 let revealGeneration = 0;
+
+// History stores UI intent, never DOM or endpoint payloads. Paths distinguish
+// the same ontology entity appearing under different parents.
+const HISTORY_KEY = 'folioExplorer';
+let committedQuery = '';
+let navigationBusy = false;
+let restoringHistory = false;
+let selectionGeneration = 0;
+let restoreRequests = null;
+let viewOperations = 0;
+let historySaveTimer;
+
+function occurrencePath(node) {
+    return $(node).parents('.tree-node').get().reverse().concat($(node).get())
+        .map(item => item.dataset.id);
+}
+
+function findOccurrence(type, path) {
+    let list = $('#' + SECTIONS[type].rootListId);
+    let node = $();
+    for (const id of path) {
+        node = list.children('.tree-node').filter(function() { return this.dataset.id === id; }).first();
+        if (!node.length) return node;
+        list = node.children('.children-container');
+    }
+    return node;
+}
+
+function occurrenceContainer(type, path) {
+    return path.length ? findOccurrence(type, path).children('.children-container')
+        : $('#' + SECTIONS[type].rootListId);
+}
+
+function captureView() {
+    const sections = {};
+    for (const type of Object.keys(SECTIONS)) {
+        const root = $('#' + SECTIONS[type].rootListId);
+        const loaded = [];
+        const expanded = [];
+        const siblings = [];
+        root.add(root.find('.children-container')).each(function() {
+            const list = $(this);
+            const path = list.parent().hasClass('tree-node') ? occurrencePath(list.parent()) : [];
+            if (this.dataset.loaded === 'true') loaded.push(path);
+            const row = list.children('.siblings-row');
+            if (row.data('siblingsLoaded')) siblings.push({ path, open: !!row.data('siblingsOpen') });
+        });
+        root.find('.tree-node.expanded').each(function() { expanded.push(occurrencePath(this)); });
+        sections[type] = { open: root[0].style.display !== 'none', loaded, expanded, siblings };
+    }
+    const selected = $('.tree-node.selected').first();
+    return { version: 1, query: committedQuery, sections,
+        selection: selected.length ? { type: selected.attr('data-type'), path: occurrencePath(selected) } : null };
+}
+
+function savedView(state) {
+    const view = state && state[HISTORY_KEY];
+    const path = value => Array.isArray(value) && value.every(id => typeof id === 'string' && id.length > 0);
+    if (!view || view.version !== 1 || typeof view.query !== 'string' ||
+        (view.query.length > 0 && view.query.length < 2) || !view.sections) return null;
+    for (const type of Object.keys(SECTIONS)) {
+        const section = view.sections[type];
+        if (!section || typeof section.open !== 'boolean' ||
+            !Array.isArray(section.loaded) || !section.loaded.every(path) ||
+            !Array.isArray(section.expanded) || !section.expanded.every(p => path(p) && p.length) ||
+            !Array.isArray(section.siblings) ||
+            !section.siblings.every(row => row && path(row.path) && typeof row.open === 'boolean')) return null;
+    }
+    const selection = view.selection;
+    if (selection !== null && (!selection || !Object.hasOwn(SECTIONS, selection.type) ||
+        !path(selection.path) || !selection.path.length)) return null;
+    return view;
+}
+
+function historyNotice(message, retry) {
+    let notice = document.getElementById('tree-history-notice');
+    if (!notice) {
+        notice = document.createElement('div');
+        notice.id = 'tree-history-notice';
+        notice.className = 'p-2 text-sm';
+        notice.setAttribute('role', 'status');
+        document.getElementById('explore-tree').before(notice);
+    }
+    notice.textContent = message;
+    notice.hidden = !message;
+    if (retry) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'tree-retry';
+        button.textContent = 'Retry';
+        button.addEventListener('click', retry);
+        notice.append(' ', button);
+    }
+}
+
+function selectionUrl(selection) {
+    const url = ontologyUrl(window.location.href);
+    url.searchParams.delete('node');
+    url.searchParams.delete('type');
+    if (selection) {
+        url.searchParams.set('node', selection.path[selection.path.length - 1]);
+        url.searchParams.set('type', selection.type);
+    }
+    return url;
+}
+
+function writeView(mode, url = ontologyUrl(window.location.href)) {
+    if (navigationBusy || restoringHistory || viewOperations) return;
+    const view = captureView();
+    if (JSON.stringify(savedView(history.state)) === JSON.stringify(view) && url.href === location.href) return;
+    const envelope = history.state && typeof history.state === 'object' ? history.state : {};
+    try {
+        history[mode + 'State']({ ...envelope, [HISTORY_KEY]: view }, '', url);
+    } catch (_) {
+        historyNotice('This view could not be saved in browser history. You can keep browsing.');
+    }
+}
+
+function saveViewSoon(generation = searchGeneration) {
+    if (navigationBusy || restoringHistory) return;
+    clearTimeout(historySaveTimer);
+    historySaveTimer = setTimeout(() => {
+        if (generation === searchGeneration) writeView('replace');
+    }, 0);
+}
+
+function beginNavigation(restoring = false) {
+    if (!restoring) writeView('replace');
+    clearTimeout(historySaveTimer);
+    $('.children-container').each(function() {
+        if ($(this).children('.loading-indicator').length && !$(this).children('.tree-node').length) {
+            setNodeExpanded($(this).parent('.tree-node'), false);
+        }
+    });
+    searchGeneration++;
+    revealGeneration++;
+    selectionGeneration++;
+    viewOperations = 0;
+    navigationBusy = true;
+    restoringHistory = restoring;
+    restoreRequests = restoring ? new Map() : null;
+    historyNotice('');
+    document.getElementById('explore-tree').setAttribute('aria-busy', 'true');
+    document.getElementById('explore-tree').inert = restoring;
+    document.dispatchEvent(new CustomEvent('entity:navigation-start'));
+    return searchGeneration;
+}
+
+function finishNavigation(generation, mode, url) {
+    if (generation !== searchGeneration) return;
+    navigationBusy = false;
+    restoringHistory = false;
+    restoreRequests = null;
+    document.getElementById('explore-tree').setAttribute('aria-busy', 'false');
+    document.getElementById('explore-tree').inert = false;
+    if (mode) writeView(mode, url);
+}
+
+function notifySelection(node) {
+    document.dispatchEvent(new CustomEvent('entity:selected', {
+        detail: node && node.length ? { iri: node.attr('data-id'), type: node.attr('data-type') }
+            : { iri: null, type: null }
+    }));
+}
+
+function clearSelection() {
+    selectionGeneration++;
+    $('.tree-node.selected').removeClass('selected');
+    document.getElementById('class-details').innerHTML = '<div class="p-4 text-gray-500"><h3>Select an item</h3><p>Choose a class or property from the tree to view its details</p></div>';
+}
+
+async function childData(nodeId, sectionType, generation) {
+    const key = sectionType + ':' + nodeId;
+    const cache = generation === searchGeneration ? restoreRequests : null;
+    if (cache && cache.has(key)) return cache.get(key);
+    const request = fetch(ontologyUrl(SECTIONS[sectionType].treeDataEndpoint + '?node_id=' + encodeURIComponent(nodeId)))
+        .then(async response => {
+            if (!response.ok) throw new Error('Could not load branch');
+            const children = await response.json();
+            if (!Array.isArray(children)) throw new Error('Invalid child list');
+            return children;
+        });
+    if (cache) cache.set(key, request);
+    return request;
+}
+
+function setNodeExpanded(node, expanded) {
+    node.toggleClass('expanded', expanded).toggleClass('collapsed', !expanded);
+    node.children('.node-content').find('.expand-icon').toggleClass('expanded', expanded);
+    node.children('.children-container').stop(true, true).toggle(expanded);
+}
 
 // ---------- Cache helper ----------
 async function getNodeData(nodeId, sectionType) {
@@ -82,6 +272,7 @@ function extractIdFromIri(iri) {
 function setupSectionHeaders() {
     document.querySelectorAll('.section-header').forEach(header => {
         header.addEventListener('click', () => {
+            if (restoringHistory) return;
             const sectionType = header.dataset.section;
             const cfg = SECTIONS[sectionType];
             const rootList = document.getElementById(cfg.rootListId);
@@ -93,6 +284,7 @@ function setupSectionHeaders() {
                 rootList.style.display = 'none';
                 chevron.classList.add('collapsed');
             }
+            saveViewSoon();
         });
     });
 }
@@ -117,35 +309,27 @@ function renderTreeNode(node, container, sectionType) {
     container.append(li);
 }
 
-function loadTreeNodes(nodeId, container, sectionType) {
-    if (nodeId === '#' && isSearchFilterActive()) return;
-    if (container.children('.tree-node').length > 0) return;
-    container.append('<li class="loading-indicator"><span>Loading...</span></li>');
-
-    const cfg = SECTIONS[sectionType];
-    fetch(ontologyUrl(cfg.treeDataEndpoint + '?node_id=' + encodeURIComponent(nodeId)))
-        .then(r => { if (!r.ok) throw new Error('Network error'); return r.json(); })
-        .then(data => {
-            // A full-root request may have started before search mode was enabled.
-            if (nodeId === '#' && isSearchFilterActive()) return;
-            container.find('.loading-indicator').remove();
-            container.children('.tree-node').remove();
-            data.forEach(node => {
-                if (container.children('.tree-node[data-id="' + node.id + '"]').length === 0) {
-                    renderTreeNode(node, container, sectionType);
-                }
-            });
-            // Update count badge for root level
-            if (nodeId === '#') {
-                const countEl = document.getElementById(cfg.countId);
-                if (countEl) countEl.textContent = data.length;
-            }
-            setupNodeClickHandlers();
-        })
-        .catch(() => {
-            if (nodeId === '#' && isSearchFilterActive()) return;
-            container.find('.loading-indicator').html('<span class="text-red-500">Error loading. Try again.</span>');
-        });
+async function loadTreeNodes(nodeId, container, sectionType, { generation = searchGeneration, strict = false } = {}) {
+    const list = $(container);
+    if (list[0]?.dataset.loaded === 'true') return true;
+    const indicator = $('<li class="loading-indicator"><span>Loading...</span></li>').appendTo(list);
+    try {
+        const children = await childData(nodeId, sectionType, generation);
+        if (generation !== searchGeneration) return false;
+        list.children('.tree-node, .tree-error-row').remove();
+        children.forEach(node => renderTreeNode(node, list, sectionType));
+        list.attr('data-loaded', 'true');
+        if (nodeId === '#') document.getElementById(SECTIONS[sectionType].countId).textContent = children.length;
+        setupNodeClickHandlers();
+        return true;
+    } catch (error) {
+        if (generation !== searchGeneration) return false;
+        if (strict) throw error;
+        list.append('<li class="tree-error-row">Error loading. Try again.</li>');
+        return false;
+    } finally {
+        indicator.remove();
+    }
 }
 
 // ---------- Retained search context ----------
@@ -242,38 +426,35 @@ function refreshSiblingsRow(container, sectionType, nodeId) {
     list.append(row);
 }
 
-async function fetchAndMergeChildren(nodeId, container, sectionType, { control } = {}) {
-    const generation = searchGeneration;
+async function fetchAndMergeChildren(nodeId, container, sectionType,
+        { control, generation = searchGeneration, strict = false } = {}) {
     const stillSearching = () => generation === searchGeneration && isSearchFilterActive();
     const list = $(container);
     const activatedControl = $(control);
     list.children('.tree-error-row').remove();
-    const indicator = $('<li class="loading-indicator"><span>Loading...</span></li>');
-    list.append(indicator);
-    activatedControl.prop('disabled', true);
+    const indicator = $('<li class="loading-indicator"><span>Loading...</span></li>').appendTo(list);
+    activatedControl.prop('disabled', true).data('loadGeneration', generation);
     try {
-        const response = await fetch(ontologyUrl(SECTIONS[sectionType].treeDataEndpoint + '?node_id=' + encodeURIComponent(nodeId)));
+        const children = await childData(nodeId, sectionType, generation);
         if (!stillSearching()) return false;
-        if (!response.ok) throw new Error('Network error');
-        const children = await response.json();
-        if (!stillSearching()) return false;
-        if (!Array.isArray(children)) throw new Error('Invalid child list');
         mergeChildrenIntoContainer(list, sectionType, children);
-        indicator.remove();
+        list.attr('data-loaded', 'true');
+        saveViewSoon(generation);
         return true;
-    } catch (_) {
+    } catch (error) {
         if (!stillSearching()) return false;
-        const errorRow = $('<li class="tree-error-row"><span>Error loading. </span><button type="button" class="tree-retry">Retry</button></li>');
-        errorRow.find('.tree-retry').on('click', function(event) {
+        if (strict) throw error;
+        const row = $('<li class="tree-error-row"><span>Error loading. </span><button type="button" class="tree-retry">Retry</button></li>');
+        row.find('button').on('click', function(event) {
             event.stopPropagation();
-            fetchAndMergeChildren(nodeId, list, sectionType, { control });
+            fetchAndMergeChildren(nodeId, list, sectionType, { control, generation });
         });
-        indicator.replaceWith(errorRow);
+        list.append(row);
         refreshSiblingsRow(list, sectionType, nodeId);
         return false;
     } finally {
         indicator.remove();
-        activatedControl.prop('disabled', false);
+        if (activatedControl.data('loadGeneration') === generation) activatedControl.prop('disabled', false);
     }
 }
 
@@ -304,28 +485,38 @@ function showSiblingsRowContext(row) {
     });
 }
 
+function hideSiblingsRowContext(row) {
+    const context = row.parent().children('.tree-node-context');
+    context.hide();
+    row.data('siblingsOpen', false);
+    const label = siblingsCountLabel(row, context.length);
+    row.children('.siblings-toggle').text(label.text).attr({ 'aria-expanded': 'false', 'aria-label': label.ariaLabel });
+}
+
 async function toggleSiblingsRow(row) {
+    if (restoringHistory) return;
+    const generation = searchGeneration;
     const button = row.children('.siblings-toggle');
-    const container = row.parent();
     if (button.prop('disabled')) return;
-    if (row.data('siblingsOpen')) {
-        const context = container.children('.tree-node-context');
-        context.hide();
-        row.data('siblingsOpen', false);
-        const label = siblingsCountLabel(row, context.length);
-        button.text(label.text).attr({
-            'aria-expanded': 'false',
-            'aria-label': label.ariaLabel
-        });
-    } else if (row.data('siblingsLoaded')) {
-        showSiblingsRowContext(row);
-    } else {
-        row.data('siblingsRequested', true);
-        const success = await fetchAndMergeChildren(row.attr('data-parent-id'), container,
-            row.attr('data-type'), { control: button });
-        if (success && row.parent().length) {
-            row.data('siblingsLoaded', true);
+    viewOperations++;
+    let success = true;
+    try {
+        if (row.data('siblingsOpen')) {
+            hideSiblingsRowContext(row);
+        } else if (row.data('siblingsLoaded')) {
             showSiblingsRowContext(row);
+        } else {
+            row.data('siblingsRequested', true);
+            success = await fetchAndMergeChildren(row.attr('data-parent-id'), row.parent(), row.attr('data-type'), { control: button, generation });
+            if (success && generation === searchGeneration) {
+                row.data('siblingsLoaded', true);
+                showSiblingsRowContext(row);
+            }
+        }
+    } finally {
+        if (generation === searchGeneration) {
+            viewOperations--;
+            if (success) saveViewSoon(generation);
         }
     }
 }
@@ -354,70 +545,59 @@ function setupNodeClickHandlers() {
     } catch (_) {}
 }
 
-function toggleNode(li) {
-    const nodeId = li.data('id');
-    const sectionType = li.data('type');
-    const childrenContainer = li.find('> .children-container');
-    const expandIcon = li.find('> .node-content .expand-icon');
-
-    if (li.hasClass('collapsed')) {
-        if (isSearchFilterActive() && expandIcon.prop('disabled')) return;
-        li.removeClass('collapsed').addClass('expanded');
-        expandIcon.addClass('expanded');
-        childrenContainer.slideDown(200);
-        const renderedCount = childrenContainer.children('.tree-node').length;
-        if (isSearchFilterActive()) {
-            const tree = lastSearchTrees[sectionType];
-            const node = tree && tree.nodes && tree.nodes[nodeId];
-            const needsChildren = li.hasClass('tree-node-context')
-                ? li.hasClass('has-children') && renderedCount === 0
-                : li.hasClass('tree-node-match') && !childrenContainer.children('.siblings-row').length &&
-                    renderedCount < (node?.child_count || 0);
-            if (needsChildren) {
-                fetchAndMergeChildren(nodeId, childrenContainer, sectionType, { control: expandIcon });
+async function toggleNode(li) {
+    if (restoringHistory || !li.length) return;
+    const generation = searchGeneration;
+    const nodeId = li.attr('data-id');
+    const sectionType = li.attr('data-type');
+    const container = li.children('.children-container');
+    const icon = li.children('.node-content').find('.expand-icon');
+    if (icon.prop('disabled')) return;
+    viewOperations++;
+    let success = true;
+    try {
+        if (li.hasClass('collapsed')) {
+            setNodeExpanded(li, true);
+            if (isSearchFilterActive()) {
+                const node = lastSearchTrees[sectionType]?.nodes?.[nodeId];
+                const count = container.children('.tree-node').length;
+                const needsChildren = li.hasClass('tree-node-context') ? count === 0
+                    : li.hasClass('tree-node-match') && !container.children('.siblings-row').length && count < (node?.child_count || 0);
+                if (needsChildren && container[0]?.dataset.loaded !== 'true') {
+                    success = await fetchAndMergeChildren(nodeId, container, sectionType, { control: icon, generation });
+                }
+            } else if (container[0]?.dataset.loaded !== 'true') {
+                success = await loadTreeNodes(nodeId, container, sectionType, { generation });
             }
-        } else if (renderedCount === 0) {
-            loadTreeNodes(nodeId, childrenContainer, sectionType);
+        } else {
+            setNodeExpanded(li, false);
         }
-        setTimeout(function() {
-            childrenContainer.find('> li:not(.selected):not(.tree-node-highlighted):not(.tree-node-match):not(.tree-node-context) > .node-content').css({
-                'background-color': 'white',
-                'color': 'var(--color-text-default, rgb(16, 16, 16))'
-            });
-        }, 250);
-    } else {
-        if (isSearchFilterActive() && expandIcon.prop('disabled')) return;
-        li.removeClass('expanded').addClass('collapsed');
-        expandIcon.removeClass('expanded');
-        childrenContainer.slideUp(200);
+    } finally {
+        if (generation === searchGeneration) {
+            viewOperations--;
+            if (success) saveViewSoon(generation);
+        }
     }
 }
 
-function selectNode(li, updateUrl) {
-    if (updateUrl === undefined) updateUrl = true;
-    ensureNodeVisible(li);
+function selectNode(li, updateUrl = true, { generation, reveal = true, notify = true } = {}) {
+    li = li.first();
+    if (!li.length || (restoringHistory && generation === undefined)) return Promise.resolve(false);
+    if (updateUrl && li.hasClass('selected') && !navigationBusy) {
+        ensureNodeVisible(li);
+        saveViewSoon();
+        return Promise.resolve(true);
+    }
+    const ownsNavigation = generation === undefined;
+    if (ownsNavigation) generation = beginNavigation();
+    if (generation !== searchGeneration) return Promise.resolve(false);
+    if (reveal) ensureNodeVisible(li);
     $('.tree-node.selected').removeClass('selected');
     li.addClass('selected');
-    const nodeId = li.data('id');
-    const sectionType = li.data('type');
-    loadDetails(nodeId, sectionType, updateUrl);
-
-    // Phase 1 (entity-graph): notify subscribers (entity_graph.js) that the
-    // user picked a new entity. Custom event keeps unified_tree.js unaware
-    // of the graph module (RESEARCH.md Pattern 1 — Custom-Event-Based Coupling).
-    try {
-        var _iri  = (typeof li !== 'undefined' && li && li.data) ? li.data('id') : null;
-        var _type = (typeof li !== 'undefined' && li && li.data) ? li.data('type') : null;
-        if (_iri) {
-            document.dispatchEvent(new CustomEvent('entity:selected', {
-                detail: { iri: _iri, type: _type }
-            }));
-        }
-    } catch (e) {
-        if (window.console && window.console.warn) {
-            window.console.warn('entity:selected dispatch failed:', e);
-        }
-    }
+    const details = loadDetails(li.attr('data-id'), li.attr('data-type'), generation);
+    if (notify) notifySelection(li);
+    if (ownsNavigation) finishNavigation(generation, updateUrl ? 'push' : null, selectionUrl(captureView().selection));
+    return details;
 }
 
 function ensureNodeVisible(li) {
@@ -439,114 +619,92 @@ function ensureNodeVisible(li) {
     }
     li.parents('li.tree-node').each(function() {
         const parent = $(this);
-        if (parent.hasClass('collapsed')) toggleNode(parent);
+        if (parent.hasClass('collapsed')) setNodeExpanded(parent, true);
     });
 }
 
 // ---------- Detail loading ----------
-function loadDetails(iri, sectionType, updateUrl) {
-    if (updateUrl === undefined) updateUrl = true;
-    const detailsContainer = document.getElementById('class-details');
-    if (!detailsContainer) return;
-
-    if (updateUrl) {
-        const url = ontologyUrl(window.location.href);
-        url.searchParams.set('node', iri);
-        url.searchParams.set('type', sectionType);
-        history.pushState({ nodeId: iri, type: sectionType }, '', url);
-    }
-
-    detailsContainer.innerHTML = '<div class="flex justify-center items-center h-64"><div class="spinner-border animate-spin inline-block w-8 h-8 border-4 rounded-full text-blue-600" role="status"><span class="sr-only">Loading...</span></div></div>';
-
+async function loadDetails(iri, sectionType, generation = searchGeneration) {
+    const selection = ++selectionGeneration;
+    const current = () => generation === searchGeneration && selection === selectionGeneration;
+    const container = document.getElementById('class-details');
+    if (!container || !current()) return false;
+    container.innerHTML = '<div class="p-4" role="status">Loading details...</div>';
     const cfg = SECTIONS[sectionType];
-    const nodeId = extractIdFromIri(iri);
-
-    // Fetch the server-rendered HTML fragment
-    fetch(ontologyUrl(cfg.detailsEndpoint + encodeURIComponent(nodeId)))
-        .then(response => {
-            if (!response.ok) throw new Error('Could not fetch rendered template');
-            return response.text();
-        })
-        .then(html => {
-            detailsContainer.innerHTML = html;
-        })
-        .catch(() => {
-            // Fallback: fetch JSON and render client-side
-            fetch(ontologyUrl(cfg.nodeDataEndpoint + encodeURIComponent(nodeId)))
-                .then(r => { if (!r.ok) throw new Error('Network error'); return r.json(); })
-                .then(data => {
-                    detailsContainer.innerHTML = '<div class="p-4"><h3 class="text-2xl font-semibold mb-2 text-[--color-primary]">' + (data.label || 'Unknown') + '</h3><p class="text-gray-700">' + (data.definition || '') + '</p></div>';
-                })
-                .catch(() => {
-                    detailsContainer.innerHTML = '<div class="p-4 text-red-500"><h3 class="text-xl font-medium mb-2">Error loading details</h3><p>Unable to load details. Please try again or select a different item.</p></div>';
-                });
-        });
+    const nodeId = encodeURIComponent(extractIdFromIri(iri));
+    try {
+        const response = await fetch(ontologyUrl(cfg.detailsEndpoint + nodeId));
+        if (!current()) return false;
+        if (!response.ok) throw new Error('Could not fetch rendered template');
+        const html = await response.text();
+        if (!current()) return false;
+        container.innerHTML = html;
+        return true;
+    } catch (_) {
+        if (!current()) return false;
+        try {
+            const response = await fetch(ontologyUrl(cfg.nodeDataEndpoint + nodeId));
+            if (!current()) return false;
+            if (!response.ok) throw new Error('Could not fetch details');
+            const data = await response.json();
+            if (!current()) return false;
+            const heading = document.createElement('h3');
+            heading.className = 'text-2xl font-semibold mb-2';
+            heading.textContent = data.label || 'Unknown';
+            const definition = document.createElement('p');
+            definition.textContent = data.definition || '';
+            container.replaceChildren(heading, definition);
+            return true;
+        } catch (_) {
+            if (current()) container.innerHTML = '<div class="p-4 text-red-500">Unable to load details. Please try again or select a different item.</div>';
+            return false;
+        }
+    }
 }
 
-// Alias for cross-type navigation from detail panel links
-function loadClassDetails(iri, updateUrl) {
-    // Determine which section this IRI belongs to by checking DOM first
-    const existingNode = document.querySelector('.tree-node[data-id="' + iri + '"]');
-    if (existingNode) {
-        loadDetails(iri, existingNode.dataset.type, updateUrl);
-    } else {
-        // Default to class type (matches backward-compat from taxonomy tree)
-        loadDetails(iri, 'class', updateUrl);
-    }
+// Preserve the global details-link entry point used by older fragments.
+function loadClassDetails(iri) {
+    return selectNodeByIri(iri);
 }
 
 // ---------- selectNodeByIri: cross-type navigation ----------
-function selectNodeByIri(iri) {
-    // First check if node already exists in DOM
-    const existingNode = document.querySelector('.tree-node[data-id="' + iri + '"]');
-    if (existingNode) {
-        const li = $(existingNode);
-        selectNode(li, true);
-        existingNode.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        return;
-    }
-
-    if (isSearchFilterActive()) {
-        return revealAndSelectInSearch(iri);
-    }
-
-    // Node not in DOM — try both path APIs in parallel to find it
-    const classPath = fetch(ontologyUrl(SECTIONS.class.pathEndpoint + encodeURIComponent(extractIdFromIri(iri))))
-        .then(r => r.ok ? r.json() : null).catch(() => null);
-    const propertyPath = fetch(ontologyUrl(SECTIONS.property.pathEndpoint + encodeURIComponent(extractIdFromIri(iri))))
-        .then(r => r.ok ? r.json() : null).catch(() => null);
-
-    Promise.all([classPath, propertyPath]).then(([classResult, propertyResult]) => {
-        let sectionType = null;
-        let pathData = null;
-        if (classResult && classResult.path && classResult.path.length > 0) {
-            sectionType = 'class';
-            pathData = classResult;
-        } else if (propertyResult && propertyResult.path && propertyResult.path.length > 0) {
-            sectionType = 'property';
-            pathData = propertyResult;
-        }
-
-        if (sectionType && pathData) {
-            // Ensure the section is visible
-            const rootList = document.getElementById(SECTIONS[sectionType].rootListId);
-            if (rootList && rootList.style.display === 'none') {
-                rootList.style.display = '';
-                const header = document.querySelector('.section-header[data-section="' + sectionType + '"]');
-                if (header) header.querySelector('.section-chevron').classList.remove('collapsed');
-            }
-            loadAndSelectNode(iri, sectionType, true);
+async function selectNodeByIri(iri) {
+    if (restoringHistory) return;
+    const existing = $('.tree-node').filter(function() { return this.dataset.id === iri; }).first();
+    if (existing.length) return selectNode(existing);
+    const generation = beginNavigation();
+    try {
+        if (isSearchFilterActive()) {
+            const selected = await revealAndSelectInSearch(iri, generation);
+            if (!selected) throw new Error('Could not reveal item');
         } else {
-            // Last resort: just load details
-            loadDetails(iri, 'class', true);
+            const paths = await Promise.all(Object.keys(SECTIONS).map(async type => {
+                const response = await fetch(ontologyUrl(SECTIONS[type].pathEndpoint + encodeURIComponent(extractIdFromIri(iri))));
+                return response.ok ? response.json() : null;
+            }));
+            if (generation !== searchGeneration) return;
+            const index = paths.findIndex(result => result?.path?.length);
+            if (index < 0) throw new Error('Node not found');
+            const type = Object.keys(SECTIONS)[index];
+            const path = paths[index].path.map(item => item.iri);
+            await loadNodePath(path, type, generation);
+            if (generation !== searchGeneration) return;
+            const node = findOccurrence(type, path);
+            if (!node.length) throw new Error('Node not found');
+            selectNode(node, false, { generation });
         }
-    });
+        if (generation !== searchGeneration) return;
+        finishNavigation(generation, 'push', selectionUrl(captureView().selection));
+    } catch (_) {
+        if (generation !== searchGeneration) return;
+        finishNavigation(generation);
+        historyNotice('Unable to reveal that item. Please try again.');
+    }
 }
 
 // Reveal details links through the same child and sibling controls as search browsing.
-async function revealAndSelectInSearch(iri) {
+async function revealAndSelectInSearch(iri, search) {
     const generation = ++revealGeneration;
-    const search = searchGeneration;
     const searchTrees = lastSearchTrees;
     const stillSearching = () => generation === revealGeneration && search === searchGeneration &&
         lastSearchTrees === searchTrees &&
@@ -630,12 +788,13 @@ async function revealAndSelectInSearch(iri) {
                 next = findChild();
             }
             if (!next.length) return;
-            if (parent.hasClass('collapsed')) toggleNode(parent);
+            if (parent.hasClass('collapsed')) setNodeExpanded(parent, true);
             parent = next;
         }
         if (!stillSearching()) return;
-        selectNode(parent, true);
+        selectNode(parent, false, { generation: search });
         parent[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return true;
     } catch (error) {
         console.warn('Unable to reveal search node:', error);
     }
@@ -721,157 +880,35 @@ if (document.readyState === 'loading') {
 window.selectNodeByIri = selectNodeByIri;
 
 // ---------- Load and select node (expand path) ----------
-function loadAndSelectNode(nodeId, sectionType, updateUrl) {
-    if (updateUrl === undefined) updateUrl = true;
-    if (isLoadingTree) {
-        setTimeout(() => loadAndSelectNode(nodeId, sectionType, updateUrl), 500);
-        return;
+async function loadAndSelectNode(nodeId, sectionType, generation) {
+    const root = $('#' + SECTIONS[sectionType].rootListId);
+    let node = root.find('.tree-node').filter(function() { return this.dataset.id === nodeId; }).first();
+    if (!node.length) {
+        const response = await fetch(ontologyUrl(SECTIONS[sectionType].pathEndpoint + encodeURIComponent(extractIdFromIri(nodeId))));
+        if (generation !== searchGeneration) return false;
+        if (!response.ok) throw new Error('Could not find node path');
+        const data = await response.json();
+        if (generation !== searchGeneration) return false;
+        const path = (data.path || []).map(item => item.iri);
+        await loadNodePath(path, sectionType, generation);
+        if (generation !== searchGeneration) return false;
+        node = findOccurrence(sectionType, path);
     }
-
-    const cfg = SECTIONS[sectionType];
-    const rootList = $('#' + cfg.rootListId);
-
-    // Ensure root nodes are loaded
-    if (rootList.children('.tree-node').length === 0) {
-        loadTreeNodes('#', rootList, sectionType);
-    }
-
-    // Check if node already in DOM
-    const node = $('.tree-node[data-id="' + nodeId + '"]');
-    if (node.length > 0) {
-        selectNode(node, updateUrl);
-        node[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
-        return;
-    }
-
-    // Need to find and expand path
-    isLoadingTree = true;
-    const detailsContainer = document.getElementById('class-details');
-    if (detailsContainer) {
-        detailsContainer.innerHTML = '<div class="flex justify-center items-center h-64"><div class="flex flex-col items-center"><div class="spinner-border animate-spin inline-block w-8 h-8 border-4 rounded-full text-blue-600 mb-4" role="status"><span class="sr-only">Loading...</span></div><p class="text-gray-600">Finding and loading node...</p></div></div>';
-    }
-
-    findNodePath(nodeId, sectionType)
-        .then(path => loadNodePath(path, sectionType))
-        .then(() => {
-            const loadedNode = $('.tree-node[data-id="' + nodeId + '"]');
-            if (loadedNode.length > 0) {
-                $('.tree-node.selected').removeClass('selected');
-                loadedNode.addClass('selected');
-                loadedNode[0].scrollIntoView({ block: 'center', behavior: 'smooth' });
-                selectNode(loadedNode, updateUrl);
-            } else {
-                loadDetails(nodeId, sectionType, updateUrl);
-            }
-        })
-        .catch(() => {
-            const finalNode = $('.tree-node[data-id="' + nodeId + '"]');
-            if (finalNode.length > 0) {
-                $('.tree-node.selected').removeClass('selected');
-                finalNode.addClass('selected');
-                finalNode[0].scrollIntoView({ block: 'center', behavior: 'smooth' });
-                selectNode(finalNode, updateUrl);
-            } else {
-                loadDetails(nodeId, sectionType, updateUrl);
-            }
-        })
-        .finally(() => {
-            setTimeout(() => {
-                const finalNode = $('.tree-node[data-id="' + nodeId + '"]');
-                if (finalNode.length > 0 && !finalNode.hasClass('selected')) {
-                    $('.tree-node.selected').removeClass('selected');
-                    finalNode.addClass('selected');
-                }
-                isLoadingTree = false;
-            }, 200);
-        });
+    if (!node.length) { historyNotice('That item is no longer available in the tree.'); return false; }
+    return selectNode(node, false, { generation, notify: false });
 }
 
-async function findNodePath(nodeId, sectionType) {
-    try {
-        const data = await getNodeData(nodeId, sectionType);
-        const path = [];
-        if (data.parents && data.parents.length > 0) {
-            let currentNode = data.parents[0].iri;
-            const parentChain = [currentNode];
-            try {
-                for (let i = 0; i < 5; i++) {
-                    const parentData = await getNodeData(currentNode, sectionType);
-                    if (!parentData.parents || parentData.parents.length === 0) break;
-                    currentNode = parentData.parents[0].iri;
-                    parentChain.unshift(currentNode);
-                }
-            } catch (_) {}
-            path.push(...parentChain);
-        }
-        if (path.length === 0 || path[path.length - 1] !== nodeId) {
-            path.push(nodeId);
-        }
-        return path;
-    } catch (_) {
-        return [nodeId];
-    }
-}
-
-async function loadNodePath(path, sectionType) {
-    if (!path || path.length === 0) return;
-    const cfg = SECTIONS[sectionType];
-    const rootList = $('#' + cfg.rootListId);
-
-    if (rootList.children('.tree-node').length === 0) {
-        await new Promise(resolve => {
-            loadTreeNodes('#', rootList, sectionType);
-            const check = setInterval(() => {
-                if (!rootList.find('.loading-indicator').length) { clearInterval(check); resolve(); }
-            }, 100);
-        });
-    }
-
-    let currentContainer = rootList;
+async function loadNodePath(path, sectionType, generation) {
+    let list = $('#' + SECTIONS[sectionType].rootListId);
     for (let i = 0; i < path.length; i++) {
-        const nodeId = path[i];
-        const isLast = (i === path.length - 1);
-        let node = currentContainer.children('.tree-node[data-id="' + nodeId + '"]');
-        if (node.length === 0) node = $('.tree-node[data-id="' + nodeId + '"]');
-
-        if (node.length > 0) {
-            if (!isLast && node.hasClass('collapsed')) toggleNode(node);
-            if (!isLast) {
-                currentContainer = node.find('> .children-container');
-                if (currentContainer.length === 0) {
-                    node.append('<ul class="children-container" style="display:block;"></ul>');
-                    currentContainer = node.find('> .children-container');
-                }
-            }
-        } else {
-            const parentNodeId = i > 0 ? path[i - 1] : '#';
-            await new Promise(resolve => {
-                if (currentContainer.children('.tree-node').length > 0) { resolve(); return; }
-                loadTreeNodes(parentNodeId, currentContainer, sectionType);
-                const check = setInterval(() => {
-                    if (!currentContainer.find('> .loading-indicator').length) {
-                        clearInterval(check);
-                        node = currentContainer.children('.tree-node[data-id="' + nodeId + '"]');
-                        if (node.length === 0) node = $('.tree-node[data-id="' + nodeId + '"]');
-                        if (node.length > 0) {
-                            if (!isLast && node.hasClass('collapsed')) toggleNode(node);
-                            if (!isLast) {
-                                currentContainer = node.find('> .children-container');
-                                if (currentContainer.length === 0) {
-                                    node.append('<ul class="children-container" style="display:block;"></ul>');
-                                    currentContainer = node.find('> .children-container');
-                                }
-                            }
-                        }
-                        resolve();
-                    }
-                }, 100);
-            });
-        }
+        if (generation !== searchGeneration) return;
+        await loadTreeNodes(i === 0 ? '#' : path[i - 1], list, sectionType, { generation, strict: true });
+        if (generation !== searchGeneration) return;
+        const node = list.children('.tree-node').filter(function() { return this.dataset.id === path[i]; }).first();
+        if (!node.length) return;
+        if (i < path.length - 1) setNodeExpanded(node, true);
+        list = node.children('.children-container');
     }
-
-    const targetNode = $('.tree-node[data-id="' + path[path.length - 1] + '"]');
-    if (targetNode.length > 0) targetNode[0].scrollIntoView({ block: 'center', behavior: 'smooth' });
 }
 
 // ---------- Tree styles ----------
@@ -934,6 +971,7 @@ function applyContextStyles() {
 
 // ---------- Expand / Collapse all ----------
 function expandAllNodes() {
+    if (restoringHistory) return;
     if (isSearchFilterActive()) {
         const collapsed = $('.tree-node.collapsed');
         collapsed.not('.tree-node-match, .tree-node-context').each(function() { toggleNode($(this)); });
@@ -945,6 +983,7 @@ function expandAllNodes() {
 }
 
 function collapseAllNodes() {
+    if (restoringHistory) return;
     const selectedNodeId = getCurrentSelectedNodeId();
     let shouldResetUrl = false;
     if (selectedNodeId) {
@@ -958,6 +997,7 @@ function collapseAllNodes() {
 // Expand one ply deeper than the current frontier.
 // First click expands depth 0 (top branches); each subsequent click drills one more level.
 function expandOneMoreLevel() {
+    if (restoringHistory) return;
     if (isSearchFilterActive()) {
         const collapsed = $('.tree-node.collapsed:visible');
         collapsed.not('.tree-node-match, .tree-node-context').each(function() { toggleNode($(this)); });
@@ -978,6 +1018,7 @@ function expandOneMoreLevel() {
 
 // Collapse only the deepest currently-expanded layer.
 function collapseOneLevel() {
+    if (restoringHistory) return;
     let maxDepth = -1;
     $('.tree-node.expanded').each(function() {
         const k = $(this).parents('.tree-node').length;
@@ -998,12 +1039,7 @@ function getCurrentSelectedNodeId() {
 }
 
 function resetUrlParameters() {
-    const url = ontologyUrl(window.location.href);
-    if (url.searchParams.has('node')) {
-        url.searchParams.delete('node');
-        url.searchParams.delete('type');
-        window.history.replaceState({}, '', url);
-    }
+    writeView('replace', selectionUrl(null));
 }
 
 // ---------- Tree controls ----------
@@ -1060,48 +1096,88 @@ function setupKeyboardNavigation() {
 }
 
 // ---------- History navigation ----------
-function setupHistoryNavigation() {
-    // Handle initial URL params
-    const urlParams = new URLSearchParams(window.location.search);
-    const nodeId = urlParams.get('node');
-    const nodeType = urlParams.get('type') || 'class';
-
-    if (nodeId) {
-        // Ensure the right section is visible
-        const cfg = SECTIONS[nodeType];
-        if (cfg) {
-            const rootList = document.getElementById(cfg.rootListId);
-            if (rootList && rootList.style.display === 'none') {
-                rootList.style.display = '';
-                const header = document.querySelector('.section-header[data-section="' + nodeType + '"]');
-                if (header) header.querySelector('.section-chevron').classList.remove('collapsed');
-            }
-        }
-        loadAndSelectNode(nodeId, nodeType, false);
-    }
-
-    // Listen for back/forward
-    window.addEventListener('popstate', function(event) {
-        window.history.replaceState(event.state, '', ontologyUrl(window.location.href));
-        if (event.state && event.state.nodeId) {
-            const type = event.state.type || 'class';
-            loadAndSelectNode(event.state.nodeId, type, false);
+async function restoreHistory(state, initial = false) {
+    const snapshot = savedView(state);
+    const generation = beginNavigation(true);
+    try {
+        clearSelection();
+        if (snapshot?.query) {
+            const data = await fetchSearch(snapshot.query);
+            if (generation !== searchGeneration) return;
+            renderSearchResults(snapshot.query, data);
         } else {
-            const params = new URLSearchParams(window.location.search);
-            const nid = params.get('node');
-            const ntype = params.get('type') || 'class';
-            if (nid) {
-                loadAndSelectNode(nid, ntype, false);
-            } else {
-                $('.tree-node.selected').removeClass('selected');
-                const dc = document.getElementById('class-details');
-                if (dc) {
-                    dc.innerHTML = '<div class="flex items-center justify-center h-full text-gray-500"><div class="text-center"><svg class="w-16 h-16 mx-auto text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg><h3 class="mt-2 text-xl font-medium">Select an item</h3><p class="mt-1">Choose a class or property from the tree to view its details</p></div></div>';
+            await clearFilterMode(generation);
+        }
+        if (generation !== searchGeneration) return;
+        let missing = false;
+        if (snapshot) {
+            for (const type of Object.keys(SECTIONS)) {
+                const section = snapshot.sections[type];
+                // Parent-first replay also reconstructs retained children behind
+                // collapsed ancestors. Requests are shared, DOM occurrences are not.
+                for (const path of [...section.loaded].sort((a, b) => a.length - b.length)) {
+                    const list = occurrenceContainer(type, path);
+                    if (!list.length) { missing = true; continue; }
+                    const row = list.children('.siblings-row');
+                    const siblings = section.siblings.find(item => JSON.stringify(item.path) === JSON.stringify(path));
+                    if (siblings) row.data('siblingsRequested', true);
+                    if (snapshot.query) {
+                        await fetchAndMergeChildren(path.at(-1) || '#', list, type, { generation, strict: true });
+                    } else {
+                        await loadTreeNodes(path.at(-1) || '#', list, type, { generation, strict: true });
+                    }
+                    if (generation !== searchGeneration) return;
+                }
+                const root = $('#' + SECTIONS[type].rootListId);
+                const expanded = new Set(section.expanded.map(path => JSON.stringify(path)));
+                root.find('.tree-node.has-children').each(function() {
+                    setNodeExpanded($(this), expanded.has(JSON.stringify(occurrencePath(this))));
+                });
+                for (const siblings of section.siblings) {
+                    const list = occurrenceContainer(type, siblings.path);
+                    const row = list.children('.siblings-row');
+                    if (!row.length) { missing = true; continue; }
+                    row.data('siblingsLoaded', true);
+                    showSiblingsRowContext(row);
+                    if (!siblings.open) hideSiblingsRowContext(row);
+                }
+                root.toggle(section.open);
+                $('#' + SECTIONS[type].sectionId + ' .section-chevron').toggleClass('collapsed', !section.open);
+            }
+            if (snapshot.selection) {
+                const node = findOccurrence(snapshot.selection.type, snapshot.selection.path);
+                if (node.length) {
+                    const loaded = await selectNode(node, false, { generation, reveal: false, notify: false });
+                    if (generation !== searchGeneration) return;
+                    if (!loaded) throw new Error('Could not restore details');
+                } else {
+                    missing = true;
                 }
             }
+        } else {
+            const params = new URLSearchParams(location.search);
+            const nodeId = params.get('node') || (typeof state?.nodeId === 'string' ? state.nodeId : null);
+            const requestedType = params.get('type') || state?.type;
+            const type = Object.hasOwn(SECTIONS, requestedType) ? requestedType : 'class';
+            if (nodeId) await loadAndSelectNode(nodeId, type, generation);
         }
-    });
+        if (generation !== searchGeneration) return;
+        notifySelection($('.tree-node.selected').first());
+        finishNavigation(generation, initial && !snapshot ? 'replace' : null);
+        if (missing) historyNotice('Some saved branches or the selected item are no longer available. The remaining view has been restored.');
+    } catch (_) {
+        if (generation !== searchGeneration) return;
+        // Keep the destination snapshot intact until retry has reconstructed it.
+        document.getElementById('explore-tree').setAttribute('aria-busy', 'false');
+        historyNotice('This view could not be restored.', () => restoreHistory(state, initial));
+    }
 }
+
+function setupHistoryNavigation() {
+    window.addEventListener('popstate', event => restoreHistory(event.state));
+    return restoreHistory(history.state, true);
+}
+
 
 // ---------- Search ----------
 function setupSearch() {
@@ -1110,21 +1186,9 @@ function setupSearch() {
     if (!input || !button) return;
 
     function doSearch() {
-        const query = input.value;
-        if (query && query.length >= 2) {
-            searchGeneration++;
-            if (input.dataset.filtering === 'true') {
-                lastSearchTrees = { class: null, property: null };
-            } else {
-                resetTreeSearch();
-            }
-            searchUnified(query);
-        } else if (query.length > 0 && query.length < 2) {
-            alert('Please enter at least 2 characters for search');
-        } else {
-            searchGeneration++;
-            resetTreeSearch();
-        }
+        if (input.value.length >= 2) searchUnified(input.value);
+        else if (input.value.length) alert('Please enter at least 2 characters for search');
+        else resetTreeSearch();
     }
 
     button.addEventListener('click', doSearch);
@@ -1143,104 +1207,120 @@ function setupSearch() {
     }
 }
 
-function searchUnified(query) {
-    if (!query || query.length < 2) return;
+async function fetchSearch(query) {
+    return Promise.all(Object.values(SECTIONS).map(async cfg => {
+        const response = await fetch(ontologyUrl(cfg.searchEndpoint + '?query=' + encodeURIComponent(query)));
+        if (!response.ok) throw new Error('Search failed');
+        const data = await response.json();
+        if (!Array.isArray(data.matches) || !data.tree) throw new Error('Invalid search results');
+        return data;
+    }));
+}
 
-    // Show loading
-    const treeEl = document.getElementById('explore-tree');
+async function searchUnified(query) {
+    if (!query || query.length < 2) return;
+    const interruptedRestore = restoringHistory;
+    const generation = beginNavigation();
+    try {
+        const data = await fetchSearch(query);
+        if (generation !== searchGeneration) return;
+        if (data.every(result => result.matches.length === 0)) {
+            await clearFilterMode(generation);
+            if (generation !== searchGeneration) return;
+            notifySelection(null);
+        } else {
+            renderSearchResults(query, data);
+            const first = $('.tree-node-highlighted').first();
+            selectNode(first, false, { generation });
+        }
+        finishNavigation(generation, 'push', selectionUrl(captureView().selection));
+    } catch (_) {
+        if (generation !== searchGeneration) return;
+        finishNavigation(generation);
+        if (interruptedRestore) {
+            const recovery = restoreHistory(history.state);
+            const recoveryGeneration = searchGeneration;
+            await recovery;
+            if (recoveryGeneration !== searchGeneration || restoringHistory) return;
+        }
+        historyNotice('Search could not be loaded. Please try again.');
+    }
+}
+
+function renderSearchResults(query, [classData, propData]) {
+    committedQuery = query;
+    document.getElementById('explore-search-input').value = query;
     const classSec = document.getElementById('class-section');
     const propSec = document.getElementById('property-section');
+    lastSearchTrees = { class: classData.tree || null, property: propData.tree || null };
+    const classMatches = classData.matches || [];
+    const propMatches = propData.matches || [];
+    const totalMatches = classMatches.length + propMatches.length;
 
-    // Fire both searches in parallel
-    const classSearch = fetch(ontologyUrl(SECTIONS.class.searchEndpoint + '?query=' + encodeURIComponent(query)))
-        .then(r => r.json()).catch(() => ({ matches: [], tree: {} }));
-    const propSearch = fetch(ontologyUrl(SECTIONS.property.searchEndpoint + '?query=' + encodeURIComponent(query)))
-        .then(r => r.json()).catch(() => ({ matches: [], tree: {} }));
+    // Add filter controls
+    addFilterModeControls(totalMatches, query, classMatches.length, propMatches.length);
 
-    Promise.all([classSearch, propSearch]).then(([classData, propData]) => {
-        searchGeneration++;
-        lastSearchTrees = { class: classData.tree || null, property: propData.tree || null };
-        const classMatches = classData.matches || [];
-        const propMatches = propData.matches || [];
-        const totalMatches = classMatches.length + propMatches.length;
+    // Render class section
+    const classRoot = document.getElementById(SECTIONS.class.rootListId);
+    delete classRoot.dataset.loaded;
+    classRoot.innerHTML = '';
+    if (classMatches.length > 0 && classData.tree) {
+        renderFilteredTree(classData.tree, classRoot, 'class', query);
+        classSec.style.display = '';
+        // Ensure section is expanded
+        const classChevron = classSec.querySelector('.section-chevron');
+        if (classChevron) classChevron.classList.remove('collapsed');
+        classRoot.style.display = '';
+    } else {
+        // Collapse empty class section
+        classRoot.style.display = 'none';
+        const classChevron = classSec.querySelector('.section-chevron');
+        if (classChevron) classChevron.classList.add('collapsed');
+    }
 
-        // Add filter controls
-        addFilterModeControls(totalMatches, query, classMatches.length, propMatches.length);
+    // Render property section
+    const propRoot = document.getElementById(SECTIONS.property.rootListId);
+    delete propRoot.dataset.loaded;
+    propRoot.innerHTML = '';
+    if (propMatches.length > 0 && propData.tree) {
+        renderFilteredTree(propData.tree, propRoot, 'property', query);
+        propSec.style.display = '';
+        const propChevron = propSec.querySelector('.section-chevron');
+        if (propChevron) propChevron.classList.remove('collapsed');
+        propRoot.style.display = '';
+    } else {
+        propRoot.style.display = 'none';
+        const propChevron = propSec.querySelector('.section-chevron');
+        if (propChevron) propChevron.classList.add('collapsed');
+    }
 
-        // Render class section
-        const classRoot = document.getElementById(SECTIONS.class.rootListId);
-        classRoot.innerHTML = '';
-        if (classMatches.length > 0 && classData.tree) {
-            renderFilteredTree(classData.tree, classRoot, 'class', query);
-            classSec.style.display = '';
-            // Ensure section is expanded
-            const classChevron = classSec.querySelector('.section-chevron');
-            if (classChevron) classChevron.classList.remove('collapsed');
-            classRoot.style.display = '';
-        } else {
-            // Collapse empty class section
-            classRoot.style.display = 'none';
-            const classChevron = classSec.querySelector('.section-chevron');
-            if (classChevron) classChevron.classList.add('collapsed');
-        }
+    // Update count badges
+    document.getElementById('class-count').textContent = classMatches.length || '';
+    document.getElementById('property-count').textContent = propMatches.length || '';
 
-        // Render property section
-        const propRoot = document.getElementById(SECTIONS.property.rootListId);
-        propRoot.innerHTML = '';
-        if (propMatches.length > 0 && propData.tree) {
-            renderFilteredTree(propData.tree, propRoot, 'property', query);
-            propSec.style.display = '';
-            const propChevron = propSec.querySelector('.section-chevron');
-            if (propChevron) propChevron.classList.remove('collapsed');
-            propRoot.style.display = '';
-        } else {
-            propRoot.style.display = 'none';
-            const propChevron = propSec.querySelector('.section-chevron');
-            if (propChevron) propChevron.classList.add('collapsed');
-        }
+    setupNodeClickHandlers();
 
-        // Update count badges
-        document.getElementById('class-count').textContent = classMatches.length || '';
-        document.getElementById('property-count').textContent = propMatches.length || '';
-
-        setupNodeClickHandlers();
-
-        // Highlight matches
-        document.querySelectorAll('.tree-node-match').forEach(node => {
-            node.classList.add('tree-node-highlighted');
-            const label = node.querySelector('.node-label');
-            if (label) {
-                // Highlight in the main label text and in the preflabel annotation separately
-                const annotation = label.querySelector('.preflabel-annotation');
-                if (annotation) {
-                    const mainText = label.firstChild;
-                    if (mainText && mainText.nodeType === Node.TEXT_NODE) {
-                        const span = document.createElement('span');
-                        span.innerHTML = highlightText(mainText.textContent, query);
-                        label.replaceChild(span, mainText);
-                    }
-                    annotation.innerHTML = '(' + highlightText(annotation.textContent.replace(/[()]/g, ''), query) + ')';
-                } else {
-                    label.innerHTML = highlightText(label.textContent, query);
+    // Highlight matches
+    document.querySelectorAll('.tree-node-match').forEach(node => {
+        node.classList.add('tree-node-highlighted');
+        const label = node.querySelector('.node-label');
+        if (label) {
+            // Highlight in the main label text and in the preflabel annotation separately
+            const annotation = label.querySelector('.preflabel-annotation');
+            if (annotation) {
+                const mainText = label.firstChild;
+                if (mainText && mainText.nodeType === Node.TEXT_NODE) {
+                    const span = document.createElement('span');
+                    span.innerHTML = highlightText(mainText.textContent, query);
+                    label.replaceChild(span, mainText);
                 }
+                annotation.innerHTML = '(' + highlightText(annotation.textContent.replace(/[()]/g, ''), query) + ')';
+            } else {
+                label.innerHTML = highlightText(label.textContent, query);
             }
-        });
-
-        // Select first match
-        const firstMatch = document.querySelector('.tree-node-highlighted');
-        if (firstMatch) {
-            const li = $(firstMatch);
-            const sectionType = firstMatch.dataset.type;
-            loadDetails(firstMatch.dataset.id, sectionType, true);
-            li.addClass('selected');
-            firstMatch.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
-
-        if (totalMatches === 0) {
-            // No results — restore trees
-            clearFilterMode();
         }
     });
+
 }
 
 function renderFilteredTree(treeData, container, sectionType, query) {
@@ -1326,51 +1406,44 @@ function addFilterModeControls(totalCount, query, classCount, propCount) {
     addFilterModeStyles();
 }
 
-function clearFilterMode() {
-    searchGeneration++;
+async function clearFilterMode(generation) {
+    committedQuery = '';
     lastSearchTrees = { class: null, property: null };
-    // Hide inline clear button and match count
-    const clearBtn = document.getElementById('explore-search-clear');
-    if (clearBtn) clearBtn.style.display = 'none';
-    const countEl = document.getElementById('search-match-count');
-    if (countEl) { countEl.textContent = ''; countEl.style.display = 'none'; }
-
-    // Clear the search input text and filtering flag
+    document.getElementById('explore-search-clear').style.display = 'none';
+    const count = document.getElementById('search-match-count');
+    count.textContent = '';
+    count.style.display = 'none';
     const input = document.getElementById('explore-search-input');
-    if (input) { input.value = ''; delete input.dataset.filtering; }
-
-    // Restore both sections
-    ['class', 'property'].forEach(sectionType => {
-        const cfg = SECTIONS[sectionType];
-        const rootList = document.getElementById(cfg.rootListId);
-        rootList.innerHTML = '';
-        rootList.style.display = '';
-        const section = document.getElementById(cfg.sectionId);
-        section.style.display = '';
-        const chevron = section.querySelector('.section-chevron');
-        if (chevron) chevron.classList.remove('collapsed');
-        loadTreeNodes('#', $(rootList), sectionType);
-    });
-
-    // Reset detail panel
-    const dc = document.getElementById('class-details');
-    if (dc) {
-        dc.innerHTML = '<div class="flex items-center justify-center h-full text-gray-500"><div class="text-center"><svg class="w-16 h-16 mx-auto text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg><h3 class="mt-2 text-xl font-medium">Select an item</h3><p class="mt-1">Choose a class or property from the tree to view its details</p></div></div>';
-    }
+    input.value = '';
+    delete input.dataset.filtering;
+    clearSelection();
+    await Promise.all(Object.keys(SECTIONS).map(async type => {
+        const cfg = SECTIONS[type];
+        const root = document.getElementById(cfg.rootListId);
+        root.innerHTML = '';
+        delete root.dataset.loaded;
+        root.style.display = '';
+        document.getElementById(cfg.sectionId).style.display = '';
+        document.querySelector('#' + cfg.sectionId + ' .section-chevron').classList.remove('collapsed');
+        await loadTreeNodes('#', $(root), type, { generation, strict: true });
+    }));
 }
 
-function resetTreeSearch() {
-    searchGeneration++;
-    const input = document.getElementById('explore-search-input');
-    const isFilterMode = input && input.dataset.filtering === 'true';
-    if (isFilterMode) {
-        clearFilterMode();
-    } else {
-        document.querySelectorAll('.tree-node-highlighted').forEach(node => {
-            node.classList.remove('tree-node-highlighted');
-            const label = node.querySelector('.node-label');
-            if (label) label.textContent = label.textContent;
-        });
+async function resetTreeSearch() {
+    if (!committedQuery && !navigationBusy) {
+        document.getElementById('explore-search-input').value = '';
+        return;
+    }
+    const generation = beginNavigation();
+    try {
+        await clearFilterMode(generation);
+        if (generation !== searchGeneration) return;
+        notifySelection(null);
+        finishNavigation(generation, 'push', selectionUrl(null));
+    } catch (_) {
+        if (generation !== searchGeneration) return;
+        finishNavigation(generation);
+        historyNotice('The full tree could not be loaded. Please try again.');
     }
 }
 
@@ -1404,10 +1477,6 @@ function initializeUnifiedTree() {
     applyArrowStyles();
     applyContextStyles();
     setupSectionHeaders();
-
-    // Load both sections eagerly
-    loadTreeNodes('#', $('#class-tree-root'), 'class');
-    loadTreeNodes('#', $('#property-tree-root'), 'property');
 
     setupNodeClickHandlers();
     setupTreeControls();
