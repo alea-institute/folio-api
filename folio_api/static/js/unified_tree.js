@@ -43,9 +43,11 @@ let committedQuery = '';
 let navigationBusy = false;
 let restoringHistory = false;
 let selectionGeneration = 0;
+let detailsPending = false;
 let restoreRequests = null;
 let viewOperations = 0;
 let historySaveTimer;
+const branchLoads = new WeakMap();
 
 function occurrencePath(node) {
     return $(node).parents('.tree-node').get().reverse().concat($(node).get())
@@ -174,11 +176,11 @@ function beginNavigation(restoring = false) {
     selectionGeneration++;
     viewOperations = 0;
     navigationBusy = true;
-    restoringHistory = restoring;
+    restoringHistory = restoring || restoringHistory;
     restoreRequests = restoring ? new Map() : null;
     historyNotice('');
     document.getElementById('explore-tree').setAttribute('aria-busy', 'true');
-    document.getElementById('explore-tree').inert = restoring;
+    document.getElementById('explore-tree').inert = restoringHistory;
     document.dispatchEvent(new CustomEvent('entity:navigation-start'));
     return searchGeneration;
 }
@@ -202,8 +204,15 @@ function notifySelection(node) {
 
 function clearSelection() {
     selectionGeneration++;
+    detailsPending = false;
     $('.tree-node.selected').removeClass('selected');
     document.getElementById('class-details').innerHTML = '<div class="p-4 text-gray-500"><h3>Select an item</h3><p>Choose a class or property from the tree to view its details</p></div>';
+}
+
+function resumeSelection(generation) {
+    const node = $('.tree-node.selected').first();
+    if (node.length && detailsPending) loadDetails(node.attr('data-id'), node.attr('data-type'), generation);
+    notifySelection(node);
 }
 
 async function childData(nodeId, sectionType, generation) {
@@ -298,27 +307,38 @@ function renderTreeNode(node, container, sectionType) {
     container.append(li);
 }
 
-async function loadTreeNodes(nodeId, container, sectionType, { generation = searchGeneration, strict = false } = {}) {
+function loadTreeNodes(nodeId, container, sectionType, { generation = searchGeneration, strict = false } = {}) {
     const list = $(container);
-    if (list[0]?.dataset.loaded === 'true') return true;
-    const indicator = $('<li class="loading-indicator"><span>Loading...</span></li>').appendTo(list);
-    try {
-        const children = await childData(nodeId, sectionType, generation);
-        if (generation !== searchGeneration) return false;
-        list.children('.tree-node, .tree-error-row').remove();
-        children.forEach(node => renderTreeNode(node, list, sectionType));
-        list.attr('data-loaded', 'true');
-        if (nodeId === '#') document.getElementById(SECTIONS[sectionType].countId).textContent = children.length;
-        setupNodeClickHandlers();
-        return true;
-    } catch (error) {
-        if (generation !== searchGeneration) return false;
-        if (strict) throw error;
-        list.append('<li class="tree-error-row">Error loading. Try again.</li>');
-        return false;
-    } finally {
-        indicator.remove();
-    }
+    if (!list.length) return Promise.resolve(false);
+    if (list[0].dataset.loaded === 'true') return Promise.resolve(true);
+    const pending = branchLoads.get(list[0]);
+    if (pending?.generation === generation) return pending.promise;
+    const promise = (async () => {
+        const indicator = $('<li class="loading-indicator"><span>Loading...</span></li>').appendTo(list);
+        try {
+            const children = await childData(nodeId, sectionType, generation);
+            if (generation !== searchGeneration) return false;
+            list.children('.tree-node, .tree-error-row').remove();
+            children.forEach(node => renderTreeNode(node, list, sectionType));
+            list.attr('data-loaded', 'true');
+            if (nodeId === '#') document.getElementById(SECTIONS[sectionType].countId).textContent = children.length;
+            setupNodeClickHandlers();
+            return true;
+        } catch (error) {
+            if (generation !== searchGeneration) return false;
+            if (strict) throw error;
+            list.append('<li class="tree-error-row">Error loading. Try again.</li>');
+            return false;
+        } finally {
+            indicator.remove();
+        }
+    })();
+    const load = { generation, promise };
+    branchLoads.set(list[0], load);
+    // Both success and error release only this request's ownership.
+    const release = () => { if (branchLoads.get(list[0]) === load) branchLoads.delete(list[0]); };
+    promise.then(release, release);
+    return promise;
 }
 
 // ---------- Retained search context ----------
@@ -618,6 +638,7 @@ async function loadDetails(iri, sectionType, generation = searchGeneration) {
     const current = () => generation === searchGeneration && selection === selectionGeneration;
     const container = document.getElementById('class-details');
     if (!container || !current()) return false;
+    detailsPending = true;
     container.innerHTML = '<div class="p-4" role="status">Loading details...</div>';
     const cfg = SECTIONS[sectionType];
     const nodeId = encodeURIComponent(extractIdFromIri(iri));
@@ -648,6 +669,8 @@ async function loadDetails(iri, sectionType, generation = searchGeneration) {
             if (current()) container.innerHTML = '<div class="p-4 text-red-500">Unable to load details. Please try again or select a different item.</div>';
             return false;
         }
+    } finally {
+        if (current()) detailsPending = false;
     }
 }
 
@@ -687,6 +710,7 @@ async function selectNodeByIri(iri) {
     } catch (_) {
         if (generation !== searchGeneration) return;
         finishNavigation(generation);
+        resumeSelection(generation);
         historyNotice('Unable to reveal that item. Please try again.');
     }
 }
@@ -875,6 +899,10 @@ async function loadAndSelectNode(nodeId, sectionType, generation) {
     if (!node.length) {
         const response = await fetch(SECTIONS[sectionType].pathEndpoint + encodeURIComponent(extractIdFromIri(nodeId)));
         if (generation !== searchGeneration) return false;
+        if (response.status === 404) {
+            historyNotice('That item is no longer available in the tree.');
+            return false;
+        }
         if (!response.ok) throw new Error('Could not find node path');
         const data = await response.json();
         if (generation !== searchGeneration) return false;
@@ -1029,14 +1057,6 @@ function getCurrentSelectedNodeId() {
 
 function resetUrlParameters() {
     writeView('replace', selectionUrl(null));
-}
-
-// ---------- Tree controls ----------
-function setupTreeControls() {
-    const expandBtn = document.getElementById('expand-all-tree');
-    if (expandBtn) expandBtn.addEventListener('click', expandAllNodes);
-    const collapseBtn = document.getElementById('collapse-all-tree');
-    if (collapseBtn) collapseBtn.addEventListener('click', collapseAllNodes);
 }
 
 // ---------- Keyboard navigation ----------
@@ -1231,6 +1251,8 @@ async function searchUnified(query) {
             const recoveryGeneration = searchGeneration;
             await recovery;
             if (recoveryGeneration !== searchGeneration || restoringHistory) return;
+        } else {
+            resumeSelection(generation);
         }
         historyNotice('Search could not be loaded. Please try again.');
     }
@@ -1467,7 +1489,6 @@ function initializeUnifiedTree() {
     setupSectionHeaders();
 
     setupNodeClickHandlers();
-    setupTreeControls();
     setupKeyboardNavigation();
     setupHistoryNavigation();
     setupSearch();

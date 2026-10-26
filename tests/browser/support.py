@@ -346,4 +346,6 @@ class ExplorerBrowserCase(unittest.IsolatedAsyncioTestCase):
             )
             destination = ROOT / "docs/plans/evidence" / name
             destination.parent.mkdir(parents=True, exist_ok=True)
-            await self.page.screenshot(path=str(destination), full_page=True)
+            await self.page.screenshot(
+                path=str(destination), full_page=True, animations="disabled"
+            )
