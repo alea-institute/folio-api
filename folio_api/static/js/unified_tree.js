@@ -54,7 +54,6 @@ let restoringHistory = false;
 let selectionGeneration = 0;
 let detailsPending = false;
 let restoreRequests = null;
-let viewOperations = 0;
 let historySaveTimer;
 const branchLoads = new WeakMap();
 
@@ -98,7 +97,12 @@ function captureView() {
             const row = list.children('.siblings-row');
             if (row.data('siblingsLoaded')) siblings.push({ path, open: !!row.data('siblingsOpen') });
         });
-        root.find('.tree-node.expanded').each(function() { expanded.push(occurrencePath(this)); });
+        root.find('.tree-node.expanded').each(function() {
+            const children = $(this).children('.children-container');
+            if (children.children('.tree-node').length || children[0]?.dataset.loaded === 'true') {
+                expanded.push(occurrencePath(this));
+            }
+        });
         sections[type] = { open: root[0].style.display !== 'none', loaded, expanded, siblings };
     }
     return { version: 1, query: committedQuery, sections, selection: captureSelection() };
@@ -156,7 +160,7 @@ function selectionUrl(selection) {
 }
 
 function writeView(mode, url = ontologyUrl(window.location.href)) {
-    if (navigationBusy || restoringHistory || viewOperations) return;
+    if (navigationBusy || restoringHistory) return;
     const view = captureView();
     if (JSON.stringify(savedView(history.state)) === JSON.stringify(view) && url.href === location.href) return;
     const envelope = history.state && typeof history.state === 'object' ? history.state : {};
@@ -186,13 +190,12 @@ function beginNavigation(restoring = false) {
     searchGeneration++;
     revealGeneration++;
     selectionGeneration++;
-    viewOperations = 0;
     navigationBusy = true;
     restoringHistory = restoring || restoringHistory;
     restoreRequests = restoring ? new Map() : null;
     historyNotice('');
     document.getElementById('explore-tree').setAttribute('aria-busy', 'true');
-    document.getElementById('explore-tree').inert = restoringHistory;
+    document.getElementById('explore-tree').inert = true;
     document.dispatchEvent(new CustomEvent('entity:navigation-start'));
     return searchGeneration;
 }
@@ -282,7 +285,7 @@ function extractIdFromIri(iri) {
 function setupSectionHeaders() {
     document.querySelectorAll('.section-header').forEach(header => {
         header.addEventListener('click', () => {
-            if (restoringHistory) return;
+            if (navigationBusy) return;
             const sectionType = header.dataset.section;
             const cfg = SECTIONS[sectionType];
             const rootList = document.getElementById(cfg.rootListId);
@@ -319,6 +322,14 @@ function renderTreeNode(node, container, sectionType) {
     container.append(li);
 }
 
+function renderLoadedChildren(nodeId, list, sectionType, children) {
+    list.children('.tree-node, .tree-error-row').remove();
+    children.forEach(node => renderTreeNode(node, list, sectionType));
+    list.attr('data-loaded', 'true');
+    if (nodeId === '#') document.getElementById(SECTIONS[sectionType].countId).textContent = children.length;
+    setupNodeClickHandlers();
+}
+
 function loadTreeNodes(nodeId, container, sectionType, { generation = searchGeneration, strict = false } = {}) {
     const list = $(container);
     if (!list.length) return Promise.resolve(false);
@@ -330,11 +341,7 @@ function loadTreeNodes(nodeId, container, sectionType, { generation = searchGene
         try {
             const children = await childData(nodeId, sectionType, generation);
             if (generation !== searchGeneration) return false;
-            list.children('.tree-node, .tree-error-row').remove();
-            children.forEach(node => renderTreeNode(node, list, sectionType));
-            list.attr('data-loaded', 'true');
-            if (nodeId === '#') document.getElementById(SECTIONS[sectionType].countId).textContent = children.length;
-            setupNodeClickHandlers();
+            renderLoadedChildren(nodeId, list, sectionType, children);
             return true;
         } catch (error) {
             if (generation !== searchGeneration) return false;
@@ -459,15 +466,17 @@ async function fetchAndMergeChildren(nodeId, container, sectionType,
         if (!stillSearching()) return false;
         mergeChildrenIntoContainer(list, sectionType, children);
         list.attr('data-loaded', 'true');
-        saveViewSoon(generation);
         return true;
     } catch (error) {
         if (!stillSearching()) return false;
         if (strict) throw error;
         const row = $('<li class="tree-error-row"><span>Error loading. </span><button type="button" class="tree-retry">Retry</button></li>');
-        row.find('button').on('click', function(event) {
+        row.find('button').on('click', async function(event) {
             event.stopPropagation();
-            fetchAndMergeChildren(nodeId, list, sectionType, { control, generation });
+            if (navigationBusy) return;
+            const retryGeneration = searchGeneration;
+            const success = await fetchAndMergeChildren(nodeId, list, sectionType, { control });
+            if (success && retryGeneration === searchGeneration) saveViewSoon(retryGeneration);
         });
         list.append(row);
         refreshSiblingsRow(list, sectionType, nodeId);
@@ -514,11 +523,10 @@ function hideSiblingsRowContext(row) {
 }
 
 async function toggleSiblingsRow(row) {
-    if (restoringHistory) return;
+    if (navigationBusy) return;
     const generation = searchGeneration;
     const button = row.children('.siblings-toggle');
     if (button.prop('disabled')) return;
-    viewOperations++;
     let success = true;
     try {
         if (row.data('siblingsOpen')) {
@@ -535,7 +543,6 @@ async function toggleSiblingsRow(row) {
         }
     } finally {
         if (generation === searchGeneration) {
-            viewOperations--;
             if (success) saveViewSoon(generation);
         }
     }
@@ -565,15 +572,14 @@ function setupNodeClickHandlers() {
     } catch (_) {}
 }
 
-async function toggleNode(li) {
-    if (restoringHistory || !li.length) return;
+async function toggleNode(li, { save = true } = {}) {
+    if (navigationBusy || !li.length) return;
     const generation = searchGeneration;
     const nodeId = li.attr('data-id');
     const sectionType = li.attr('data-type');
     const container = li.children('.children-container');
     const icon = li.children('.node-content').find('.expand-icon');
     if (icon.prop('disabled')) return;
-    viewOperations++;
     let success = true;
     try {
         if (li.hasClass('collapsed')) {
@@ -594,19 +600,19 @@ async function toggleNode(li) {
         }
     } finally {
         if (generation === searchGeneration) {
-            viewOperations--;
-            if (success) saveViewSoon(generation);
+            if (success && save) saveViewSoon(generation);
         }
     }
 }
 
 function selectNode(li, updateUrl = true, { generation, reveal = true, notify = true } = {}) {
     li = li.first();
-    if (!li.length || (restoringHistory && generation === undefined)) return Promise.resolve(false);
+    if (!li.length || (navigationBusy && generation === undefined)) return Promise.resolve(false);
     if (updateUrl && li.hasClass('selected') && !navigationBusy) {
         ensureNodeVisible(li);
         saveViewSoon();
-        return Promise.resolve(true);
+        if (notify) notifySelection(li);
+        return loadDetails(li.attr('data-id'), li.attr('data-type'));
     }
     const ownsNavigation = generation === undefined;
     if (ownsNavigation) generation = beginNavigation();
@@ -630,13 +636,12 @@ function ensureNodeVisible(li) {
                 showSiblingsRowContext(row);
             }
         });
-        const cfg = SECTIONS[li.attr('data-type')];
-        const root = document.getElementById(cfg.rootListId);
-        root.style.display = '';
-        const section = document.getElementById(cfg.sectionId);
-        section.style.display = '';
-        section.querySelector('.section-chevron')?.classList.remove('collapsed');
     }
+    const cfg = SECTIONS[li.attr('data-type')];
+    document.getElementById(cfg.rootListId).style.display = '';
+    const section = document.getElementById(cfg.sectionId);
+    section.style.display = '';
+    section.querySelector('.section-chevron')?.classList.remove('collapsed');
     li.parents('li.tree-node').each(function() {
         const parent = $(this);
         if (parent.hasClass('collapsed')) setNodeExpanded(parent, true);
@@ -691,7 +696,7 @@ function loadClassDetails(iri) {
 
 // ---------- selectNodeByIri: cross-type navigation ----------
 async function selectNodeByIri(iri) {
-    if (restoringHistory) return;
+    if (navigationBusy) return;
     const existing = $('.tree-node').filter(function() { return this.dataset.id === iri; }).first();
     if (existing.length) return selectNode(existing);
     const generation = beginNavigation();
@@ -922,7 +927,9 @@ async function loadAndSelectNode(nodeId, sectionType, generation) {
         node = findOccurrence(sectionType, path);
     }
     if (!node.length) { historyNotice('That item is no longer available in the tree.'); return false; }
-    return selectNode(node, false, { generation, notify: false });
+    const loaded = await selectNode(node, false, { generation, notify: false });
+    if (generation === searchGeneration && !loaded) throw new Error('Could not restore details');
+    return loaded;
 }
 
 async function loadNodePath(path, sectionType, generation) {
@@ -997,64 +1004,64 @@ function applyContextStyles() {
 }
 
 // ---------- Expand / Collapse all ----------
+async function toggleNodeBatch(nodes, resetUrl = false) {
+    const generation = searchGeneration;
+    await Promise.all($(nodes).get().map(node => toggleNode($(node), { save: false })));
+    if (generation !== searchGeneration) return;
+    if (resetUrl) resetUrlParameters();
+    else saveViewSoon(generation);
+}
+
 function expandAllNodes() {
-    if (restoringHistory) return;
-    if (isSearchFilterActive()) {
-        const collapsed = $('.tree-node.collapsed');
-        collapsed.not('.tree-node-match, .tree-node-context').each(function() { toggleNode($(this)); });
-        collapsed.filter('.tree-node-match, .tree-node-context')
-            .slice(0, 50).each(function() { toggleNode($(this)); });
-        return;
-    }
-    $('.tree-node.collapsed').each(function() { toggleNode($(this)); });
+    if (navigationBusy) return;
+    const collapsed = $('.tree-node.collapsed');
+    const nodes = isSearchFilterActive()
+        ? collapsed.not('.tree-node-match, .tree-node-context').get().concat(
+            collapsed.filter('.tree-node-match, .tree-node-context').slice(0, 50).get())
+        : collapsed;
+    return toggleNodeBatch(nodes);
 }
 
 function collapseAllNodes() {
-    if (restoringHistory) return;
+    if (navigationBusy) return;
     const selectedNodeId = getCurrentSelectedNodeId();
     let shouldResetUrl = false;
     if (selectedNodeId) {
         const selectedNode = $('.tree-node[data-id="' + selectedNodeId + '"]');
         if (selectedNode.length > 0 && selectedNode.parents('.tree-node').length > 0) shouldResetUrl = true;
     }
-    $('.tree-node.expanded').each(function() { toggleNode($(this)); });
-    if (shouldResetUrl) resetUrlParameters();
+    return toggleNodeBatch($('.tree-node.expanded'), shouldResetUrl);
 }
 
 // Expand one ply deeper than the current frontier.
 // First click expands depth 0 (top branches); each subsequent click drills one more level.
 function expandOneMoreLevel() {
-    if (restoringHistory) return;
+    if (navigationBusy) return;
     if (isSearchFilterActive()) {
         const collapsed = $('.tree-node.collapsed:visible');
-        collapsed.not('.tree-node-match, .tree-node-context').each(function() { toggleNode($(this)); });
-        collapsed.filter('.tree-node-match, .tree-node-context')
-            .slice(0, 50).each(function() { toggleNode($(this)); });
-        return;
+        return toggleNodeBatch(collapsed.not('.tree-node-match, .tree-node-context').get().concat(
+            collapsed.filter('.tree-node-match, .tree-node-context').slice(0, 50).get()));
     }
     let maxExpandedDepth = -1;
     $('.tree-node.expanded').each(function() {
-        const k = $(this).parents('.tree-node').length;
-        if (k > maxExpandedDepth) maxExpandedDepth = k;
+        maxExpandedDepth = Math.max(maxExpandedDepth, $(this).parents('.tree-node').length);
     });
-    const targetDepth = maxExpandedDepth + 1;
-    $('.tree-node.collapsed').each(function() {
-        if ($(this).parents('.tree-node').length === targetDepth) toggleNode($(this));
-    });
+    return toggleNodeBatch($('.tree-node.collapsed').filter(function() {
+        return $(this).parents('.tree-node').length === maxExpandedDepth + 1;
+    }));
 }
 
 // Collapse only the deepest currently-expanded layer.
 function collapseOneLevel() {
-    if (restoringHistory) return;
+    if (navigationBusy) return;
     let maxDepth = -1;
     $('.tree-node.expanded').each(function() {
-        const k = $(this).parents('.tree-node').length;
-        if (k > maxDepth) maxDepth = k;
+        maxDepth = Math.max(maxDepth, $(this).parents('.tree-node').length);
     });
     if (maxDepth < 0) return;
-    $('.tree-node.expanded').each(function() {
-        if ($(this).parents('.tree-node').length === maxDepth) toggleNode($(this));
-    });
+    return toggleNodeBatch($('.tree-node.expanded').filter(function() {
+        return $(this).parents('.tree-node').length === maxDepth;
+    }));
 }
 
 function getCurrentSelectedNodeId() {
@@ -1136,8 +1143,13 @@ async function restoreHistory(state, initial = false) {
                 for (const path of [...section.loaded].sort((a, b) => a.length - b.length)) {
                     const list = occurrenceContainer(type, path);
                     if (!list.length) { missing = true; continue; }
-                    const row = list.children('.siblings-row');
-                    if (siblingPaths.has(JSON.stringify(path))) row.data('siblingsRequested', true);
+                    if (siblingPaths.has(JSON.stringify(path))) {
+                        if (!list.children('.siblings-row').length) {
+                            const label = list.parent('.tree-node').children('.node-content').children('.node-label').text();
+                            appendSiblingsRow(list, type, path.at(-1) || '#', label, 1);
+                        }
+                        list.children('.siblings-row').data('siblingsRequested', true);
+                    }
                     if (snapshot.query) {
                         await fetchAndMergeChildren(path.at(-1) || '#', list, type, { generation, strict: true });
                     } else {
@@ -1425,6 +1437,9 @@ function addFilterModeControls(totalCount, query, classCount, propCount) {
 }
 
 async function clearFilterMode(generation) {
+    const types = Object.keys(SECTIONS);
+    const roots = await Promise.all(types.map(type => childData('#', type, generation)));
+    if (generation !== searchGeneration) return;
     committedQuery = '';
     lastSearchTrees = { class: null, property: null };
     document.getElementById('explore-search-clear').style.display = 'none';
@@ -1435,7 +1450,7 @@ async function clearFilterMode(generation) {
     input.value = '';
     delete input.dataset.filtering;
     clearSelection();
-    await Promise.all(Object.keys(SECTIONS).map(async type => {
+    types.forEach((type, index) => {
         const cfg = SECTIONS[type];
         const root = document.getElementById(cfg.rootListId);
         root.innerHTML = '';
@@ -1443,8 +1458,8 @@ async function clearFilterMode(generation) {
         root.style.display = '';
         document.getElementById(cfg.sectionId).style.display = '';
         document.querySelector('#' + cfg.sectionId + ' .section-chevron').classList.remove('collapsed');
-        await loadTreeNodes('#', $(root), type, { generation, strict: true });
-    }));
+        renderLoadedChildren('#', $(root), type, roots[index]);
+    });
 }
 
 async function resetTreeSearch() {
@@ -1461,6 +1476,7 @@ async function resetTreeSearch() {
     } catch (_) {
         if (generation !== searchGeneration) return;
         finishNavigation(generation);
+        resumeSelection(generation);
         historyNotice('The full tree could not be loaded. Please try again.');
     }
 }

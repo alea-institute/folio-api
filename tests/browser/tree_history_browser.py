@@ -575,3 +575,279 @@ class TreeHistoryBrowserTests(ExplorerBrowserCase):
         await self.release_response(barrier)
         await self.choose("c-alpha")
         self.assertEqual(self.fixtures.requests[key], 1)
+
+    async def test_pending_search_blocks_old_view_gestures(self):
+        await self.open()
+        await self.search("alpha")
+        barrier = self.fixtures.hold("/taxonomy/tree/search?query=beta")
+        await self.page.locator("#explore-search-input").fill("beta")
+        await self.page.locator("#explore-search-input").press("Enter")
+        await barrier.wait()
+        await expect(self.page.locator("#explore-tree")).to_have_attribute("inert", "")
+        before = dict(self.fixtures.requests)
+        await self.page.locator("#expand-all-tree").click()
+        await self.page.locator(
+            "#class-tree-root > .siblings-row > button"
+        ).dispatch_event("click")
+        await self.node("c-alpha").locator(
+            ":scope > .node-content > .expand-icon"
+        ).dispatch_event("click")
+        await self.page.evaluate(
+            "() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))"
+        )
+        self.assertEqual(dict(self.fixtures.requests), before)
+        barrier.release()
+        await self.selected("c-beta")
+        await self.settled()
+        await expect(
+            self.page.locator("#class-tree-root > .tree-node-context")
+        ).to_have_count(0)
+        await expect(self.page.locator("#explore-tree")).not_to_have_attribute(
+            "inert", ""
+        )
+
+    async def test_details_navigation_opens_full_tree_destination_section(self):
+        await self.open()
+        await self.expand("c-root")
+        await self.choose("c-alpha")
+        await self.page.locator('.section-header[data-section="property"]').click()
+        await expect(self.page.locator("#property-tree-root")).to_be_hidden()
+        length = await self.page.evaluate("history.length")
+        await self.page.locator("#class-details a").click()
+        await self.selected("p-beta")
+        await expect(self.node("p-beta")).to_be_visible()
+        self.assertEqual(await self.page.evaluate("history.length"), length + 1)
+        await self.page.go_back()
+        await self.settled()
+        await self.selected("c-alpha")
+        await expect(self.page.locator("#property-tree-root")).to_be_hidden()
+
+    async def test_branch_retry_still_works_after_selection_changes(self):
+        await self.open()
+        await self.search("alpha")
+        self.fixtures.fail_next(
+            "/taxonomy/tree/data?node_id=" + quote(iri("c-alpha"), safe="")
+        )
+        await self.expand("c-alpha")
+        retry = self.node("c-alpha").locator(".tree-retry")
+        await expect(retry).to_be_visible()
+        await self.choose("p-alpha")
+        length = await self.page.evaluate("history.length")
+        await retry.click()
+        await expect(self.node("c-alpha-child")).to_be_visible()
+        await self.selected("p-alpha")
+        self.assertEqual(await self.page.evaluate("history.length"), length)
+        await expect(self.page.locator("#search-match-count")).to_have_text(
+            "2 matches (1 class, 1 property)"
+        )
+
+    async def test_failed_clear_and_zero_results_preserve_committed_view(self):
+        await self.open()
+        for action in ("clear", "zero"):
+            with self.subTest(action=action):
+                await self.search("alpha")
+                await self.selected("c-alpha")
+                saved = await self.page.evaluate("history.state")
+                self.fixtures.fail_next("/taxonomy/tree/data?node_id=%23")
+                if action == "clear":
+                    await self.page.locator("#explore-search-clear").click()
+                    message = "The full tree could not be loaded"
+                else:
+                    await self.page.locator("#explore-search-input").fill("no matches")
+                    await self.page.locator("#explore-search-input").press("Enter")
+                    message = "Search could not be loaded"
+                await expect(self.page.locator("#tree-history-notice")).to_contain_text(
+                    message
+                )
+                await self.selected("c-alpha")
+                await expect(self.node("c-alpha")).to_be_visible()
+                self.assertEqual(await self.page.evaluate("history.state"), saved)
+                await self.choose("p-alpha")
+                await self.page.go_back()
+                await self.settled()
+                await self.selected("c-alpha")
+                await expect(self.page.locator("#explore-search-input")).to_have_value(
+                    "alpha"
+                )
+                self.assertEqual(await self.page.evaluate("history.state"), saved)
+
+    async def test_empty_search_section_retains_revealed_root_siblings(self):
+        original_search = self.fixtures.search
+        self.fixtures.search = lambda query, section: (
+            {
+                "matches": [],
+                "tree": {"root_nodes": [], "nodes": {}, "hidden_root_count": 2},
+            }
+            if query == "alpha" and section == "property"
+            else original_search(query, section)
+        )
+        await self.open()
+        await self.page.locator("#explore-search-input").fill("alpha")
+        await self.page.locator("#explore-search-input").press("Enter")
+        await self.selected("c-alpha")
+        await self.page.locator("#class-details a").click()
+        await self.selected("p-beta")
+        row = self.page.locator("#property-tree-root > .siblings-row > button")
+        await expect(row).to_be_visible()
+        await row.click()
+        await expect(self.node("p-beta")).to_be_hidden()
+        await self.search("beta")
+        await self.page.go_back()
+        await self.settled()
+        await self.selected("p-beta")
+        await expect(self.node("p-beta")).to_be_hidden()
+        await expect(row).to_be_visible()
+        before = dict(self.fixtures.requests)
+        await row.click()
+        await expect(self.node("p-beta")).to_be_visible()
+        self.assertEqual(dict(self.fixtures.requests), before)
+        await expect(self.page.locator("#search-match-count")).to_have_text(
+            "1 match in classes"
+        )
+
+    async def test_legacy_details_failure_has_destination_retry(self):
+        for legacy in (None, {"nodeId": iri("c-alpha"), "type": "class"}):
+            with self.subTest(state=legacy):
+                await self.open()
+                await self.page.evaluate(
+                    "state => { history.replaceState(state, '', '/explore/tree?node=c-alpha&type=class'); history.pushState({}, '', '/explore/tree?node=c-beta'); }",
+                    legacy,
+                )
+                length = await self.page.evaluate("history.length")
+                self.fixtures.fail_next("/taxonomy/class-details/c-alpha")
+                self.fixtures.fail_next("/taxonomy/tree/node/c-alpha")
+                await self.page.go_back()
+                await expect(self.page.locator("#tree-history-notice")).to_contain_text(
+                    "could not be restored"
+                )
+                self.assertEqual(await self.page.evaluate("history.state"), legacy)
+                await self.page.get_by_role("button", name="Retry", exact=True).click()
+                await self.settled()
+                await self.selected("c-alpha")
+                self.assertEqual(await self.page.evaluate("history.state"), legacy)
+                self.assertEqual(await self.page.evaluate("history.length"), length)
+
+    async def test_completed_gesture_survives_abandoned_branch_load(self):
+        await self.open()
+        await self.search("alpha")
+        barrier = self.fixtures.hold(
+            "/taxonomy/tree/data?node_id=" + quote(iri("c-alpha"), safe="")
+        )
+        await self.expand("c-alpha")
+        await barrier.wait()
+        await self.page.locator('.section-header[data-section="property"]').click()
+        await self.choose("c-root")
+        await self.page.go_back()
+        await self.settled()
+        await self.selected("c-alpha")
+        await expect(self.page.locator("#property-tree-root")).to_be_hidden()
+        await self.release_response(barrier)
+        await expect(self.node("c-alpha")).to_have_class(re.compile("collapsed"))
+        await expect(self.page.locator(".loading-indicator")).to_have_count(0)
+
+    async def test_completed_gesture_is_saved_before_native_traversal_during_load(self):
+        await self.open()
+        await self.search("alpha")
+        barrier = self.fixtures.hold(
+            "/taxonomy/tree/data?node_id=" + quote(iri("c-alpha"), safe="")
+        )
+        await self.expand("c-alpha")
+        await barrier.wait()
+        await self.page.locator('.section-header[data-section="property"]').click()
+        await self.page.go_back()
+        await self.settled()
+        await self.page.go_forward()
+        await self.settled()
+        await self.selected("c-alpha")
+        await expect(self.page.locator("#property-tree-root")).to_be_hidden()
+        await self.release_response(barrier)
+        await expect(self.node("c-alpha")).to_have_class(re.compile("collapsed"))
+
+    async def test_reselecting_same_node_retries_details_without_history_entry(self):
+        await self.open()
+        self.fixtures.fail_next("/taxonomy/class-details/c-alpha")
+        self.fixtures.fail_next("/taxonomy/tree/node/c-alpha")
+        await self.search("alpha")
+        await expect(self.page.locator("#class-details")).to_contain_text(
+            "Unable to load details"
+        )
+        length = await self.page.evaluate("history.length")
+        await self.choose("c-alpha")
+        self.assertEqual(await self.page.evaluate("history.length"), length)
+
+    async def test_history_restores_unequal_match_counts_and_highlighted_hits(self):
+        original_search = self.fixtures.search
+
+        def search(query, section):
+            data = original_search(query, section)
+            if query == "alpha" and section == "class":
+                extra = original_search("beta", section)
+                hit = iri("c-beta")
+                data["matches"].extend(extra["matches"])
+                data["tree"]["nodes"][hit] = extra["tree"]["nodes"][hit]
+                data["tree"]["nodes"][iri("c-root")]["children"].append(hit)
+            return data
+
+        self.fixtures.search = search
+        await self.open()
+
+        async def assert_hits(query, count, names):
+            await self.settled()
+            await expect(self.page.locator("#explore-search-input")).to_have_value(
+                query
+            )
+            await expect(self.page.locator("#search-match-count")).to_have_text(count)
+            await expect(self.page.locator(".tree-node-match")).to_have_count(
+                len(names)
+            )
+            for name in names:
+                await expect(self.node(name)).to_have_class(
+                    re.compile("tree-node-match")
+                )
+                await expect(
+                    self.node(name).locator(":scope > .node-content")
+                ).to_have_css("color", "rgb(255, 255, 255)")
+
+        field = self.page.locator("#explore-search-input")
+        await field.fill("alpha")
+        await field.press("Enter")
+        await self.selected("c-alpha")
+        await assert_hits(
+            "alpha",
+            "3 matches (2 classes, 1 property)",
+            ["c-alpha", "c-beta", "p-alpha"],
+        )
+        await self.search("beta")
+        await self.page.go_back()
+        await assert_hits(
+            "alpha",
+            "3 matches (2 classes, 1 property)",
+            ["c-alpha", "c-beta", "p-alpha"],
+        )
+        await self.page.go_forward()
+        await assert_hits(
+            "beta", "2 matches (1 class, 1 property)", ["c-beta", "p-beta"]
+        )
+
+    async def test_pending_clear_retains_both_sections_until_roots_settle(self):
+        await self.open()
+        await self.search("alpha")
+        barrier = self.fixtures.hold("/properties/tree/data?node_id=%23")
+        length = await self.page.evaluate("history.length")
+        await self.page.locator("#explore-search-clear").click()
+        await barrier.wait()
+        await expect(self.page.locator("#explore-tree")).to_have_attribute("inert", "")
+        await self.node("c-root").locator(":scope > .node-content").dispatch_event(
+            "click"
+        )
+        barrier.release()
+        await self.settled()
+        for prefix in ("c", "p"):
+            await expect(self.node(prefix + "-root")).to_be_visible()
+            await expect(self.node(prefix + "-other")).to_be_visible()
+        await expect(self.page.locator(".tree-node.selected")).to_have_count(0)
+        self.assertEqual(await self.page.evaluate("history.length"), length + 1)
+        await self.page.go_back()
+        await self.settled()
+        await self.selected("c-alpha")
+        await expect(self.page.locator("#explore-search-input")).to_have_value("alpha")
