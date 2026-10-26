@@ -900,3 +900,21 @@ class TreeHistoryBrowserTests(ExplorerBrowserCase):
         await self.selected("c-alpha")
         self.assertEqual(await self.page.evaluate("history.state"), saved)
         self.assertEqual(await self.page.evaluate("history.length"), length)
+
+    async def test_completed_gesture_is_saved_before_next_browser_task(self):
+        await self.open()
+        await self.search("alpha")
+        opened = await self.page.evaluate(
+            """async () => {
+            document.querySelector('.section-header[data-section="property"]').click();
+            await Promise.resolve();
+            return history.state.folioExplorer.sections.property.open;
+        }"""
+        )
+        self.assertFalse(opened)
+        await self.page.go_back()
+        await self.settled()
+        await self.page.go_forward()
+        await self.settled()
+        await self.selected("c-alpha")
+        await expect(self.page.locator("#property-tree-root")).to_be_hidden()
