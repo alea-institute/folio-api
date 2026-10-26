@@ -47,8 +47,6 @@
     liveNodeMap: {},
   };
 
-  // A navigation owns every pending fetch, layout and animation frame.
-  // Child expansions also sequence layouts within that selected graph.
   let graphGeneration = 0;
   let layoutGeneration = 0;
   let renderedData = null;

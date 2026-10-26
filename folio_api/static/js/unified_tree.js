@@ -36,8 +36,6 @@ let lastSearchTrees = { class: null, property: null };
 let searchGeneration = 0;
 let revealGeneration = 0;
 
-// History stores UI intent, never DOM or endpoint payloads. Paths distinguish
-// the same ontology entity appearing under different parents.
 const HISTORY_KEY = 'folioExplorer';
 let committedQuery = '';
 let navigationBusy = false;
@@ -70,6 +68,11 @@ function occurrenceContainer(type, path) {
         : $('#' + SECTIONS[type].rootListId);
 }
 
+function captureSelection() {
+    const selected = $('.tree-node.selected').first();
+    return selected.length ? { type: selected.attr('data-type'), path: occurrencePath(selected) } : null;
+}
+
 function captureView() {
     const sections = {};
     for (const type of Object.keys(SECTIONS)) {
@@ -87,9 +90,7 @@ function captureView() {
         root.find('.tree-node.expanded').each(function() { expanded.push(occurrencePath(this)); });
         sections[type] = { open: root[0].style.display !== 'none', loaded, expanded, siblings };
     }
-    const selected = $('.tree-node.selected').first();
-    return { version: 1, query: committedQuery, sections,
-        selection: selected.length ? { type: selected.attr('data-type'), path: occurrencePath(selected) } : null };
+    return { version: 1, query: committedQuery, sections, selection: captureSelection() };
 }
 
 function savedView(state) {
@@ -335,7 +336,6 @@ function loadTreeNodes(nodeId, container, sectionType, { generation = searchGene
     })();
     const load = { generation, promise };
     branchLoads.set(list[0], load);
-    // Both success and error release only this request's ownership.
     const release = () => { if (branchLoads.get(list[0]) === load) branchLoads.delete(list[0]); };
     promise.then(release, release);
     return promise;
@@ -605,7 +605,7 @@ function selectNode(li, updateUrl = true, { generation, reveal = true, notify = 
     li.addClass('selected');
     const details = loadDetails(li.attr('data-id'), li.attr('data-type'), generation);
     if (notify) notifySelection(li);
-    if (ownsNavigation) finishNavigation(generation, updateUrl ? 'push' : null, selectionUrl(captureView().selection));
+    if (ownsNavigation) finishNavigation(generation, updateUrl ? 'push' : null, selectionUrl(captureSelection()));
     return details;
 }
 
@@ -674,7 +674,6 @@ async function loadDetails(iri, sectionType, generation = searchGeneration) {
     }
 }
 
-// Preserve the global details-link entry point used by older fragments.
 function loadClassDetails(iri) {
     return selectNodeByIri(iri);
 }
@@ -706,7 +705,7 @@ async function selectNodeByIri(iri) {
             selectNode(node, false, { generation });
         }
         if (generation !== searchGeneration) return;
-        finishNavigation(generation, 'push', selectionUrl(captureView().selection));
+        finishNavigation(generation, 'push', selectionUrl(captureSelection()));
     } catch (_) {
         if (generation !== searchGeneration) return;
         finishNavigation(generation);
@@ -1122,14 +1121,12 @@ async function restoreHistory(state, initial = false) {
         if (snapshot) {
             for (const type of Object.keys(SECTIONS)) {
                 const section = snapshot.sections[type];
-                // Parent-first replay also reconstructs retained children behind
-                // collapsed ancestors. Requests are shared, DOM occurrences are not.
+                const siblingPaths = new Set(section.siblings.map(item => JSON.stringify(item.path)));
                 for (const path of [...section.loaded].sort((a, b) => a.length - b.length)) {
                     const list = occurrenceContainer(type, path);
                     if (!list.length) { missing = true; continue; }
                     const row = list.children('.siblings-row');
-                    const siblings = section.siblings.find(item => JSON.stringify(item.path) === JSON.stringify(path));
-                    if (siblings) row.data('siblingsRequested', true);
+                    if (siblingPaths.has(JSON.stringify(path))) row.data('siblingsRequested', true);
                     if (snapshot.query) {
                         await fetchAndMergeChildren(path.at(-1) || '#', list, type, { generation, strict: true });
                     } else {
@@ -1176,7 +1173,6 @@ async function restoreHistory(state, initial = false) {
         if (missing) historyNotice('Some saved branches or the selected item are no longer available. The remaining view has been restored.');
     } catch (_) {
         if (generation !== searchGeneration) return;
-        // Keep the destination snapshot intact until retry has reconstructed it.
         document.getElementById('explore-tree').setAttribute('aria-busy', 'false');
         historyNotice('This view could not be restored.', () => restoreHistory(state, initial));
     }
@@ -1242,7 +1238,7 @@ async function searchUnified(query) {
             const first = $('.tree-node-highlighted').first();
             selectNode(first, false, { generation });
         }
-        finishNavigation(generation, 'push', selectionUrl(captureView().selection));
+        finishNavigation(generation, 'push', selectionUrl(captureSelection()));
     } catch (_) {
         if (generation !== searchGeneration) return;
         finishNavigation(generation);
