@@ -47,6 +47,27 @@
     liveNodeMap: {},
   };
 
+  // A navigation owns every pending fetch, layout and animation frame.
+  // Child expansions also sequence layouts within that selected graph.
+  let graphGeneration = 0;
+  let layoutGeneration = 0;
+  let renderedData = null;
+  let navigationPending = false;
+
+  function scheduleGraphFrame(callback, generation = graphGeneration) {
+    requestAnimationFrame(function () {
+      if (generation === graphGeneration) callback();
+    });
+  }
+
+  function onNavigationStart() {
+    _panMouseUp();
+    _nodeDragUp();
+    graphGeneration++;
+    layoutGeneration++;
+    navigationPending = true;
+  }
+
   function _readUrlSelection() {
     try {
       var params = new URLSearchParams(window.location.search || '');
@@ -494,7 +515,7 @@
   }
 
   // _mountGraph — actual DOM construction.
-  function _mountGraph(graphData, opts) {
+  function _mountGraph(graphData, opts, generation) {
     opts = opts || {};
     var preserveZoom = !!opts.preserveZoom;
     var pane = _pane();
@@ -870,10 +891,10 @@
     if (preserveZoom) {
       applyTransform();
     } else {
-      requestAnimationFrame(fitGraph);
+      scheduleGraphFrame(() => fitGraph(generation), generation);
     }
     // Initial minimap render (deferred so layout is measured).
-    requestAnimationFrame(renderMinimap);
+    scheduleGraphFrame(renderMinimap, generation);
 
     _perfMark('eg:render:end');
     _perfMeasure('eg:render', 'eg:render:start', 'eg:render:end');
@@ -891,14 +912,15 @@
     renderMinimap();
   }
 
-  function fitGraph() {
+  function fitGraph(generation = graphGeneration) {
+    if (generation !== graphGeneration) return;
     var vp = document.getElementById('graph-viewport');
     if (!vp) return;
     var rect = vp.getBoundingClientRect();
     var vw = rect.width;
     var vh = rect.height;
     if (vw === 0 || vh === 0) {
-      requestAnimationFrame(fitGraph);
+      scheduleGraphFrame(() => fitGraph(generation), generation);
       return;
     }
 
@@ -1079,7 +1101,10 @@
 
     // Clear wasDragged flag after a tick so the click handler (which fires after
     // mouseup) can read it, then reset it.
-    setTimeout(function () { _dragState.wasDragged = false; }, 0);
+    const generation = graphGeneration;
+    setTimeout(function () {
+      if (generation === graphGeneration) _dragState.wasDragged = false;
+    }, 0);
   }
 
   // _redrawIncidentEdges — update d attribute on all <path>s in edgesGroup
@@ -1114,18 +1139,21 @@
     }
   }
 
-  function renderGraph(graphData, opts) {
-    if (!graphData || !graphData.layout) return;
+  function renderGraph(graphData, opts, generation = graphGeneration, layout = layoutGeneration) {
+    if (!graphData || !graphData.layout || generation !== graphGeneration) return;
     clearStates();
-    requestAnimationFrame(function () {
-      _mountGraph(graphData, opts);
-    });
+    scheduleGraphFrame(function () {
+      if (layout !== layoutGeneration || graphData !== state.graphData) return;
+      _mountGraph(graphData, opts, generation);
+      renderedData = graphData;
+    }, generation);
   }
 
   // ---------------- Public API ----------------
 
   function init() {
     document.addEventListener('entity:selected', _onEntitySelected);
+    document.addEventListener('entity:navigation-start', onNavigationStart);
     var fromUrl = _readUrlSelection();
     if (fromUrl) {
       state.lastSelectedIri = fromUrl.iri;
@@ -1136,13 +1164,23 @@
 
   function _onEntitySelected(ev) {
     var detail = (ev && ev.detail) || {};
-    if (detail.iri) {
-      state.lastSelectedIri = detail.iri;
-      state.lastSelectedType = detail.type || 'class';
+    graphGeneration++;
+    layoutGeneration++;
+    navigationPending = false;
+    state.lastSelectedIri = detail.iri || null;
+    state.lastSelectedType = detail.iri ? (detail.type || 'class') : null;
+    if (!detail.iri) {
+      state.currentIri = null;
+      state.currentType = null;
+      state.graphData = null;
+      state.expandedIris = new Set();
+      state.nodePositions = {};
+      state.liveNodeMap = {};
+      renderedData = null;
+      showEmpty();
+      return;
     }
     if (state.activeTab !== 'graph') return;
-    if (!detail.iri) return;
-    if (detail.iri === state.currentIri && detail.type === state.currentType) return;
     refreshFor(detail.iri, detail.type).catch(function (err) {
       if (window.console && window.console.error) {
         window.console.error('[EntityGraph] _onEntitySelected refreshFor failed:', err);
@@ -1151,21 +1189,11 @@
   }
 
   function onTabActivated() {
-    var iri = null;
-    var type = 'class';
-    var sel = document.querySelector('.tree-node.selected[data-id]');
-    if (sel && sel.getAttribute('data-id')) {
-      iri = sel.getAttribute('data-id');
-      type = sel.getAttribute('data-type') || 'class';
-    } else if (state.lastSelectedIri) {
-      iri = state.lastSelectedIri;
-      type = state.lastSelectedType || 'class';
-    }
+    if (navigationPending) return;
+    var iri = state.lastSelectedIri;
+    var type = state.lastSelectedType || 'class';
     if (!iri) {
       showEmpty();
-      return;
-    }
-    if (state.currentIri === iri && state.graphData && state.graphData.layout) {
       return;
     }
     refreshFor(iri, type).catch(function (err) {
@@ -1175,90 +1203,87 @@
     });
   }
 
-  function refreshFor(iri, type, force) {
-    if (!force && iri === state.currentIri && type === state.currentType && state.graphData) {
-      return Promise.resolve(state.graphData);
+  async function refreshFor(iri, type, force) {
+    if (navigationPending) return null;
+    if (!force && iri === state.currentIri && type === state.currentType &&
+        state.graphData && renderedData === state.graphData) {
+      return state.graphData;
     }
-
+    const generation = ++graphGeneration;
+    const layout = ++layoutGeneration;
+    const current = () => generation === graphGeneration && layout === layoutGeneration;
     _perfMark('eg:fetch:start');
     showSkeleton();
-
     state.transform = { x: 0, y: 0, scale: 1 };
     state.expandedIris = new Set();
     state.graphData = null;
-
+    renderedData = null;
     var url = '/explore/api/entity-graph/' + encodeURIComponent(iri);
-    return fetch(url, { headers: { 'Accept': 'application/json' } })
-      .then(function (res) {
-        if (!res.ok) {
-          var errLabel = (state.graphData && state.graphData.selected && state.graphData.selected.label) || iri;
-          showError(errLabel, function () { refreshFor(iri, type, true); });
-          throw new Error('HTTP ' + res.status);
-        }
-        return res.json();
-      })
-      .then(function (data) {
-        _perfMark('eg:fetch:end');
-        _perfMeasure('eg:fetch', 'eg:fetch:start', 'eg:fetch:end');
-        _perfMark('eg:layout:start');
-
-        state.graphData = data;
-        state.currentIri = iri;
-        state.currentType = type;
-        var spec = buildELKGraph(data);
-        return runLayout(spec).then(function (laid) {
-          state.graphData.layout = laid;
-          _perfMark('eg:layout:end');
-          _perfMeasure('eg:layout', 'eg:layout:start', 'eg:layout:end');
-          _perfMark('eg:render:start');
-          renderGraph(state.graphData);
-          return state.graphData;
-        });
-      })
-      .catch(function (err) {
-        if (window.console && window.console.error) {
-          window.console.error('[EntityGraph] refreshFor failed:', err);
-        }
-        throw err;
+    try {
+      const response = await fetch(url, { headers: { 'Accept': 'application/json' } });
+      if (!current()) return null;
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      const data = await response.json();
+      if (!current()) return null;
+      _perfMark('eg:fetch:end');
+      _perfMeasure('eg:fetch', 'eg:fetch:start', 'eg:fetch:end');
+      _perfMark('eg:layout:start');
+      const laid = await runLayout(buildELKGraph(data));
+      if (!current()) return null;
+      data.layout = laid;
+      state.graphData = data;
+      state.currentIri = iri;
+      state.currentType = type;
+      _perfMark('eg:layout:end');
+      _perfMeasure('eg:layout', 'eg:layout:start', 'eg:layout:end');
+      _perfMark('eg:render:start');
+      renderGraph(data, undefined, generation, layout);
+      return data;
+    } catch (error) {
+      if (!current()) return null;
+      showError(iri, function () {
+        if (generation === graphGeneration) refreshFor(iri, type, true);
       });
+      throw error;
+    }
   }
 
-  function expand(iri) {
-    if (!state.graphData) {
-      return Promise.reject(new Error('No graph loaded'));
-    }
-    if (state.expandedIris.has(iri)) {
-      return Promise.resolve(state.graphData);
-    }
-
+  async function expand(iri) {
+    if (navigationPending) return null;
+    const graphData = state.graphData;
+    if (!graphData) throw new Error('No graph loaded');
+    if (state.expandedIris.has(iri)) return graphData;
+    const generation = graphGeneration;
+    const current = () => generation === graphGeneration && graphData === state.graphData;
     var url = '/explore/api/entity-graph/' + encodeURIComponent(iri) + '?mode=children';
-    return fetch(url, { headers: { 'Accept': 'application/json' } })
-      .then(function (res) {
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        return res.json();
-      })
-      .then(function (data) {
-        var fetchedChildren = (data && data.children) || [];
-        state.expandedIris.add(iri);
-        if (state.graphData.selected && iri === state.graphData.selected.iri) {
-          state.graphData.children = fetchedChildren;
-        } else {
-          state.graphData.expandedChildren = state.graphData.expandedChildren || {};
-          state.graphData.expandedChildren[iri] = fetchedChildren;
-        }
-        var spec = buildELKGraph(state.graphData);
-        return runLayout(spec).then(function (laid) {
-          state.graphData.layout = laid;
-          renderGraph(state.graphData, { preserveZoom: true });
-          return state.graphData;
-        });
-      })
-      .catch(function (err) {
-        if (window.console && window.console.error) {
-          window.console.error('[EntityGraph] expand failed for', iri, err);
-        }
-        throw err;
-      });
+    try {
+      const response = await fetch(url, { headers: { 'Accept': 'application/json' } });
+      if (!current()) return null;
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      const data = await response.json();
+      if (!current()) return null;
+      var fetchedChildren = (data && data.children) || [];
+      renderedData = null;
+      state.expandedIris.add(iri);
+      if (graphData.selected && iri === graphData.selected.iri) {
+        graphData.children = fetchedChildren;
+      } else {
+        graphData.expandedChildren = graphData.expandedChildren || {};
+        graphData.expandedChildren[iri] = fetchedChildren;
+      }
+      const layout = ++layoutGeneration;
+      const laid = await runLayout(buildELKGraph(graphData));
+      if (!current() || layout !== layoutGeneration) return null;
+      graphData.layout = laid;
+      renderGraph(graphData, { preserveZoom: true }, generation, layout);
+      return graphData;
+    } catch (error) {
+      if (!current()) return null;
+      if (window.console && window.console.error) {
+        window.console.error('[EntityGraph] expand failed for', iri, error);
+      }
+      throw error;
+    }
   }
 
   function close() {

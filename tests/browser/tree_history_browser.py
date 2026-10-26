@@ -454,3 +454,124 @@ class TreeHistoryBrowserTests(ExplorerBrowserCase):
         await self.release_response(barrier)
         await self.selected("c-beta")
         self.assertEqual(await self.page.evaluate("history.state"), saved)
+
+    async def test_large_retained_view_and_search_expand_limit(self):
+        parents = []
+        for index in range(60):
+            identity = iri(f"c-extra-{index}")
+            parents.append(identity)
+            self.fixtures.nodes[identity] = {
+                "id": identity,
+                "label": f"Topic {index:02}",
+                "type": "class",
+                "children": [iri("c-shared")],
+                "parents": [],
+            }
+        self.fixtures.nodes[iri("c-shared")]["parents"] = parents
+        await self.open()
+        await self.search("shared")
+        await self.page.locator("#expand-all-tree").click()
+        await expect(self.node("c-deep")).to_have_count(50)
+        await expect(
+            self.page.locator('.tree-node.collapsed[data-id="' + iri("c-shared") + '"]')
+        ).to_have_count(10)
+        await self.page.locator("#expand-all-tree").click()
+        await expect(self.node("c-deep")).to_have_count(60)
+        await self.search("beta")
+        before = dict(self.fixtures.requests)
+        await self.page.go_back()
+        await self.settled()
+        await expect(self.node("c-deep")).to_have_count(60)
+        key = "/taxonomy/tree/data?node_id=" + quote(iri("c-shared"), safe="")
+        self.assertEqual(self.fixtures.requests[key] - before.get(key, 0), 1)
+
+    async def test_missing_legacy_node_does_not_leave_tree_locked(self):
+        await self.open("?node=deleted&type=class")
+        await self.settled()
+        await expect(self.page.locator("#tree-history-notice")).to_contain_text(
+            "no longer available"
+        )
+        await self.choose("c-root")
+
+    async def test_new_search_failure_during_restore_retains_destination(self):
+        await self.open()
+        await self.search("alpha")
+        saved = await self.page.evaluate("history.state")
+        await self.search("beta")
+        barrier = self.fixtures.hold("/taxonomy/tree/search?query=alpha")
+        await self.page.go_back()
+        await barrier.wait()
+        self.fixtures.fail_next("/taxonomy/tree/search?query=shared")
+        await self.page.locator("#explore-search-input").fill("shared")
+        await self.page.locator("#explore-search-input").press("Enter")
+        await expect(self.page.locator("#tree-history-notice")).to_contain_text(
+            "Search could not be loaded"
+        )
+        await self.selected("c-alpha")
+        await self.release_response(barrier)
+        self.assertEqual(await self.page.evaluate("history.state"), saved)
+
+    async def test_only_one_duplicate_occurrence_is_expanded_on_return(self):
+        await self.open()
+        await self.search("shared")
+        left = self.node("p-root")
+        right = self.node("p-other")
+        await self.expand("p-shared", left)
+        await self.choose("p-deep", left)
+        await self.search("beta")
+        await self.page.go_back()
+        await self.settled()
+        await self.selected("p-deep")
+        await expect(self.node("p-deep", left)).to_be_visible()
+        await expect(self.node("p-deep", right)).to_have_count(0)
+        await expect(self.node("p-shared", right)).to_have_class(
+            re.compile("collapsed")
+        )
+        await expect(self.node("c-deep")).to_have_count(0)
+
+    async def test_canceled_expansion_does_not_stick_or_save_loading_state(self):
+        await self.open()
+        await self.search("alpha")
+        barrier = self.fixtures.hold(
+            "/taxonomy/tree/data?node_id=" + quote(iri("c-alpha"), safe="")
+        )
+        await self.expand("c-alpha")
+        await barrier.wait()
+        await self.choose("p-alpha")
+        saved = await self.page.evaluate("history.state")
+        await self.release_response(barrier)
+        self.assertEqual(await self.page.evaluate("history.state"), saved)
+        await self.expand("c-alpha")
+        await expect(self.node("c-alpha-child")).to_be_visible()
+        await self.search("beta")
+        await self.page.go_back()
+        await self.settled()
+        await self.selected("p-alpha")
+        await expect(self.node("c-alpha-child")).to_be_visible()
+        await expect(self.page.locator(".loading-indicator")).to_have_count(0)
+
+    async def test_mobile_dark_history_preserves_property_selection(self):
+        await self.page.set_viewport_size({"width": 390, "height": 844})
+        await self.open()
+        await self.page.evaluate("document.documentElement.classList.add('dark')")
+        await self.search("alpha")
+        await self.choose("p-alpha")
+        await self.search("beta")
+        await self.page.go_back()
+        await self.settled()
+        await self.selected("p-alpha")
+        await expect(self.node("p-alpha")).to_be_visible()
+        await expect(self.page.locator("#explore-search-input")).to_have_value("alpha")
+        await expect(self.page.locator("html")).to_have_class(re.compile("dark"))
+
+    async def test_repeated_full_tree_expansion_shares_inflight_load(self):
+        await self.open()
+        key = "/taxonomy/tree/data?node_id=" + quote(iri("c-root"), safe="")
+        barrier = self.fixtures.hold(key)
+        await self.expand("c-root")
+        await barrier.wait()
+        await self.expand("c-root")
+        await self.expand("c-root")
+        await self.release_response(barrier)
+        await self.choose("c-alpha")
+        self.assertEqual(self.fixtures.requests[key], 1)
