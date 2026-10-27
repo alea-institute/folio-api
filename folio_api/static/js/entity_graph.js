@@ -99,10 +99,12 @@
   var _mount = null;
   var _renderFrame = null;
   var _focusVersion = 0;
+  var _pendingFocus = null;
 
   function _disposeMount() {
     if (_renderFrame !== null) cancelAnimationFrame(_renderFrame);
     _renderFrame = null;
+    _pendingFocus = null;
     if (_mount) {
       _mount.observer.disconnect();
       if (_mount.frame !== null) cancelAnimationFrame(_mount.frame);
@@ -559,6 +561,18 @@
       Math.round(t.scale * 100) + '% zoom.' +
       (positions.length && !visible ? ' Use Fit graph to return.' : '');
     if (_mount.summary.textContent !== summary) _mount.summary.textContent = summary;
+    // Hidden overflow can scroll on focus, independently of the graph camera.
+    // Keep clipped child actions out of Tab order as the camera moves.
+    if (_mount.childButton) {
+      var buttonRect = _mount.childButton.getBoundingClientRect();
+      var viewRect = _mount.viewport.getBoundingClientRect();
+      var childVisible = buttonRect.right > viewRect.left && buttonRect.left < viewRect.right &&
+        buttonRect.bottom > viewRect.top && buttonRect.top < viewRect.bottom;
+      var tabIndex = childVisible ? 0 : -1;
+      if (_mount.childButton.tabIndex !== tabIndex || !_mount.childButton.hasAttribute('tabindex')) {
+        _mount.childButton.tabIndex = tabIndex;
+      }
+    }
     _mount.controls.querySelectorAll('button').forEach(function (button) {
       var action = button.dataset.graphAction;
       var disabled = String(!bounds ||
@@ -1000,6 +1014,7 @@
 
     _mount = { viewport: viewport, canvas: minimapCanvas, controls: controls,
       summary: summary, announcement: announcement, edges: edgesGroup,
+      childButton: nodesDiv.querySelector('.graph-node-children-btn'),
       nodes: Array.from(nodesDiv.children), frame: null, needsFit: !preserveZoom };
     _observeMount(_mount);
     wirePanZoom();
@@ -1219,22 +1234,30 @@
     if (!graphData || !graphData.layout) return;
     var pane = _pane();
     var focused = document.activeElement;
-    var restore = opts && opts.preserveZoom && pane && pane.contains(focused);
-    var action = restore && focused.dataset.graphAction;
-    var node = restore && focused.closest('.graph-node');
-    var iri = node && node.getAttribute('data-iri');
-    var focusVersion = _focusVersion;
+    var focusRequest = null;
+    if (opts && opts.preserveZoom) {
+      if (pane && pane.contains(focused)) {
+        var node = focused.closest('.graph-node');
+        focusRequest = { action: focused.dataset.graphAction,
+          iri: node && node.getAttribute('data-iri'), version: _focusVersion };
+      } else if (focused === document.body && _pendingFocus && _pendingFocus.version === _focusVersion) {
+        // A superseded render has already removed the focused DOM.
+        focusRequest = _pendingFocus;
+      }
+    }
     clearStates();
+    _pendingFocus = focusRequest;
     _renderFrame = requestAnimationFrame(function () {
       _renderFrame = null;
       _mountGraph(graphData, opts);
-      if (!restore || !_mount || !_viewportSize() || state.activeTab !== 'graph' ||
-          _focusVersion !== focusVersion || document.activeElement !== document.body) return;
-      var target = action && pane.querySelector('[data-graph-action="' + action + '"]');
-      if (!target && iri) {
-        var match = _mount.nodes.find(function (el) { return el.getAttribute('data-iri') === iri; });
+      if (!focusRequest || !_mount || !_viewportSize() || state.activeTab !== 'graph' ||
+          _focusVersion !== focusRequest.version || document.activeElement !== document.body) return;
+      var target = focusRequest.action && pane.querySelector('[data-graph-action="' + focusRequest.action + '"]');
+      if (!target && focusRequest.iri) {
+        var match = _mount.nodes.find(function (el) { return el.getAttribute('data-iri') === focusRequest.iri; });
         target = match && match.querySelector('.graph-node-children-btn');
       }
+      if (target && target.tabIndex < 0) target = null;
       (target || _mount.controls.querySelector('button')).focus({ preventScroll: true });
     });
   }
@@ -1243,7 +1266,7 @@
 
   function init() {
     document.addEventListener('entity:selected', _onEntitySelected);
-    document.addEventListener('focusin', function () { _focusVersion++; });
+    document.addEventListener('focusin', function () { _focusVersion++; _pendingFocus = null; });
     var fromUrl = _readUrlSelection();
     if (fromUrl) {
       state.lastSelectedIri = fromUrl.iri;

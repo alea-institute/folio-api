@@ -174,9 +174,10 @@ def assert_map_contains_graph_and_view(page):
     scale = min(
         (drawing["cw"] - 12) / (right - left), (drawing["ch"] - 12) / (bottom - top)
     )
-    ox, oy = (drawing["cw"] - (right - left) * scale) / 2, (
-        drawing["ch"] - (bottom - top) * scale
-    ) / 2
+    ox, oy = (
+        (drawing["cw"] - (right - left) * scale) / 2,
+        (drawing["ch"] - (bottom - top) * scale) / 2,
+    )
     expected = [
         ox + (v["x"] - left) * scale,
         oy + (v["y"] - top) * scale,
@@ -247,7 +248,11 @@ def test_offscreen_overview_and_discrete_announcements(graph_page):
     expect(page.locator("#graph-view-summary")).to_contain_text("Use Fit graph")
     offscreen = assert_map_contains_graph_and_view(page)
     assert offscreen["pixels"] != initial["pixels"]
-    announcement = page.locator("#graph-view-announcement").inner_text()
+    live = page.locator("#graph-view-announcement")
+    expect(live).to_have_attribute("role", "status")
+    expect(live).to_have_attribute("aria-live", "polite")
+    expect(live).to_contain_text("Pan right. 0 of 3 nodes visible")
+    announcement = live.inner_text()
     v = page.locator("#graph-viewport").bounding_box()
     page.mouse.move(v["x"] + 10, v["y"] + 10)
     page.mouse.wheel(0, -90)
@@ -255,6 +260,7 @@ def test_offscreen_overview_and_discrete_announcements(graph_page):
     assert page.locator("#graph-view-announcement").inner_text() == announcement
     page.get_by_role("button", name="Fit graph", exact=True).click()
     expect(page.locator("#graph-view-summary")).to_contain_text("3 of 3 nodes visible")
+    expect(live).to_contain_text("Fit graph. 3 of 3 nodes visible")
     assert_map_contains_graph_and_view(page)
 
 
@@ -582,3 +588,107 @@ def test_visual_evidence_narrow_and_enlarged_text(graph_page, pytestconfig):
         )
         == "0s"
     )
+
+
+def test_short_desktop_scroll_reveals_overview(graph_page):
+    page, _ = graph_page
+    page.set_viewport_size({"width": 1280, "height": 500})
+    settled(page)
+    controls = page.locator("#graph-controls").bounding_box()
+    page.mouse.move(controls["x"] + 20, controls["y"] + 20)
+    page.mouse.wheel(0, 600)
+    page.wait_for_function(
+        "() => document.querySelector('#tab-panel-graph').scrollTop > 0"
+    )
+    for selector in ("#graph-minimap", "#graph-view-summary"):
+        assert page.locator(selector).evaluate("""el => {
+            const r = el.getBoundingClientRect();
+            const host = document.querySelector('#tab-panel-graph').getBoundingClientRect();
+            const hit = document.elementFromPoint(r.x + r.width/2, r.y + r.height/2);
+            return r.top >= host.top && r.bottom <= host.bottom && el.parentElement.contains(hit);
+        }""")
+
+
+def test_repeated_keyboard_expansion_keeps_focus(graph_page, graph_payload):
+    page, _ = graph_page
+    held = []
+
+    def release_together(route):
+        held.append(route)
+        if len(held) == 2:
+            for pending in held:
+                pending.fulfill(json={"children": graph_payload["expansion"]})
+
+    page.route("**/explore/api/entity-graph/**?mode=children", release_together)
+    for attempt in range(8):
+        if attempt:
+            page.reload()
+            page.locator("#tab-graph").click()
+            expect(page.locator(".graph-node")).to_have_count(3)
+        expand = page.get_by_role("button", name="Show 3 children")
+        expand.focus()
+        with page.expect_request("**/explore/api/entity-graph/**?mode=children"):
+            page.keyboard.press("Enter")
+        with page.expect_request("**/explore/api/entity-graph/**?mode=children"):
+            page.keyboard.press("Enter")
+        expect(page.locator(".graph-node")).to_have_count(6)
+        settled(page)
+        assert len(held) == 2
+        expect(expand).to_be_focused()
+        held.clear()
+
+
+def test_first_fit_waits_for_hidden_graph_to_be_shown(page, graph_payload):
+    held = []
+    page.route("**/explore/api/entity-graph/**", lambda route: held.append(route))
+    page.goto("/explore/tree")
+    selected = page.locator("#class-tree-root > .tree-node").first
+    expect(selected).to_be_visible()
+    graph_payload["selected"]["iri"] = selected.get_attribute("data-id")
+    for edge in graph_payload["edges"]:
+        edge["target"] = graph_payload["selected"]["iri"]
+    selected.locator(".node-label").first.click()
+    with page.expect_request("**/explore/api/entity-graph/**"):
+        page.locator("#tab-graph").click()
+    page.locator("#tab-details").click()
+    held[0].fulfill(json=graph_payload)
+    expect(page.locator(".graph-node")).to_have_count(3)
+    settled(page)
+    assert camera(page) == {"x": 0, "y": 0, "scale": 1}
+    page.locator("#tab-graph").click()
+    expect(page.locator("#graph-view-summary")).to_contain_text("3 of 3 nodes visible")
+    before = camera(page)
+    assert before != {"x": 0, "y": 0, "scale": 1}
+    page.set_viewport_size({"width": 1200, "height": 850})
+    settled(page)
+    assert camera(page) == before
+    assert_map_contains_graph_and_view(page)
+
+
+def test_offscreen_child_focus_cannot_scroll_the_camera(graph_page):
+    page, _ = graph_page
+    page.get_by_role("button", name="Open graph in full screen").click()
+    for _ in range(20):
+        page.get_by_role("button", name="Pan left", exact=True).click()
+    before = camera(page)
+    expect(page.locator("#graph-view-summary")).to_contain_text("0 of 3 nodes visible")
+    close = page.get_by_role("button", name="Close full-screen graph")
+    close.focus()
+    page.keyboard.press("Shift+Tab")
+    expect(page.get_by_role("button", name="Fit graph", exact=True)).to_be_focused()
+    assert page.locator("#graph-viewport").evaluate(
+        "v => v.scrollLeft === 0 && v.scrollTop === 0"
+    )
+    assert camera(page) == before
+    assert_map_contains_graph_and_view(page)
+    page.keyboard.press("Tab")
+    expect(close).to_be_focused()
+    page.keyboard.press("Escape")
+    page.get_by_role("button", name="Fit graph", exact=True).focus()
+    page.keyboard.press("Tab")
+    assert not page.evaluate("document.activeElement.closest('.graph-node') !== null")
+    assert page.locator("#graph-viewport").evaluate(
+        "v => v.scrollLeft === 0 && v.scrollTop === 0"
+    )
+    page.get_by_role("button", name="Fit graph", exact=True).click()
+    expect(page.locator(".graph-node-children-btn")).to_have_attribute("tabindex", "0")
