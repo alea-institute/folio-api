@@ -43,7 +43,7 @@ Latest: v1.1 Entity Graph (PRs #18, #19) live at https://folio.openlegalstandard
 
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
-| UX | Pan/zoom button controls + minimap | Future milestone | v1.1 planning |
+| UX | Pan/zoom button controls + minimap | Implemented and locally verified in fa-2; controller acceptance pending ([evidence](../docs/plans/evidence/fa-2-verification.md)) | v1.1 planning |
 | UX | Edge labels (`subClassOf`, `sub_property_of`) | Future milestone | v1.1 planning |
 | UX | Mobile gesture support for full-screen | Future milestone | v1.1 planning |
 | Perf | Server-side caching of `/api/entity-graph/*` | Future milestone | v1.1 planning |
