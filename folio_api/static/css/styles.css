@@ -480,10 +480,6 @@ html, body {
     cursor: grabbing;
 }
 
-/* ============================================================ */
-/* Passive overview and its readable equivalent.              */
-/* ============================================================ */
-
 #graph-minimap {
     width: 140px;
     height: 90px;
