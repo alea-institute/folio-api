@@ -303,6 +303,74 @@ html, body {
    per user feedback 2026-05-08 — was too visually noisy). */
 #entity-graph-pane {
     background-color: #f9fafb;
+    display: flex;
+    flex-direction: column;
+    min-height: 420px;
+}
+
+#tab-panel-graph:not([hidden]) {
+    display: flex;
+    flex-direction: column;
+}
+
+#tab-panel-graph > #entity-graph-pane {
+    flex: 1;
+}
+
+#detail-tabs {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+}
+
+#tab-fullscreen {
+    margin: 4px;
+    min-width: 36px;
+    min-height: 36px;
+}
+
+#graph-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 10px;
+    flex-shrink: 0;
+    background: #fff;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.graph-view-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 36px;
+    min-height: 36px;
+    padding: 6px;
+    border: 1px solid #6b7280;
+    border-radius: 6px;
+    color: #1f2937;
+    background: #fff;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.graph-view-button svg {
+    width: 20px;
+    height: 20px;
+}
+
+.graph-view-button:hover {
+    background: #eff6ff;
+}
+
+.graph-view-button:focus-visible {
+    outline: 3px solid #1d4ed8;
+    outline-offset: 2px;
+}
+
+.graph-view-button[aria-disabled="true"] {
+    color: #6b7280;
+    background: #f3f4f6;
+    cursor: default;
 }
 
 /* subClassOf edges — blue with arrowhead (blue-500 #3b82f6).
@@ -401,6 +469,10 @@ html, body {
 /* ============================================================ */
 
 #graph-viewport {
+    position: relative;
+    flex: 1;
+    min-height: 180px;
+    overflow: hidden;
     cursor: grab;
 }
 
@@ -409,20 +481,37 @@ html, body {
 }
 
 /* ============================================================ */
-/* Entity Graph: minimap (canvas-based, bottom-right corner).   */
-/* Ported from folio-enrich graph-minimap pattern.              */
+/* Passive overview and its readable equivalent.              */
 /* ============================================================ */
 
 #graph-minimap {
-    position: absolute;
-    bottom: 40px;   /* sits above the legend bar */
-    right: 12px;
+    width: 140px;
+    height: 90px;
+    max-width: 100%;
+    flex-shrink: 0;
     border-radius: 6px;
-    background: rgba(255, 255, 255, 0.9);
-    border: 1px solid #e5e7eb;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    background: #fff;
+    border: 1px solid #6b7280;
     pointer-events: none;
-    z-index: 10;
+}
+
+.graph-overview {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 8px 12px;
+    border-top: 1px solid #e5e7eb;
+    flex-shrink: 0;
+}
+
+#graph-view-summary {
+    flex: 1 1 140px;
+    color: #374151;
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    margin: 0;
+    overflow-wrap: anywhere;
 }
 
 /* ============================================================ */
@@ -432,10 +521,6 @@ html, body {
 /* ============================================================ */
 
 #graph-legend {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
     display: flex;
     align-items: center;
     gap: 16px;
@@ -467,6 +552,11 @@ html, body {
 /* ============================================================ */
 
 #graph-modal-root.hidden { display: none; }
+
+#graph-modal-host {
+    min-height: 0;
+    overflow: auto;
+}
 
 #graph-modal-root #graph-modal-scrim {
     opacity: 1;
