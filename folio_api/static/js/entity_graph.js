@@ -96,7 +96,6 @@
     return document.getElementById('entity-graph-pane');
   }
 
-  // One observer/frame owner per mounted graph. Replaced panes cannot update it.
   var _mount = null;
   var _renderFrame = null;
   var _focusVersion = 0;
@@ -529,16 +528,14 @@
         if (!size || !_mount || _mount.controls !== group || button.getAttribute('aria-disabled') === 'true') return;
         var t = state.transform;
         switch (action[0]) {
-          case 'left': t.x += 80; break;
-          case 'right': t.x -= 80; break;
-          case 'up': t.y += 80; break;
-          case 'down': t.y -= 80; break;
+          case 'left': t.x += 80; applyTransform(); break;
+          case 'right': t.x -= 80; applyTransform(); break;
+          case 'up': t.y += 80; applyTransform(); break;
+          case 'down': t.y -= 80; applyTransform(); break;
           case 'in': _zoomAt(1.12, size.w / 2, size.h / 2); break;
           case 'out': _zoomAt(1 / 1.12, size.w / 2, size.h / 2); break;
           case 'fit': fitGraph(); break;
         }
-        applyTransform();
-        // Pointer motion updates readable text, but only commands announce it.
         _mount.announcement.textContent = action[1] + '. ' + _mount.summary.textContent;
       });
       group.appendChild(button);
@@ -558,13 +555,15 @@
       return p.x + p.w >= view.left && p.x <= view.right &&
         p.y + p.h >= view.top && p.y <= view.bottom;
     }).length;
-    _mount.summary.textContent = visible + ' of ' + positions.length + ' nodes visible · ' +
+    var summary = visible + ' of ' + positions.length + ' nodes visible · ' +
       Math.round(t.scale * 100) + '% zoom.' +
       (positions.length && !visible ? ' Use Fit graph to return.' : '');
+    if (_mount.summary.textContent !== summary) _mount.summary.textContent = summary;
     _mount.controls.querySelectorAll('button').forEach(function (button) {
       var action = button.dataset.graphAction;
-      button.setAttribute('aria-disabled', String(!bounds ||
-        (action === 'in' && t.scale >= 4) || (action === 'out' && t.scale <= 0.2)));
+      var disabled = String(!bounds ||
+        (action === 'in' && t.scale >= 4) || (action === 'out' && t.scale <= 0.2));
+      if (button.getAttribute('aria-disabled') !== disabled) button.setAttribute('aria-disabled', disabled);
     });
 
     var canvas = _mount.canvas;
@@ -582,7 +581,6 @@
     ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
     ctx.clearRect(0, 0, cw, ch);
     if (!bounds) return;
-    // Include both graph and camera, even after the user pans fully offscreen.
     var left = Math.min(bounds.left, view.left), top = Math.min(bounds.top, view.top);
     var w = Math.max(bounds.right, view.right) - left || 1;
     var h = Math.max(bounds.bottom, view.bottom) - top || 1;
@@ -605,11 +603,11 @@
       mount.frame = requestAnimationFrame(function () {
         mount.frame = null;
         if (_mount !== mount || !_viewportSize()) return;
-        _measureNodes();
         if (mount.needsFit) {
           mount.needsFit = false;
           fitGraph();
         } else {
+          _measureNodes();
           renderMinimap();
         }
       });
@@ -947,7 +945,6 @@
     xform.appendChild(nodesDiv);
     viewport.appendChild(xform);
 
-    // Passive overview in normal layout, outside the transformed viewport.
     var minimapCanvas = document.createElement('canvas');
     minimapCanvas.id = 'graph-minimap';
     minimapCanvas.width = 140;
