@@ -1,0 +1,18 @@
+{
+  "selected": {"iri": "https://example.org/focus", "label": "Legal concept", "type": "class", "child_count": 3},
+  "ancestors": [],
+  "nodes": [
+    {"iri": "https://example.org/root-a", "label": "Legal classification", "type": "class", "branch_root_type": "ultimate"},
+    {"iri": "https://example.org/root-b", "label": "Related classification", "type": "class", "branch_root_type": "ultimate"}
+  ],
+  "edges": [
+    {"source": "https://example.org/root-a", "target": "https://example.org/focus", "relationship": "subClassOf"},
+    {"source": "https://example.org/root-b", "target": "https://example.org/focus", "relationship": "subClassOf"}
+  ],
+  "children": [],
+  "expansion": [
+    {"iri": "https://example.org/child-a", "label": "First child", "type": "class", "child_count": 0},
+    {"iri": "https://example.org/child-b", "label": "Second child", "type": "class", "child_count": 0},
+    {"iri": "https://example.org/child-c", "label": "Third child", "type": "class", "child_count": 0}
+  ]
+}
