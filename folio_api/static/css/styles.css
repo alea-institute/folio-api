@@ -311,6 +311,7 @@ html, body {
 #tab-panel-graph:not([hidden]) {
     display: flex;
     flex-direction: column;
+    overflow-y: auto;
 }
 
 #tab-panel-graph > #entity-graph-pane {
@@ -472,7 +473,7 @@ html, body {
     position: relative;
     flex: 1;
     min-height: 180px;
-    overflow: hidden;
+    overflow: clip;
     cursor: grab;
 }
 
