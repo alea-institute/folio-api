@@ -4,11 +4,11 @@ The graph now provides native pan, zoom and Fit buttons, a passive overview that
 frames both graph and camera, and readable node visibility and zoom information.
 Fit and the overview use measured rendered nodes, including the child button and
 dragged positions. Resize preserves the camera; replacement disposes observers
-and frame callbacks. Keyboard expansion restores logical focus across overlapping renders without
-taking it from another surface. Offscreen child buttons leave Tab order, and
+and frame callbacks. Keyboard expansion restores logical focus across overlapping
+renders without taking it from another surface. Offscreen child buttons leave Tab order, and
 focus cannot scroll the graph independently of its camera. Short embedded panels
-scroll to reveal the complete overview. The full-screen trigger has its own layout column so it
-cannot overlap the graph tab in a narrow pane.
+scroll to reveal the complete overview. The full-screen trigger has its own
+layout column so it cannot overlap the graph tab in a narrow pane.
 
 ## Scope and starting state
 
@@ -51,6 +51,19 @@ empty/error states). The new controls case failed at the missing Pan right butto
 The first implementation pass exposed fractional viewport rounding in centered
 zoom; using the actual viewport rectangle fixed it. Screenshot inspection exposed
 the overlapping full-screen/tab text, now covered by a non-overlap assertion.
+
+After the fixes were committed as `fa69aeb`, the workflow's browser pass used
+the requested Playwright driver against the same local server. The screenshot
+case passed again (`-k visual_evidence`: 1 passed, 19 deselected, 2.48 seconds),
+and its three captures were inspected. A separate unintercepted navigation check
+exercised keyboard Pan/Fit and full-screen return with zero console or page errors.
+
+| Route | Status | Notes |
+| --- | --- | --- |
+| `/` | Pass | Root served successfully |
+| `/explore/tree` | Pass | Actual graph selection, keyboard commands and full-screen focus return |
+
+No route was skipped and no external human verification was required.
 
 ## Review and follow-up
 
