@@ -40,6 +40,8 @@ event-loop or logging-handler workaround was used.
 | Black check of all five changed Python files | Passed |
 | `actionlint .github/workflows/api-tests.yml` | Passed with actionlint 1.7.12, downloaded archive verified against its published SHA-256 |
 | `git diff --check` | Passed |
+| Stale manifest in a disposable copy, `uv sync --locked --dev --python 3.12` | Correctly exited 1 because `uv.lock` needed updating; repository manifest and lock unchanged |
+| `uv run --no-sync pylint folio_api` | Exited 28, score 9.54/10; findings are in unchanged application files, including broad-exception and deprecated-style warnings |
 
 The full suite retains the 46 existing tests and adds 42 isolation/report cases.
 Coverage is 46% of existing application statements; this change introduces no
@@ -64,6 +66,27 @@ Action tags were resolved through their public repository APIs and their pinned
 
 The pinned uv version is the version used for local verification. Setup and sync
 follow the [official uv Actions guide](https://docs.astral.sh/uv/guides/integration/github/).
+
+## Simplification and review
+
+The simplification pass reviewed reuse, quality, efficiency, test value and
+comments. It removed two redundant comments; no test or behavior changed.
+Its focused regression run passed all 42 new isolation/report cases.
+
+The full code review covered correctness, testing, maintainability, security,
+reliability, adversarial false-green cases and applicable repository learnings.
+All seven passes completed with zero actionable findings. The review confirmed
+R1-R6 and U1-U3 implementation coverage and explicitly left hosted acceptance
+pending. The local review verdict was ready to merge, subject to the controller's
+CI and campaign gates below. The checkout disables cross-model review; the local
+adversarial pass ran, and this receipt does not claim an Astra/Fable review.
+
+Final checks passed for Black, actionlint, JUnit validation and diff whitespace.
+Comparison against `39aeca1` confirmed that application code, dependency files
+and every original test module were unchanged. No separate typecheck is configured.
+The browser-test scope contains no changed application routes, templates or
+assets, so no browser run or screenshot was needed. New durable-learning prose
+was unnecessary because the plan, tests and this receipt carry the reasoning.
 
 ## Acceptance remaining with the controller
 

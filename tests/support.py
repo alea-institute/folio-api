@@ -79,7 +79,6 @@ def isolated_environment():
     environment = ExternalAttempts()
 
     def reject_http(transport, request):
-        # Record the kind only: URLs and provider arguments can contain secrets.
         environment.attempts.append(f"HTTPX {request.method}")
         raise RuntimeError("External HTTPX request disabled in isolated tests")
 
@@ -130,5 +129,4 @@ def isolated_environment():
         try:
             yield environment
         finally:
-            # Runs before patches unwind, including when app shutdown raises.
             environment.assert_clean()
