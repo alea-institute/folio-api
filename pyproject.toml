@@ -20,6 +20,9 @@ Homepage = "https://folio.openlegalstandard.org"
 Repository = "https://github.com/alea-institute/folio-api"
 
 [dependency-groups]
+browser = [
+    "pytest-playwright>=0.10.0",
+]
 dev = [
     "sphinx>=7.4.7,<8",
     "black>=24.4.2,<25",
