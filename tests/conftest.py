@@ -1,31 +1,35 @@
-"""Shared pytest fixtures for folio-api tests.
-
-Two fixtures:
-  - `client`: a `TestClient(app)` instance that runs the FastAPI lifespan
-    on entry, so `app.state.folio` and `app.state.property_children` are
-    populated for every test that uses it. Function-scoped so each test
-    gets a fresh client (the underlying app + ontology are session-scoped
-    through Python module caching, so this is cheap).
-  - `folio`: a session-scoped reference to `app.state.folio` (the in-memory
-    ontology). Tests use this directly when they don't need an HTTP round
-    trip.
-"""
+"""Controlled inputs at collection; real API/MCP startup once per session."""
 
 import pytest
 from fastapi.testclient import TestClient
 
-from folio_api.api import app
+from tests.support import isolated_environment
+
+
+def pytest_configure(config):
+    """Fixtures run too late to protect application imports during collection."""
+    isolation = isolated_environment()
+    config._folio_test_environment = isolation.__enter__()
+    config.add_cleanup(lambda: isolation.__exit__(None, None, None))
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _test_environment(request):
+    environment = request.config._folio_test_environment
+    yield environment
+    # The app fixture depends on this one, so its lifespan has already exited.
+    # Report late attempts as a pytest teardown error, as well as at cleanup.
+    environment.assert_clean()
 
 
 @pytest.fixture(scope="session")
-def _booted_app():
+def _booted_app(_test_environment):
     """Start the FastAPI app once per test session so the lifespan
     loads the FOLIO ontology and builds the property_children reverse
     index. Returns the live app instance.
     """
-    # Using TestClient as a context manager triggers the lifespan
-    # startup and shutdown events. We only need startup here, so we
-    # enter the context and hold it open for the whole session.
+    from folio_api.api import app
+
     with TestClient(app) as _:
         yield app
 
