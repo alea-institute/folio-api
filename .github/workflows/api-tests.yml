@@ -1,0 +1,56 @@
+name: API tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  merge_group:
+    types: [checks_requested]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api-tests:
+    name: API tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: "0.9.22"
+          python-version: "3.12"
+          enable-cache: false
+
+      - name: Install locked dependencies
+        id: install
+        run: uv sync --locked --dev
+
+      - name: Run full test suite
+        timeout-minutes: 8
+        run: uv run --no-sync pytest tests -ra --junitxml=test-results/pytest.xml
+
+      - name: Reject incomplete or skipped verification
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: uv run --no-sync python scripts/check_pytest_results.py test-results/pytest.xml
+
+      - name: Upload test reports
+        if: ${{ !cancelled() && (hashFiles('test-results/pytest.xml') != '' || hashFiles('coverage.xml') != '') }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: api-test-reports
+          path: |
+            test-results/pytest.xml
+            coverage.xml
+          retention-days: 7
+          if-no-files-found: error
