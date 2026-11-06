@@ -1,4 +1,4 @@
-{% if prop_data %}
+{% from "components/ontology_link.html" import ontology_link %}{% if prop_data %}
 <section class="card animate-fade-in mb-6 border-t-4 border-[--color-primary]">
     <div class="flex justify-between items-start">
         <div>
@@ -76,7 +76,9 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11l5-5m0 0l5 5m-5-5v12" />
                         </svg>
                         <div>
+                            {% call ontology_link(parent.iri, parent.label|strip_folio_prefix, 'font-medium text-blue-600 hover:text-blue-800 transition-colors duration-150 group-hover:underline', ontology_key|default('folio'), in_ontology) %}
                             <a href="#" class="font-medium text-blue-600 hover:text-blue-800 transition-colors duration-150 group-hover:underline" onclick="selectNodeByIri('{{ parent.iri }}'); return false;">{{ parent.label|strip_folio_prefix }}</a>
+                            {% endcall %}
                             <p class="text-sm text-gray-600 mt-0.5 line-clamp-2">{{ parent.definition }}</p>
                         </div>
                     </div>
@@ -103,7 +105,9 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 13l-5 5m0 0l-5-5m5 5V6" />
                         </svg>
                         <div>
+                            {% call ontology_link(child.iri, child.label|strip_folio_prefix, 'font-medium text-blue-600 hover:text-blue-800 transition-colors duration-150 group-hover:underline', ontology_key|default('folio'), in_ontology) %}
                             <a href="#" class="font-medium text-blue-600 hover:text-blue-800 transition-colors duration-150 group-hover:underline" onclick="selectNodeByIri('{{ child.iri }}'); return false;">{{ child.label|strip_folio_prefix }}</a>
+                            {% endcall %}
                             <p class="text-sm text-gray-600 mt-0.5 line-clamp-2">{{ child.definition }}</p>
                         </div>
                     </div>
@@ -124,7 +128,9 @@
             Inverse Property
         </h4>
         <div class="bg-purple-50 rounded-lg p-4 border-l-3 border-purple-200">
+            {% call ontology_link(prop_data.inverse.iri, prop_data.inverse.label|strip_folio_prefix, 'font-medium text-purple-700 hover:text-purple-900 hover:underline', ontology_key|default('folio'), in_ontology) %}
             <a href="#" class="font-medium text-purple-700 hover:text-purple-900 hover:underline" onclick="selectNodeByIri('{{ prop_data.inverse.iri }}'); return false;">{{ prop_data.inverse.label|strip_folio_prefix }}</a>
+            {% endcall %}
         </div>
     </section>
     {% endif %}
@@ -146,7 +152,9 @@
                     <div class="flex items-start">
                         <span class="text-teal-500 mr-2 mt-1">&bull;</span>
                         <div>
+                            {% call ontology_link(cls.iri, cls.label, 'font-medium text-teal-700 hover:text-teal-900 transition-colors duration-150 group-hover:underline', ontology_key|default('folio'), in_ontology) %}
                             <a href="{{ cls.iri }}/html" class="font-medium text-teal-700 hover:text-teal-900 transition-colors duration-150 group-hover:underline">{{ cls.label }}</a>
+                            {% endcall %}
                             {% if cls.definition %}
                             <p class="text-sm text-gray-600 mt-0.5 line-clamp-2">{{ cls.definition }}</p>
                             {% endif %}
@@ -176,7 +184,9 @@
                     <div class="flex items-start">
                         <span class="text-orange-500 mr-2 mt-1">&bull;</span>
                         <div>
+                            {% call ontology_link(cls.iri, cls.label, 'font-medium text-orange-700 hover:text-orange-900 transition-colors duration-150 group-hover:underline', ontology_key|default('folio'), in_ontology) %}
                             <a href="{{ cls.iri }}/html" class="font-medium text-orange-700 hover:text-orange-900 transition-colors duration-150 group-hover:underline">{{ cls.label }}</a>
+                            {% endcall %}
                             {% if cls.definition %}
                             <p class="text-sm text-gray-600 mt-0.5 line-clamp-2">{{ cls.definition }}</p>
                             {% endif %}

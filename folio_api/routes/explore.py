@@ -6,7 +6,9 @@ Unified explore routes for the FOLIO API — combined class + property tree view
 from pathlib import Path
 
 # packages
-from fastapi import APIRouter, Query, Request, status
+from fastapi import APIRouter, HTTPException, Query, Request, status
+
+from folio_api.ontologies import canon_status_message, requested_ontology
 from folio import FOLIO, OWLClass, OWLObjectProperty
 from starlette.responses import JSONResponse, Response
 
@@ -24,8 +26,9 @@ _FOLIO_IRI_PREFIX = "https://folio.openlegalstandard.org/"
 
 
 def _resolve_entity(folio: FOLIO, iri: str):
-    """4-strategy IRI resolver — mirrors properties.py:_find_property and
-    taxonomy.py:1190-1216. Returns (entity, type) tuple or (None, None).
+    """Resolve a class or property from an IRI or short FOLIO ID.
+
+    Returns an (entity, type) tuple or (None, None).
 
     Strategies:
       1. Direct lookup as class, then as property.
@@ -323,6 +326,11 @@ async def get_entity_graph(
 )
 async def explore_tree(request: Request) -> Response:
     """Unified tree explorer combining classes (nouns) and properties (verbs)."""
+    ontology_key, canon_state = requested_ontology(request)
+    if ontology_key is None:
+        raise HTTPException(404, "Unknown ontology")
+    tree_status = canon_status_message(canon_state) if ontology_key == "canon" else None
+
     typeahead_js_path = Path(__file__).parent.parent / "static" / "js" / "typeahead_search.js"
     typeahead_js_source = typeahead_js_path.read_text(encoding="utf-8")
 
@@ -332,5 +340,8 @@ async def explore_tree(request: Request) -> Response:
             "request": request,
             "typeahead_js_source": typeahead_js_source,
             "config": request.app.state.config,
+            "ontology_key": ontology_key,
+            "canon_state": canon_state,
+            "tree_status": tree_status,
         },
     )

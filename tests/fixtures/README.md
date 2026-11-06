@@ -1,4 +1,4 @@
-# Pinned FOLIO test data
+# Pinned ontology test data
 
 `folio.owl.gz` is the complete, unmodified FOLIO ontology from public commit
 `79f77449c8566d7ac2fc193bed50812cfd2e84cb`, compressed with gzip (level 9, empty
@@ -34,3 +34,22 @@ initialization. Default synchronous and asynchronous HTTPX transports reject
 and record external attempts, including attempts whose errors get caught.
 TestClient's in-process transport, sockets, event loops and logging remain real.
 This is a guard on the current HTTPX callers, not a general network firewall.
+
+## Catholic Semantic Canon snapshot
+
+`canon.owl.gz` contains the complete, unmodified Catholic Semantic Canon export
+from CatholicOS/ontology-semantic-canon commit
+`935bc5ac8acbe005ab1ba7cd8dfe920d81302890`.
+
+- [Immutable source](https://raw.githubusercontent.com/CatholicOS/ontology-semantic-canon/935bc5ac8acbe005ab1ba7cd8dfe920d81302890/sources/ontology-semantic-canon.owl)
+- Raw size: 13,821,006 bytes
+- Raw SHA-256: `add8b2b140273b197b759f8945b4f5aa66ecb1ec801fcc69431f1b4baaf59f24`
+- Attribution: Catholic Semantic Canon, CatholicOS; [Apache-2.0](https://www.apache.org/licenses/LICENSE-2.0).
+  See [THIRD-PARTY.md](../../THIRD-PARTY.md).
+
+Refresh using the same process and deterministic gzip settings above, selecting
+a reviewed Canon commit and its complete `sources/ontology-semantic-canon.owl`.
+Update this provenance, `CANON_FIXTURE_SHA256` in `tests/support.py`, and the raw
+byte-count assertion in `tests/test_test_environment.py`. The patched loader
+selects this snapshot only for the Canon source URL; all other loads retain the
+FOLIO snapshot. Neither snapshot is repaired through network or cache access.

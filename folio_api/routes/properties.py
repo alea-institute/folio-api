@@ -6,25 +6,22 @@ Property routes for the FOLIO API — browse, tree, and detail views for OWL Obj
 from pathlib import Path
 
 # packages
-from fastapi import APIRouter, Request, status
+from fastapi import APIRouter, Depends, Request, status
 from folio import FOLIO, OWLObjectProperty
 from starlette.responses import Response, JSONResponse, RedirectResponse
 
 # project
 from folio_api.rendering import get_property_neighbors, strip_folio_prefix
 
+from folio_api.ontologies import (
+    HIDDEN_ROOT_PROPERTY_IRIS, OntologyEntry, get_ontology, resolve_property, tree_redirect_url,
+)
+
 # API router
 router = APIRouter(prefix="/properties", tags=["properties"])
 
 # The OWL top-level property IRI
 OWL_TOP_OBJECT_PROPERTY = "http://www.w3.org/2002/07/owl#topObjectProperty"
-
-# Root properties to hide from the tree
-HIDDEN_ROOT_PROPERTY_IRIS = {
-    "https://folio.openlegalstandard.org/RBD1G5FjdaXj6UM26EWBxJc",  # utbms:activities
-    "https://folio.openlegalstandard.org/RDc1B2GDj6ckfXBkRRSJXfH",  # TR:SALI
-    "https://folio.openlegalstandard.org/RDNZZOyU2yb5Q9xbxIWXd62",  # ZZZ:DEPRECATED PROPERTIES
-}
 
 
 def _find_property(folio: FOLIO, iri: str) -> OWLObjectProperty | None:
@@ -66,16 +63,18 @@ def _is_root_property(prop: OWLObjectProperty) -> bool:
     return False
 
 
-def _get_root_properties(folio: FOLIO) -> list[OWLObjectProperty]:
+def _get_root_properties(folio: FOLIO, hidden_roots=HIDDEN_ROOT_PROPERTY_IRIS) -> list[OWLObjectProperty]:
     """Get all root-level object properties."""
-    roots = [p for p in folio.object_properties if _is_root_property(p) and p.iri not in HIDDEN_ROOT_PROPERTY_IRIS]
+    roots = [p for p in folio.object_properties if _is_root_property(p) and p.iri not in hidden_roots]
     roots.sort(key=lambda p: (p.label or p.iri).lower())
     return roots
 
 
-def _is_in_hidden_branch(folio: FOLIO, prop: OWLObjectProperty) -> bool:
+def _is_in_hidden_branch(folio: FOLIO, prop: OWLObjectProperty, hidden_roots=HIDDEN_ROOT_PROPERTY_IRIS) -> bool:
     """Check if a property is itself hidden or is a descendant of a hidden root."""
-    if prop.iri in HIDDEN_ROOT_PROPERTY_IRIS:
+    if not hidden_roots:
+        return False
+    if prop.iri in hidden_roots:
         return True
     visited = set()
     current = prop
@@ -83,7 +82,7 @@ def _is_in_hidden_branch(folio: FOLIO, prop: OWLObjectProperty) -> bool:
         for parent_iri in current.sub_property_of:
             if parent_iri == OWL_TOP_OBJECT_PROPERTY or parent_iri in visited:
                 continue
-            if parent_iri in HIDDEN_ROOT_PROPERTY_IRIS:
+            if parent_iri in hidden_roots:
                 return True
             visited.add(parent_iri)
             parent = folio.get_property(parent_iri)
@@ -199,11 +198,7 @@ async def browse_properties(request: Request) -> Response:
 )
 async def explore_property_tree(request: Request) -> Response:
     """Redirect to the unified explore tree view."""
-    target = "/explore/tree"
-    node = request.query_params.get("node")
-    if node:
-        target += f"?node={node}&type=property"
-    return RedirectResponse(url=target, status_code=301)
+    return RedirectResponse(url=tree_redirect_url(request, "property"), status_code=301)
 
 
 @router.get(
@@ -214,15 +209,18 @@ async def explore_property_tree(request: Request) -> Response:
     description="Get hierarchical data for the property tree view",
     status_code=status.HTTP_200_OK,
 )
-async def get_property_tree_data(request: Request, node_id: str = "#") -> JSONResponse:
+async def get_property_tree_data(
+    request: Request, node_id: str = "#",
+    entry: OntologyEntry = Depends(get_ontology),
+) -> JSONResponse:
     """Get hierarchical data for the property tree (lazy-load compatible)."""
-    folio: FOLIO = request.app.state.folio
-    property_children = getattr(request.app.state, "property_children", None)
+    folio: FOLIO = entry.folio
+    property_children = entry.property_children
 
     # INTERIM: strip_folio_prefix calls below can be removed once FOLIO PR #5 is merged
     if node_id == "#":
         # Return root properties
-        roots = _get_root_properties(folio)
+        roots = _get_root_properties(folio, entry.hidden_root_property_iris)
         result = []
         for prop in roots:
             children = _get_child_properties(folio, prop.iri, property_children)
@@ -239,7 +237,8 @@ async def get_property_tree_data(request: Request, node_id: str = "#") -> JSONRe
         return JSONResponse(content=result)
     else:
         # Return children of a specific property
-        children = _get_child_properties(folio, node_id, property_children)
+        prop = resolve_property(entry, node_id)
+        children = _get_child_properties(folio, prop.iri if prop else node_id, property_children)
         result = []
         for child in children:
             grandchildren = _get_child_properties(folio, child.iri, property_children)
@@ -264,12 +263,15 @@ async def get_property_tree_data(request: Request, node_id: str = "#") -> JSONRe
     description="Get detailed data for a single property node",
     status_code=status.HTTP_200_OK,
 )
-async def get_property_node_data(request: Request, iri: str) -> JSONResponse:
+async def get_property_node_data(
+    request: Request, iri: str,
+    entry: OntologyEntry = Depends(get_ontology),
+) -> JSONResponse:
     """Get detailed data for a single property node by IRI."""
-    folio: FOLIO = request.app.state.folio
-    property_children = getattr(request.app.state, "property_children", None)
+    folio: FOLIO = entry.folio
+    property_children = entry.property_children
 
-    prop = _find_property(folio, iri)
+    prop = resolve_property(entry, iri)
     if not prop:
         return JSONResponse(
             content={"error": f"Property not found for identifier: {iri}"},
@@ -368,11 +370,14 @@ async def get_property_node_data(request: Request, iri: str) -> JSONResponse:
     description="Get the complete path from root to a specific property in the tree",
     status_code=status.HTTP_200_OK,
 )
-async def get_property_path(request: Request, iri: str) -> JSONResponse:
+async def get_property_path(
+    request: Request, iri: str,
+    entry: OntologyEntry = Depends(get_ontology),
+) -> JSONResponse:
     """Get the complete path from root to a specific property."""
-    folio: FOLIO = request.app.state.folio
+    folio: FOLIO = entry.folio
 
-    prop = _find_property(folio, iri)
+    prop = resolve_property(entry, iri)
     if not prop:
         return JSONResponse(
             content={"error": f"Property not found for identifier: {iri}"},
@@ -414,10 +419,13 @@ async def get_property_path(request: Request, iri: str) -> JSONResponse:
     description="Search for properties and return a filtered tree structure",
     status_code=status.HTTP_200_OK,
 )
-async def search_property_tree(request: Request, query: str) -> JSONResponse:
+async def search_property_tree(
+    request: Request, query: str,
+    entry: OntologyEntry = Depends(get_ontology),
+) -> JSONResponse:
     """Search for properties and return a filtered tree structure."""
-    folio: FOLIO = request.app.state.folio
-    property_children = getattr(request.app.state, "property_children", None)
+    folio: FOLIO = entry.folio
+    property_children = entry.property_children
 
     if not query or len(query) < 2:
         return JSONResponse(content={"matches": [], "tree": {}})
@@ -442,7 +450,7 @@ async def search_property_tree(request: Request, query: str) -> JSONResponse:
     query_lower = query.lower()
 
     for prop in folio.object_properties:
-        if prop.iri in seen_iris or _is_in_hidden_branch(folio, prop):
+        if prop.iri in seen_iris or _is_in_hidden_branch(folio, prop, entry.hidden_root_property_iris):
             continue
 
         label_match = False
@@ -531,7 +539,7 @@ async def search_property_tree(request: Request, query: str) -> JSONResponse:
             tree["root_nodes"].append(node_iri)
 
     tree["hidden_root_count"] = sum(
-        prop.iri not in tree["root_nodes"] for prop in _get_root_properties(folio)
+        prop.iri not in tree["root_nodes"] for prop in _get_root_properties(folio, entry.hidden_root_property_iris)
     )
 
     matches.sort(key=lambda x: x["label"].lower())
@@ -562,15 +570,25 @@ async def search_property_tree(request: Request, query: str) -> JSONResponse:
     description="Get rendered HTML for a property's details using Jinja2 templates",
     include_in_schema=False,
 )
-async def get_property_details_html(request: Request, iri: str) -> Response:
+async def get_property_details_html(
+    request: Request, iri: str,
+    entry: OntologyEntry = Depends(get_ontology),
+) -> Response:
     """Get rendered HTML for a specific property's details."""
-    folio: FOLIO = request.app.state.folio
-    property_children = getattr(request.app.state, "property_children", None)
+    folio: FOLIO = entry.folio
+    property_children = entry.property_children
 
-    prop = _find_property(folio, iri)
+    prop = resolve_property(entry, iri)
     if not prop:
         return request.app.state.templates.TemplateResponse(
-            "components/property_details.html", {"request": request, "prop_data": None}
+            "components/property_details.html",
+            {
+                "request": request,
+                "prop_data": None,
+                "ontology_key": entry.key,
+                "in_ontology": entry.contains,
+            },
+            status_code=404 if entry.key == "canon" else 200,
         )
 
     nodes, edges = get_property_neighbors(prop, folio, property_children)
@@ -642,5 +660,10 @@ async def get_property_details_html(request: Request, iri: str) -> Response:
 
     return request.app.state.templates.TemplateResponse(
         "components/property_details.html",
-        {"request": request, "prop_data": prop_data},
+        {
+            "request": request,
+            "prop_data": prop_data,
+            "ontology_key": entry.key,
+            "in_ontology": entry.contains,
+        },
     )
