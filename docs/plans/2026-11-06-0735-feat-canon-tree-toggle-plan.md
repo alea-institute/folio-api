@@ -24,7 +24,7 @@ execution: code
 
 ## Product Contract
 
-Product Contract preservation: changed: added R11-R14 — the Canon-unavailable state, FOLIO wording removal, hidden licensing/deprecated roots, and toggle navigation, confirmed at the planning scope check on 2026-11-06. Added AE6-AE8. Outstanding Questions resolved into KTD3, KTD4, and KTD5. Restructured, no scope change: Problem Frame branch count corrected to nine; AE3 and the tree-page Key Decision clarified to match the Canon's data and the tree data routes.
+Product Contract preservation: changed: added R15 and AE9 — background Canon loading, directed by Damien on 2026-11-06. Earlier: added R11-R14 — the Canon-unavailable state, FOLIO wording removal, hidden licensing/deprecated roots, and toggle navigation, confirmed at the planning scope check on 2026-11-06. Added AE6-AE8. Outstanding Questions resolved into KTD3, KTD4, and KTD5. Restructured, no scope change: Problem Frame branch count corrected to nine; AE3 and the tree-page Key Decision clarified to match the Canon's data and the tree data routes.
 
 ### Summary
 
@@ -43,6 +43,7 @@ FOLIO's tree explorer already serves a near-identical ontology well. The Canon n
 - **Only the tree page and its data routes change.** FOLIO's standalone pages, REST API, and entity graph stay FOLIO-only, so removing the Canon later means removing the toggle, the Canon registry entry, and the routes' ontology parameter. Governs R9, R10.
 - **The Canon comes from CatholicOS's GitHub repository and follows its latest version.** The repository's README designates WebProtégé exports to it as the published form. (session-settled: user-approved — proposed over a frozen copy at the planning scope check; Damien confirmed.) Governs R7.
 - **A Canon outage never takes FOLIO down.** (session-settled: user-approved — confirmed at the planning scope check.) Governs R11.
+- **The Canon loads in the background, after FOLIO, so it never slows FOLIO.** (session-settled: user-directed — chosen over loading both ontologies during startup: Damien asked that the Canon load after FOLIO, in stages if that helps FOLIO's performance.) Governs R15.
 
 ### Requirements
 
@@ -63,6 +64,8 @@ FOLIO's tree explorer already serves a near-identical ontology well. The Canon n
 - R7. Canon data comes from the CatholicOS `ontology-semantic-canon` GitHub repository and refreshes on the same schedule and mechanism as FOLIO's data.
 - R8. Canon classes and properties keep their own identifiers (`https://ontology.catholicos.catholic/...`). None are rewritten to FOLIO identifiers.
 - R11. When the Canon could not be loaded, the toggle is absent, FOLIO works normally, and a Canon link shows a "Canon unavailable" state instead of FOLIO data.
+
+- R15. FOLIO starts and serves without waiting for the Canon. The Canon loads only after FOLIO is serving, and while it loads the toggle is absent and a Canon link shows a "Canon loading" state.
 
 **Boundaries with FOLIO features**
 
@@ -86,6 +89,7 @@ FOLIO's tree explorer already serves a near-identical ontology well. The Canon n
 - AE5. **Covers R5.** Given a search for "Sacrament" in the Canon view, results come from the Canon, not from FOLIO.
 - AE6. **Covers R4, R5.** Given a Canon-view link whose node is a FOLIO-only IRI, the panel shows the explorer's existing not-found state; it never shows a FOLIO class.
 - AE7. **Covers R6.** Given a Canon detail panel that names a related item absent from the Canon (for example a W3C or Dublin Core property), the item renders as plain text, not a link.
+- AE9. **Covers R15.** Given the app has just started and the Canon is still loading, FOLIO pages and API calls answer normally, `/explore/tree` shows no toggle, and `/explore/tree?ontology=canon` shows "Canon loading"; once loading finishes, the toggle appears on the next page load.
 - AE8. **Covers R11.** Given the Canon failed to load at startup, `/explore/tree` shows FOLIO with no toggle, and `/explore/tree?ontology=canon` shows "Canon unavailable" in the tree area.
 
 ### Scope Boundaries
@@ -118,9 +122,9 @@ FOLIO's tree explorer already serves a near-identical ontology well. The Canon n
 ### Key Technical Decisions
 
 - KTD1. **An ontology registry beside, not instead of, `app.state.folio`.** Startup builds `app.state.ontologies` keyed `folio` and `canon`. Each entry holds its FOLIO-library instance, IRI base, root class IDs, hidden property IRIs, and its own property-children index. `app.state.folio`, `app.state.property_children`, and the MCP's shared instance stay exactly as they are, so every FOLIO-only surface is untouched (R10). Rationale: the tree routes need two ontologies; nothing else does.
-- KTD2. **One query parameter selects the ontology everywhere.** The page and every tree data endpoint take `ontology`, case-insensitive. An absent, empty, or `folio` value means FOLIO. `canon` means Canon. Any other value returns 404, because silently serving FOLIO is this feature's worst failure. A Canon request while Canon is unloaded returns 503 from data endpoints (R11). The 404 for an unrecognized value is the one deliberate change to FOLIO-facing tree responses; requests without the parameter behave as before (R10). The `/taxonomy/tree` and `/properties/tree` redirects pass the parameter through, with the query built by proper URL encoding (R4).
+- KTD2. **One query parameter selects the ontology everywhere.** The page and every tree data endpoint take `ontology`, case-insensitive. An absent, empty, or `folio` value means FOLIO. `canon` means Canon. Any other value returns 404, because silently serving FOLIO is this feature's worst failure. A Canon request while the Canon is loading or failed returns 503 from data endpoints, with `Retry-After` while loading (R11, R15). The 404 for an unrecognized value is the one deliberate change to FOLIO-facing tree responses; requests without the parameter behave as before (R10). The `/taxonomy/tree` and `/properties/tree` redirects pass the parameter through, with the query built by proper URL encoding (R4).
 - KTD3. **Canon loads over the library's `http` source from the raw GitHub URL of the repository's `main` branch.** Probe: `FOLIO(source_type="http", http_url=<raw .owl>, use_cache=True)` parses the Canon with IRIs intact (14,973 classes, 166 properties, 1.3 s cold). The library caches by URL and never revalidates, so the Canon refreshes when the container is recreated or redeployed, exactly like FOLIO (R7). The source URL is an in-code constant. An optional `canon` block in `config.json` carries only an `enabled` flag, and its absence means enabled, so PROD's host-local `config.json` needs no edit.
-- KTD4. **Canon loading is isolated from FOLIO startup.** Canon loads after FOLIO, inside its own error boundary. A download or parse failure logs one warning, leaves the registry without a `canon` entry, and FOLIO serves normally (R11). This passes the plan's harm test: a GitHub outage would otherwise take PROD FOLIO down, and nothing would catch it in time.
+- KTD4. **Canon loads in a background stage cascade after FOLIO is serving.** Startup finishes with FOLIO alone, so the health check and first requests never wait on the Canon (R15). A background task then runs the Canon in stages: wait for startup to complete, download, parse, then build roots and the property-children index, and only then publish the `canon` registry entry in one assignment, so a request never sees a half-built entry. The heavy stages run in a worker thread that lowers its own scheduling priority (Linux per-thread nice), so FOLIO request handling keeps the CPU; parsing still shares the interpreter lock, which is why the stages are short and sequential rather than parallel. The registry tracks the Canon's state as loading, ready, or failed. Any stage failure logs one warning, sets failed, and FOLIO serves normally (R11). This passes the plan's harm test: a GitHub outage or slow parse would otherwise delay or take down PROD FOLIO, and nothing would catch it in time.
 - KTD5. **One shared resolver replaces the five duplicated IRI resolvers on tree routes.** It takes a registry entry and a full IRI or bare ID, and looks up only within that entry. Bare IDs get the entry's own IRI base, never FOLIO's. The O(n) suffix-scan fallback scans only that entry's instance. Evidence: the ontologies share 14,407 bare IDs, and folio-python's `normalize_iri` prepends FOLIO's base to any bare ID, so a FOLIO-prefixed lookup would return the wrong ontology's class (R5, R8). FOLIO lookups keep their current order and results (R10).
 - KTD6. **Canon roots are computed, not curated.** Canon roots are classes whose parent list is empty or holds only `owl:Thing`, excluding `owl:Thing` itself and any root whose label starts with "ZZZ" (R13). The Canon declares three branches as subclasses of `owl:Thing` and leaves four (Place, Authority, Normative Concepts, Operational Concepts) with no parent, so an `owl:Thing`-children rule alone finds three of seven. This mirrors `_is_root_property` in `folio_api/routes/properties.py`. Canon has no hidden root properties. FOLIO keeps `ROOT_CLASS_IRI_IDS` and `HIDDEN_ROOT_PROPERTY_IRIS`. Rationale: the Canon follows its latest version (KTD3), so a curated ID list would drift.
 - KTD7. **The server renders the view; the toggle is a full page navigation.** `/explore/tree` reads `ontology`, then renders the heading, title, toggle state, branding, and Graph-tab presence server-side (R2, R3, R9, R12), so nothing flashes FOLIO first. The toggle is a pair of links to `/explore/tree` and `/explore/tree?ontology=canon`. Navigation resets the client's node cache, search state, and selection, which share keys across ontologies (R14). The client script receives the ontology once from the page and appends it to every fetch through one helper. URL writes keep the parameter on pushState and popstate (R4).
@@ -194,7 +198,7 @@ flowchart LR
 
 **Goal:** The app starts with FOLIO and, when available, the Canon, each reachable through the registry.
 
-**Requirements:** R7, R8, R11, R13; KTD1, KTD3, KTD4, KTD6.
+**Requirements:** R7, R8, R11, R13, R15; KTD1, KTD3, KTD4, KTD6.
 
 **Dependencies:** U1.
 
@@ -207,9 +211,11 @@ flowchart LR
 - `tests/test_ontologies.py` (new)
 
 **Approach:**
-1. After FOLIO loads, build the registry: the `folio` entry wraps the existing instance and indexes; the `canon` entry loads per KTD3 inside the KTD4 error boundary.
-2. Compute Canon roots per KTD6 and build the Canon property-children index the same way FOLIO's is built.
-3. Read the optional `canon.enabled` flag, defaulting to enabled when absent (KTD3).
+1. After FOLIO loads, build the registry with the `folio` entry wrapping the existing instance and indexes, and the Canon state set to loading; startup then completes without waiting.
+2. Start the KTD4 background cascade: download and parse per KTD3, compute Canon roots per KTD6, build the Canon property-children index the same way FOLIO's is built, then publish the entry and set ready.
+3. Cancel the background task cleanly on shutdown.
+4. Read the optional `canon.enabled` flag, defaulting to enabled when absent (KTD3).
+5. Give tests a way to wait for the Canon to reach ready or failed, so route tests never race the cascade.
 
 **Patterns to follow:** `initialize_folio` and the property-children build in `folio_api/api.py` lifespan.
 
@@ -217,7 +223,9 @@ flowchart LR
 - Startup with the fixture yields both entries; the Canon instance holds about 14,973 classes, and its roots are the seven non-ZZZ Canon branches.
 - Place, Authority (Source and Scope), Normative Concepts, and Operational Concepts, which declare no parent, appear among the Canon roots.
 - `owl:Thing`, "ZZZ - Licensing", and "ZZZZ - Deprecated" are absent from Canon roots.
-- When the Canon load raises, startup completes, the registry has no `canon` entry, FOLIO routes answer, and one warning is logged.
+- Covers AE9. Startup completes and FOLIO routes answer while the Canon state is still loading (load held open by a test gate).
+- When any Canon stage raises, the state becomes failed, the registry has no `canon` entry, FOLIO routes answer, and one warning is logged.
+- Shutdown during loading cancels the cascade without errors.
 - `canon.enabled: false` in config skips the Canon load entirely.
 - `app.state.folio` and `app.state.property_children` are the same objects as before the change.
 
@@ -277,7 +285,7 @@ flowchart LR
 - `tests/routes/test_canon_page.py` (new)
 
 **Approach:**
-1. `/explore/tree` resolves the view with the KTD2 selector rules, rendering a "Canon unavailable" tree state for an unloaded Canon instead of 503 on the page itself (R11).
+1. `/explore/tree` resolves the view with the KTD2 selector rules, rendering a "Canon loading" state while loading and a "Canon unavailable" state when failed, never 503 on the page itself (R11, R15).
 2. Render the toggle as two links in a labeled group (accessible name "Ontology view") visible at every width, outside the header block hidden on small screens. The active link carries `aria-current="page"` and a filled style; both keep the page's focus ring. Omit the toggle when the Canon is unloaded.
 3. In Canon view: heading "Canon", neutral title, meta description, header title and subtitle, author meta, and search hint; no FOLIO website or "Learn More" buttons; no Graph tab, with the tab strip collapsed to one column.
 4. In the Canon-unavailable state, mark the page for the client, render search and expand/collapse controls disabled, show "Canon unavailable" in the tree and detail areas, and offer a link back to the FOLIO view.
@@ -293,7 +301,8 @@ flowchart LR
 - Covers AE7. A Canon class panel with a related property absent from the Canon renders it as plain text.
 - Every Canon class and property panel variant contains no `/html` href.
 - FOLIO panels keep their `/html` links byte-for-byte.
-- Covers AE8. With the Canon unloaded, `/explore/tree` has no toggle and `/explore/tree?ontology=canon` shows "Canon unavailable", disabled search, and a link back to FOLIO.
+- Covers AE9. While the Canon is loading, `/explore/tree` has no toggle and `/explore/tree?ontology=canon` shows "Canon loading".
+- Covers AE8. With the Canon failed, `/explore/tree` has no toggle and `/explore/tree?ontology=canon` shows "Canon unavailable", disabled search, and a link back to FOLIO.
 
 **Verification:** Rendered HTML tests pass for both views and the unloaded state.
 
@@ -337,7 +346,7 @@ flowchart LR
   - Phone-width screenshot shows the toggle; desktop screenshots of both views are inspected.
   - AE8: with the Canon disabled by config, the Canon link shows the unavailable state with no failed requests in the network log.
   - Network log: every Canon-page API request carries `ontology=canon`.
-- **PROD deploy checks:** host total RAM and container memory before and after; `/info/health` within the health window; single requests to `/explore/tree` and `/explore/tree?ontology=canon`; one FOLIO API call unchanged. No bursts against PROD.
+- **PROD deploy checks:** FOLIO's `/info/health` answers before the Canon finishes loading; a FOLIO tree request timed during the Canon load stays within its pre-deploy latency; host total RAM and container memory before and after; `/info/health` within the health window; single requests to `/explore/tree` and `/explore/tree?ontology=canon`; one FOLIO API call unchanged. No bursts against PROD.
 
 ## Definition of Done
 
