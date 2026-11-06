@@ -6,7 +6,6 @@ import copy
 import logging
 import logging.config
 import os
-from collections import defaultdict
 from contextlib import AsyncExitStack, asynccontextmanager, suppress
 from typing import Any, Dict
 from pathlib import Path
@@ -35,7 +34,7 @@ import folio_api.routes.properties
 import folio_api.routes.explore
 import folio_api.routes.connections
 from folio_api.api_config import load_config
-from folio_api.ontologies import OntologyRegistry, make_folio_entry
+from folio_api.ontologies import OntologyRegistry, build_property_children, make_folio_entry
 from folio_api.rate_limit import RateLimitConfig, RateLimitMiddleware
 
 _DEFAULT_LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -125,11 +124,7 @@ async def lifespan_handler(app_instance: FastAPI):
     )
 
     # Build reverse index for property children lookups
-    property_children = defaultdict(list)
-    for prop in app_instance.state.folio.object_properties:
-        for parent_iri in prop.sub_property_of:
-            property_children[parent_iri].append(prop)
-    app_instance.state.property_children = dict(property_children)
+    app_instance.state.property_children = build_property_children(app_instance.state.folio)
 
     # Share FOLIO instance with MCP server
     from folio_mcp.server import set_shared_folio

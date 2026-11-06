@@ -62,7 +62,7 @@
     
     {% block extra_content %}{% endblock %}
     
-    {% include "components/footer.html" %}
+    {% block footer %}{% include "components/footer.html" %}{% endblock %}
     
     <!-- Global Scripts -->
     <script src="/static/js/copy_iri.js?v={{ asset_version }}"></script>

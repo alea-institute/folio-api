@@ -4,7 +4,6 @@ Taxonomy routes for the FOLIO API.
 
 # imports
 from pathlib import Path
-from urllib.parse import urlencode
 
 # packages
 from fastapi import APIRouter, Depends, Request, status
@@ -15,39 +14,12 @@ from starlette.responses import Response, JSONResponse, RedirectResponse
 from folio_api.models import OWLClassList
 from folio_api.rendering import get_node_neighbors, strip_folio_prefix
 
-from folio_api.ontologies import OntologyEntry, get_ontology, resolve_class
+from folio_api.ontologies import (
+    ROOT_CLASS_IRI_IDS, OntologyEntry, get_ontology, resolve_class, tree_redirect_url,
+)
 
 # API router
 router = APIRouter(prefix="/taxonomy", tags=["taxonomy"])
-
-# Curated list of root-level class IRI IDs (direct subclasses of owl:Thing,
-# excluding sandbox/draft classes not ready for public display).
-ROOT_CLASS_IRI_IDS = [
-    "R8CdMpOM0RmyrgCCvbpiLS0",  # Actor / Player
-    "RSYBzf149Mi5KE0YtmpUmr",  # Area of Law
-    "RCIwc6WJi6IT7xePURxsi4T",  # Asset Type
-    "R8qItBwG2pRMFhUq1HQEMnb",  # Communication Modality
-    "R767niCLQVC5zIcO5WDQMSl",  # Currency
-    "R79aItNTJQwHgR002wuX3iC",  # Data Format
-    "RDt4vQCYDfY0R9fZ5FNnTbj",  # Document / Artifact
-    "R9kmGZf5FSmFdouXWQ1Nndm",  # Engagement Attributes
-    "R73hoH1RXYjBTYiGfolpsAF",  # Event
-    "RhBgnef56iLBXYfPqWQE41",  # Financial Concepts and Metrics
-    "RBjHwNNG2ASVmasLFU42otk",  # Forums and Venues
-    "RBQGborh1CfXanGZipDL0Qo",  # Governmental Body
-    "R8f4qGdjxuiQary8OBpq8W9",  # Industry and Market
-    "RDOvAHsvY8TKJ1O1orXPM9o",  # Language
-    "RC1CZydjfH8oiM4W3rCkma3",  # Legal Authorities
-    "R7L5eLIzH0CpOUE74uJvSjL",  # Legal Entity
-    "R9B8sRCK209t5Y8LlU4f62a",  # Legal Use Cases
-    "R9aSzp9cEiBCzObnP92jYFX",  # Location
-    "R7ReDY2v13rer1U8AyOj55L",  # Matter Narrative
-    "RlNFgB3TQfMzV26V4V7u4E",  # Objectives
-    "RDK1QEdQg1T8B5HQqMK2pZN",  # Service
-    "RB4cFSLB4xvycDlKv73dOg6",  # Standards Compatibility
-    "Rx69EnEj3H3TpcgTfUSoYx",  # Status
-    "R8EoZh39tWmXCkmP2Xzjl6E",  # System Identifiers
-]
 
 
 @router.get(
@@ -601,10 +573,9 @@ async def get_tree_data(
 
     # If requesting root nodes
     if node_id == "#":
-        # Look up the selected ontology's visible roots
         root_classes = [
-            resolve_class(entry, iri_id) for iri_id in entry.root_class_iris
-            if resolve_class(entry, iri_id) is not None
+            cls for iri_id in entry.root_class_iris
+            if (cls := resolve_class(entry, iri_id)) is not None
         ]
         root_classes.sort(key=lambda x: (x.label or "").lower())
 
@@ -1303,16 +1274,7 @@ async def get_class_details_html(
 async def explore_taxonomy_tree(request: Request) -> Response:
     """Redirect to the unified explore tree view."""
     # Preserve any query params (e.g. ?node=...)
-    target = "/explore/tree"
-    node = request.query_params.get("node")
-    params = {}
-    if node:
-        params.update(node=node, type="class")
-    if "ontology" in request.query_params:
-        params["ontology"] = request.query_params["ontology"]
-    if params:
-        target += "?" + urlencode(params)
-    return RedirectResponse(url=target, status_code=301)
+    return RedirectResponse(url=tree_redirect_url(request, "class"), status_code=301)
 
 
 @router.get(

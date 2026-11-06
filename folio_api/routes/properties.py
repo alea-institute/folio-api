@@ -4,7 +4,6 @@ Property routes for the FOLIO API — browse, tree, and detail views for OWL Obj
 
 # imports
 from pathlib import Path
-from urllib.parse import urlencode
 
 # packages
 from fastapi import APIRouter, Depends, Request, status
@@ -14,20 +13,15 @@ from starlette.responses import Response, JSONResponse, RedirectResponse
 # project
 from folio_api.rendering import get_property_neighbors, strip_folio_prefix
 
-from folio_api.ontologies import OntologyEntry, get_ontology, resolve_class, resolve_property
+from folio_api.ontologies import (
+    HIDDEN_ROOT_PROPERTY_IRIS, OntologyEntry, get_ontology, resolve_property, tree_redirect_url,
+)
 
 # API router
 router = APIRouter(prefix="/properties", tags=["properties"])
 
 # The OWL top-level property IRI
 OWL_TOP_OBJECT_PROPERTY = "http://www.w3.org/2002/07/owl#topObjectProperty"
-
-# Root properties to hide from the tree
-HIDDEN_ROOT_PROPERTY_IRIS = {
-    "https://folio.openlegalstandard.org/RBD1G5FjdaXj6UM26EWBxJc",  # utbms:activities
-    "https://folio.openlegalstandard.org/RDc1B2GDj6ckfXBkRRSJXfH",  # TR:SALI
-    "https://folio.openlegalstandard.org/RDNZZOyU2yb5Q9xbxIWXd62",  # ZZZ:DEPRECATED PROPERTIES
-}
 
 
 def _find_property(folio: FOLIO, iri: str) -> OWLObjectProperty | None:
@@ -78,6 +72,8 @@ def _get_root_properties(folio: FOLIO, hidden_roots=HIDDEN_ROOT_PROPERTY_IRIS) -
 
 def _is_in_hidden_branch(folio: FOLIO, prop: OWLObjectProperty, hidden_roots=HIDDEN_ROOT_PROPERTY_IRIS) -> bool:
     """Check if a property is itself hidden or is a descendant of a hidden root."""
+    if not hidden_roots:
+        return False
     if prop.iri in hidden_roots:
         return True
     visited = set()
@@ -202,16 +198,7 @@ async def browse_properties(request: Request) -> Response:
 )
 async def explore_property_tree(request: Request) -> Response:
     """Redirect to the unified explore tree view."""
-    target = "/explore/tree"
-    node = request.query_params.get("node")
-    params = {}
-    if node:
-        params.update(node=node, type="property")
-    if "ontology" in request.query_params:
-        params["ontology"] = request.query_params["ontology"]
-    if params:
-        target += "?" + urlencode(params)
-    return RedirectResponse(url=target, status_code=301)
+    return RedirectResponse(url=tree_redirect_url(request, "property"), status_code=301)
 
 
 @router.get(

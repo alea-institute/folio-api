@@ -4,6 +4,7 @@
 
 {% block meta_description %}{% if ontology_key == "canon" %}Interactive explorer for classes and properties in a unified tree view{% else %}Interactive explorer for FOLIO classes and properties in a unified tree view{% endif %}{% endblock %}
 {% block meta_author %}{% if ontology_key == "canon" %}Canon{% else %}{{ super() }}{% endif %}{% endblock %}
+{% block footer %}{% if ontology_key == "canon" %}{% include "components/canon_footer.html" %}{% else %}{{ super() }}{% endif %}{% endblock %}
 {% block meta_keywords %}legal, ontology, standard, open, information, taxonomy, properties, tree, explorer{% endblock %}
 
 {% block header_title %}{% if ontology_key == "canon" %}Canon{% else %}FOLIO Ontology Explorer{% endif %}{% endblock %}

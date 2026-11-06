@@ -1,5 +1,3 @@
-"""Ontology selection and an isolated, background Canon load."""
-
 import asyncio
 import logging
 import os
@@ -7,7 +5,8 @@ import threading
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, get_args
+from urllib.parse import urlencode
 
 from fastapi import HTTPException, Request
 from folio import FOLIO, OWLClass, OWLObjectProperty
@@ -18,6 +17,43 @@ FOLIO_IRI_BASE = "https://folio.openlegalstandard.org/"
 OWL_THING = "http://www.w3.org/2002/07/owl#Thing"
 OntologyKey = Literal["folio", "canon"]
 CanonState = Literal["loading", "ready", "failed", "disabled"]
+
+
+# Curated list of root-level class IRI IDs (direct subclasses of owl:Thing,
+# excluding sandbox/draft classes not ready for public display).
+ROOT_CLASS_IRI_IDS = [
+    "R8CdMpOM0RmyrgCCvbpiLS0",  # Actor / Player
+    "RSYBzf149Mi5KE0YtmpUmr",  # Area of Law
+    "RCIwc6WJi6IT7xePURxsi4T",  # Asset Type
+    "R8qItBwG2pRMFhUq1HQEMnb",  # Communication Modality
+    "R767niCLQVC5zIcO5WDQMSl",  # Currency
+    "R79aItNTJQwHgR002wuX3iC",  # Data Format
+    "RDt4vQCYDfY0R9fZ5FNnTbj",  # Document / Artifact
+    "R9kmGZf5FSmFdouXWQ1Nndm",  # Engagement Attributes
+    "R73hoH1RXYjBTYiGfolpsAF",  # Event
+    "RhBgnef56iLBXYfPqWQE41",  # Financial Concepts and Metrics
+    "RBjHwNNG2ASVmasLFU42otk",  # Forums and Venues
+    "RBQGborh1CfXanGZipDL0Qo",  # Governmental Body
+    "R8f4qGdjxuiQary8OBpq8W9",  # Industry and Market
+    "RDOvAHsvY8TKJ1O1orXPM9o",  # Language
+    "RC1CZydjfH8oiM4W3rCkma3",  # Legal Authorities
+    "R7L5eLIzH0CpOUE74uJvSjL",  # Legal Entity
+    "R9B8sRCK209t5Y8LlU4f62a",  # Legal Use Cases
+    "R9aSzp9cEiBCzObnP92jYFX",  # Location
+    "R7ReDY2v13rer1U8AyOj55L",  # Matter Narrative
+    "RlNFgB3TQfMzV26V4V7u4E",  # Objectives
+    "RDK1QEdQg1T8B5HQqMK2pZN",  # Service
+    "RB4cFSLB4xvycDlKv73dOg6",  # Standards Compatibility
+    "Rx69EnEj3H3TpcgTfUSoYx",  # Status
+    "R8EoZh39tWmXCkmP2Xzjl6E",  # System Identifiers
+]
+
+# Root properties to hide from the tree
+HIDDEN_ROOT_PROPERTY_IRIS = {
+    "https://folio.openlegalstandard.org/RBD1G5FjdaXj6UM26EWBxJc",  # utbms:activities
+    "https://folio.openlegalstandard.org/RDc1B2GDj6ckfXBkRRSJXfH",  # TR:SALI
+    "https://folio.openlegalstandard.org/RDNZZOyU2yb5Q9xbxIWXd62",  # ZZZ:DEPRECATED PROPERTIES
+}
 
 
 @dataclass(frozen=True)
@@ -76,11 +112,10 @@ def parse_ontology_param(value: str | None) -> OntologyKey | None:
     if not value:
         return "folio"
     key = value.lower()
-    return key if key in ("folio", "canon") else None
+    return key if key in get_args(OntologyKey) else None
 
 
 def requested_ontology(request: Request) -> tuple[OntologyKey | None, CanonState]:
-    """Page selection without raising for loading, unavailable, or invalid input."""
     return (
         parse_ontology_param(request.query_params.get("ontology")),
         request.app.state.ontologies.canon_state,
@@ -93,7 +128,7 @@ def get_ontology(request: Request) -> OntologyEntry:
         raise HTTPException(404, "Unknown ontology")
     if key == "canon" and state != "ready":
         raise HTTPException(
-            503, "Canon loading" if state == "loading" else "Canon unavailable",
+            503, canon_status_message(state),
             headers={"Retry-After": "5"} if state == "loading" else None,
         )
     return request.app.state.ontologies[key]
@@ -132,9 +167,6 @@ def resolve_property(entry: OntologyEntry, iri_or_id: str) -> OWLObjectProperty 
 
 
 def make_folio_entry(folio: FOLIO, property_children: dict) -> OntologyEntry:
-    from folio_api.routes.taxonomy import ROOT_CLASS_IRI_IDS
-    from folio_api.routes.properties import HIDDEN_ROOT_PROPERTY_IRIS
-
     roots = [folio[iri] for iri in ROOT_CLASS_IRI_IDS if folio[iri] is not None]
     roots.sort(key=lambda cls: (cls.label or "").lower())
     return OntologyEntry(
@@ -144,7 +176,6 @@ def make_folio_entry(folio: FOLIO, property_children: dict) -> OntologyEntry:
 
 
 def build_canon_entry() -> OntologyEntry:
-    """Run acquisition, parsing, then indexes sequentially on a low-priority thread."""
     try:
         os.setpriority(os.PRIO_PROCESS, threading.get_native_id(), 10)
     except (AttributeError, OSError):
@@ -156,11 +187,35 @@ def build_canon_entry() -> OntologyEntry:
         and (not cls.sub_class_of or all(parent == OWL_THING for parent in cls.sub_class_of))
     ]
     roots.sort(key=lambda cls: (cls.label or "").lower())
-    children = defaultdict(list)
-    for prop in canon.object_properties:
-        for parent in prop.sub_property_of:
-            children[parent].append(prop)
+    children = build_property_children(canon)
     return OntologyEntry(
         "canon", canon, CANON_IRI_BASE, tuple(cls.iri for cls in roots),
-        frozenset(), dict(children),
+        frozenset(), children,
     )
+
+
+def build_property_children(folio: FOLIO) -> dict[str, list[OWLObjectProperty]]:
+    children = defaultdict(list)
+    for prop in folio.object_properties:
+        for parent_iri in prop.sub_property_of:
+            children[parent_iri].append(prop)
+    return dict(children)
+
+
+def canon_status_message(state: CanonState) -> str | None:
+    if state == "ready":
+        return None
+    return "Canon loading" if state == "loading" else "Canon unavailable"
+
+
+def tree_redirect_url(request: Request, node_type: Literal["class", "property"]) -> str:
+    target = "/explore/tree"
+    node = request.query_params.get("node")
+    params = {}
+    if node:
+        params.update(node=node, type=node_type)
+    if "ontology" in request.query_params:
+        params["ontology"] = request.query_params["ontology"]
+    if params:
+        target += "?" + urlencode(params)
+    return target

@@ -1,0 +1,11 @@
+{% macro ontology_link(iri, label, classes, ontology_key, in_ontology) -%}
+    {%- if ontology_key == 'canon' -%}
+        {%- if in_ontology(iri) -%}
+<a href="#" class="{{ classes }}" onclick='selectNodeByIri({{ iri|tojson }}); return false;'>{{ label }}</a>
+        {%- else -%}
+<span>{{ label }}</span>
+        {%- endif -%}
+    {%- else -%}
+        {{ caller() }}
+    {%- endif -%}
+{%- endmacro %}
