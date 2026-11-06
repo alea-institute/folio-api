@@ -15,8 +15,8 @@ branch: "feat/canon-tree-toggle"
 - **Branch:** `feat/canon-tree-toggle`, based on `main` plus the three plan commits.
 - **Framing decision:** Cockpit ask `folio-api-2026-11-06-1326-canon-tree-framing`, qid `canon-framing` = plain toggle, no note.
 - **Execution:** `ce-work` running. Workers are Codex via `codex-run.sh`; the orchestrator runs pytest and browser UAT on the host and makes the canonical commits.
-  - Wave 1 (fixture, registry, background Canon loader, shared selector/resolver) dispatched.
-  - Wave 2 next: tree data routes in parallel with page, templates, and client script.
+  - Wave 1 committed (`25d6399`): Canon test snapshot, ontology registry, background Canon loader on a dedicated low-priority thread, shared selector and resolvers. Suite: 115 passed.
+  - Wave 2 running in parallel worktrees: tree data routes (`wip/canon-routes`) and page, templates, and client script (`wip/canon-page`). Interface between them: detail templates receive `ontology_key` and `in_ontology`.
   - Then: full suite, Playwright UAT, code review, PR, merge, PROD deploy with memory receipt.
 
 ## Key facts a cold reader needs
