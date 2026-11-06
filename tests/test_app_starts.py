@@ -35,3 +35,38 @@ def test_property_children_built(property_children):
         "property_children reverse index is empty — "
         "api.py lifespan did not build it"
     )
+
+
+def test_registry_wraps_existing_folio_objects(_booted_app, folio, property_children):
+    from folio_mcp import server
+    from folio_api.routes.taxonomy import ROOT_CLASS_IRI_IDS
+    from folio_api.routes.properties import HIDDEN_ROOT_PROPERTY_IRIS
+
+    entry = _booted_app.state.ontologies["folio"]
+    assert entry.folio is folio
+    assert entry.property_children is property_children
+    assert server._shared_backend.folio is folio
+    roots = sorted((folio[iri] for iri in ROOT_CLASS_IRI_IDS), key=lambda cls: (cls.label or "").lower())
+    assert entry.root_class_iris == tuple(cls.iri for cls in roots)
+    assert entry.hidden_root_property_iris == HIDDEN_ROOT_PROPERTY_IRIS
+
+
+def test_canon_is_ready_with_all_seven_roots(_booted_app):
+    from folio_api.ontologies import CANON_IRI_BASE, OWL_THING, resolve_class
+
+    registry = _booted_app.state.ontologies
+    assert registry.canon_state == "ready"
+    entry = registry["canon"]
+    assert len(entry.folio.classes) == 14_973
+    assert [resolve_class(entry, iri).label for iri in entry.root_class_iris] == [
+        "Actor", "Authority (Source and Scope)", "Document / Artifact", "Event",
+        "Normative Concepts (e.g., Ethics, Morals, Laws)", "Operational Concepts", "Place",
+    ]
+    assert OWL_THING not in entry.root_class_iris
+    assert all(iri.startswith(CANON_IRI_BASE) for iri in entry.root_class_iris)
+    assert not entry.hidden_root_property_iris
+    expected = {}
+    for prop in entry.folio.object_properties:
+        for parent in prop.sub_property_of:
+            expected.setdefault(parent, []).append(prop)
+    assert entry.property_children == expected

@@ -13,6 +13,14 @@ Information Ontology), maintained by the **ALEA Institute**, originating from th
 - Source: https://github.com/alea-institute/FOLIO
 - License: https://creativecommons.org/licenses/by/4.0/
 
+### Catholic Semantic Canon — Apache-2.0
+
+folio-api serves the **Catholic Semantic Canon**, maintained by **CatholicOS**,
+licensed **Apache License 2.0**. The pinned test export retains its original
+ontology identifiers and attribution.
+- Source: https://github.com/CatholicOS/ontology-semantic-canon
+- License: https://www.apache.org/licenses/LICENSE-2.0
+
 ## Notable dependencies
 
 | Component | License |

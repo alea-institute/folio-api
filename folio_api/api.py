@@ -1,12 +1,13 @@
 """Main API module to define the FastAPI app and its configuration"""
 
 # imports
+import asyncio
 import copy
 import logging
 import logging.config
 import os
 from collections import defaultdict
-from contextlib import AsyncExitStack, asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager, suppress
 from typing import Any, Dict
 from pathlib import Path
 
@@ -34,6 +35,7 @@ import folio_api.routes.properties
 import folio_api.routes.explore
 import folio_api.routes.connections
 from folio_api.api_config import load_config
+from folio_api.ontologies import OntologyRegistry, make_folio_entry
 from folio_api.rate_limit import RateLimitConfig, RateLimitMiddleware
 
 _DEFAULT_LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -149,7 +151,22 @@ async def lifespan_handler(app_instance: FastAPI):
     async with AsyncExitStack() as mcp_stack:
         await mcp_stack.enter_async_context(mcp_app.router.lifespan_context(mcp_app))
 
-        yield
+        registry = OntologyRegistry(
+            make_folio_entry(app_instance.state.folio, app_instance.state.property_children),
+            enabled=app_instance.state.config.get("canon", {}).get("enabled", True),
+        )
+        app_instance.state.ontologies = registry
+        canon_task = (
+            asyncio.create_task(registry.load_canon())
+            if registry.canon_state == "loading" else None
+        )
+        try:
+            yield
+        finally:
+            if canon_task is not None:
+                canon_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await canon_task
 
     # log shutdown
     app_instance.state.logger.info("Shutting down API")

@@ -30,7 +30,8 @@ def _booted_app(_test_environment):
     """
     from folio_api.api import app
 
-    with TestClient(app) as _:
+    with TestClient(app) as started:
+        started.portal.call(app.state.ontologies.wait_until_settled)
         yield app
 
 

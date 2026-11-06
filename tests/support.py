@@ -14,20 +14,30 @@ FIXTURE_PATH = Path(__file__).parent / "fixtures" / "folio.owl.gz"
 FIXTURE_SHA256 = "b6ed82e6d17b7cb1d468453e4111ec08ca091d72a6849be2b58dd37692cb6ef9"
 
 
-def load_snapshot(path: Path = FIXTURE_PATH) -> str:
+CANON_FIXTURE_PATH = FIXTURE_PATH.with_name("canon.owl.gz")
+CANON_FIXTURE_SHA256 = "add8b2b140273b197b759f8945b4f5aa66ecb1ec801fcc69431f1b4baaf59f24"
+
+
+def load_snapshot(
+    path: Path = FIXTURE_PATH, *, digest: str = FIXTURE_SHA256, name: str = "FOLIO"
+) -> str:
     """Reject missing or damaged input instead of falling back to a download."""
     try:
         with gzip.open(path, "rb") as archive:
             raw = archive.read()
     except (OSError, EOFError, zlib.error) as exc:
         raise RuntimeError(
-            "Cannot read FOLIO test snapshot; see tests/fixtures/README.md"
+            f"Cannot read {name} test snapshot; see tests/fixtures/README.md"
         ) from exc
-    if hashlib.sha256(raw).hexdigest() != FIXTURE_SHA256:
+    if hashlib.sha256(raw).hexdigest() != digest:
         raise RuntimeError(
-            "FOLIO test snapshot SHA-256 mismatch; see tests/fixtures/README.md"
+            f"{name} test snapshot SHA-256 mismatch; see tests/fixtures/README.md"
         )
     return raw.decode("utf-8")
+
+
+def load_canon_snapshot(path: Path = CANON_FIXTURE_PATH) -> str:
+    return load_snapshot(path, digest=CANON_FIXTURE_SHA256, name="Canon")
 
 
 def make_test_config() -> dict:
@@ -121,6 +131,10 @@ def isolated_environment():
         patches.enter_context(patch.object(api_config, "load_config", make_test_config))
 
         def local_owl(**kwargs):
+            from folio_api.ontologies import CANON_SOURCE_URL
+
+            if kwargs.get("http_url") == CANON_SOURCE_URL:
+                return load_canon_snapshot()
             return load_snapshot()
 
         patches.enter_context(

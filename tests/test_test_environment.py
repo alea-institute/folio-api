@@ -11,6 +11,8 @@ import pytest
 
 from tests.support import (
     FIXTURE_PATH,
+    CANON_FIXTURE_PATH,
+    load_canon_snapshot,
     isolated_environment,
     load_snapshot,
     make_test_config,
@@ -172,3 +174,29 @@ def test_dummy_provider_environment_does_not_enable_llm(monkeypatch):
         ontology = initialize_folio(config["folio"], config["llm"])
     assert ontology.llm is None
     assert ontology.classes
+
+
+def test_canon_snapshot_is_complete_owl():
+    text = load_canon_snapshot()
+    assert len(text.encode()) == 13_821_006
+    assert "owl:Class" in text
+    assert "owl:ObjectProperty" in text
+
+
+@pytest.mark.parametrize("damage", ["missing", "truncated", "wrong-digest"])
+def test_bad_canon_snapshot_fails_without_fallback(tmp_path, damage):
+    path = tmp_path / "canon.owl.gz"
+    if damage == "truncated":
+        path.write_bytes(CANON_FIXTURE_PATH.read_bytes()[:100])
+    elif damage == "wrong-digest":
+        path.write_bytes(gzip.compress(b"not the pinned ontology", mtime=0))
+    with pytest.raises(RuntimeError, match="Canon test snapshot"):
+        load_canon_snapshot(path)
+
+
+def test_local_owl_dispatches_by_source_url():
+    from folio import FOLIO
+    from folio_api.ontologies import CANON_SOURCE_URL
+
+    assert FOLIO.load_owl(source_type="http", http_url=CANON_SOURCE_URL) == load_canon_snapshot()
+    assert FOLIO.load_owl(source_type="github") == load_snapshot()
