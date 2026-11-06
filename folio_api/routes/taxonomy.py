@@ -4,15 +4,18 @@ Taxonomy routes for the FOLIO API.
 
 # imports
 from pathlib import Path
+from urllib.parse import urlencode
 
 # packages
-from fastapi import APIRouter, Request, status
+from fastapi import APIRouter, Depends, Request, status
 from folio import FOLIO, FOLIO_TYPE_IRIS
 from starlette.responses import Response, JSONResponse, RedirectResponse
 
 # project
 from folio_api.models import OWLClassList
 from folio_api.rendering import get_node_neighbors, strip_folio_prefix
+
+from folio_api.ontologies import OntologyEntry, get_ontology, resolve_class
 
 # API router
 router = APIRouter(prefix="/taxonomy", tags=["taxonomy"])
@@ -576,7 +579,8 @@ async def list_branches(request: Request) -> JSONResponse:
     status_code=status.HTTP_200_OK,
 )
 async def get_tree_data(
-    request: Request, node_id: str = "#", max_depth: int = 1
+    request: Request, node_id: str = "#", max_depth: int = 1,
+    entry: OntologyEntry = Depends(get_ontology),
 ) -> JSONResponse:
     """
     Get hierarchical data for the taxonomy tree in a format compatible with jsTree.
@@ -593,14 +597,14 @@ async def get_tree_data(
     Returns:
         JSONResponse: A list of nodes in jsTree format
     """
-    folio: FOLIO = request.app.state.folio
+    folio: FOLIO = entry.folio
 
     # If requesting root nodes
     if node_id == "#":
-        # Look up root classes from curated list
+        # Look up the selected ontology's visible roots
         root_classes = [
-            folio[iri_id] for iri_id in ROOT_CLASS_IRI_IDS
-            if folio[iri_id] is not None
+            resolve_class(entry, iri_id) for iri_id in entry.root_class_iris
+            if resolve_class(entry, iri_id) is not None
         ]
         root_classes.sort(key=lambda x: (x.label or "").lower())
 
@@ -630,7 +634,7 @@ async def get_tree_data(
 
     # If requesting children of a specific node
     else:
-        owl_class = folio[node_id]
+        owl_class = resolve_class(entry, node_id)
         if not owl_class:
             return JSONResponse(content=[])
 
@@ -662,14 +666,17 @@ async def get_tree_data(
 
 
 @router.get(
-    "/tree/node/{iri}",
+    "/tree/node/{iri:path}",
     tags=["taxonomy"],
     response_model=None,
     summary="Get Single Node Data",
     description="Get detailed data for a single taxonomy node",
     status_code=status.HTTP_200_OK,
 )
-async def get_node_data(request: Request, iri: str) -> JSONResponse:
+async def get_node_data(
+    request: Request, iri: str,
+    entry: OntologyEntry = Depends(get_ontology),
+) -> JSONResponse:
     """
     Get detailed data for a single taxonomy node by IRI.
 
@@ -680,34 +687,9 @@ async def get_node_data(request: Request, iri: str) -> JSONResponse:
     Returns:
         JSONResponse: Detailed information about the node
     """
-    folio: FOLIO = request.app.state.folio
+    folio: FOLIO = entry.folio
 
-    # Try multiple strategies to find the class
-    owl_class = None
-
-    # Strategy 1: Use the IRI directly as given
-    owl_class = folio[iri]
-
-    # Strategy 2: If not found and this is a full IRI, try extracting just the ID part
-    if not owl_class and iri.startswith("http"):
-        # Extract the ID from the full IRI - get the last part after the last '/'
-        parts = iri.rstrip("/").split("/")
-        if parts:
-            id_part = parts[-1]
-            owl_class = folio[id_part]
-
-    # Strategy 3: If not found and this is just an ID, try with the FOLIO IRI prefix
-    if not owl_class and not iri.startswith("http"):
-        full_iri = f"https://folio.openlegalstandard.org/{iri}"
-        owl_class = folio[full_iri]
-
-    # Strategy 4: Try with just the ID part in the FOLIO dictionary directly
-    if not owl_class:
-        # One last attempt by checking all classes
-        for cls in folio.classes:
-            if hasattr(cls, "iri") and (cls.iri.endswith(iri) or iri.endswith(cls.iri)):
-                owl_class = cls
-                break
+    owl_class = resolve_class(entry, iri)
 
     if not owl_class:
         return JSONResponse(
@@ -823,14 +805,17 @@ async def get_node_data(request: Request, iri: str) -> JSONResponse:
 
 
 @router.get(
-    "/tree/path/{iri}",
+    "/tree/path/{iri:path}",
     tags=["taxonomy"],
     response_model=None,
     summary="Get Path to Node",
     description="Get the complete path from root to a specific node in the taxonomy tree",
     status_code=status.HTTP_200_OK,
 )
-async def get_path_to_node(request: Request, iri: str) -> JSONResponse:
+async def get_path_to_node(
+    request: Request, iri: str,
+    entry: OntologyEntry = Depends(get_ontology),
+) -> JSONResponse:
     """
     Get the complete path from root to a specific node in the taxonomy tree.
 
@@ -845,34 +830,9 @@ async def get_path_to_node(request: Request, iri: str) -> JSONResponse:
     Returns:
         JSONResponse: An array of nodes representing the path from root to the target node
     """
-    folio: FOLIO = request.app.state.folio
+    folio: FOLIO = entry.folio
 
-    # Try multiple strategies to find the class
-    owl_class = None
-
-    # Strategy 1: Use the IRI directly as given
-    owl_class = folio[iri]
-
-    # Strategy 2: If not found and this is a full IRI, try extracting just the ID part
-    if not owl_class and iri.startswith("http"):
-        # Extract the ID from the full IRI - get the last part after the last '/'
-        parts = iri.rstrip("/").split("/")
-        if parts:
-            id_part = parts[-1]
-            owl_class = folio[id_part]
-
-    # Strategy 3: If not found and this is just an ID, try with the FOLIO IRI prefix
-    if not owl_class and not iri.startswith("http"):
-        full_iri = f"https://folio.openlegalstandard.org/{iri}"
-        owl_class = folio[full_iri]
-
-    # Strategy 4: Try with just the ID part in the FOLIO dictionary directly
-    if not owl_class:
-        # One last attempt by checking all classes
-        for cls in folio.classes:
-            if hasattr(cls, "iri") and (cls.iri.endswith(iri) or iri.endswith(cls.iri)):
-                owl_class = cls
-                break
+    owl_class = resolve_class(entry, iri)
 
     if not owl_class:
         return JSONResponse(
@@ -935,7 +895,10 @@ async def get_path_to_node(request: Request, iri: str) -> JSONResponse:
     description="Search for classes and return a filtered tree structure containing only matches and their ancestors",
     status_code=status.HTTP_200_OK,
 )
-async def search_taxonomy_tree(request: Request, query: str) -> JSONResponse:
+async def search_taxonomy_tree(
+    request: Request, query: str,
+    entry: OntologyEntry = Depends(get_ontology),
+) -> JSONResponse:
     """
     Search for classes in the taxonomy and return a filtered tree structure.
 
@@ -953,7 +916,7 @@ async def search_taxonomy_tree(request: Request, query: str) -> JSONResponse:
     Returns:
         JSONResponse: A filtered tree structure containing only matching classes and their ancestors
     """
-    folio: FOLIO = request.app.state.folio
+    folio: FOLIO = entry.folio
 
     def _get_match_field(cls, q_lower):
         """Determine which field matched the search query."""
@@ -1134,8 +1097,8 @@ async def search_taxonomy_tree(request: Request, query: str) -> JSONResponse:
             tree["root_nodes"].append(node_iri)
 
     root_classes = [
-        cls for iri_id in ROOT_CLASS_IRI_IDS
-        if (cls := folio[iri_id]) is not None
+        cls for iri_id in entry.root_class_iris
+        if (cls := resolve_class(entry, iri_id)) is not None
     ]
     tree["hidden_root_count"] = sum(
         cls.iri not in tree["root_nodes"] for cls in root_classes
@@ -1176,14 +1139,17 @@ async def search_taxonomy_tree(request: Request, query: str) -> JSONResponse:
 
 
 @router.get(
-    "/class-details/{iri}",
+    "/class-details/{iri:path}",
     tags=["taxonomy"],
     response_model=None,
     summary="Get Rendered Class Details",
     description="Get rendered HTML for a class's details using Jinja2 templates",
     include_in_schema=False,  # Hide from API docs
 )
-async def get_class_details_html(request: Request, iri: str) -> Response:
+async def get_class_details_html(
+    request: Request, iri: str,
+    entry: OntologyEntry = Depends(get_ontology),
+) -> Response:
     """
     Get rendered HTML for a specific class's details using Jinja2 templates.
 
@@ -1194,39 +1160,21 @@ async def get_class_details_html(request: Request, iri: str) -> Response:
     Returns:
         Response: HTML content for the class details
     """
-    folio: FOLIO = request.app.state.folio
+    folio: FOLIO = entry.folio
 
-    # Try multiple strategies to find the class
-    owl_class = None
-
-    # Strategy 1: Use the IRI directly as given
-    owl_class = folio[iri]
-
-    # Strategy 2: If not found and this is a full IRI, try extracting just the ID part
-    if not owl_class and iri.startswith("http"):
-        # Extract the ID from the full IRI - get the last part after the last '/'
-        parts = iri.rstrip("/").split("/")
-        if parts:
-            id_part = parts[-1]
-            owl_class = folio[id_part]
-
-    # Strategy 3: If not found and this is just an ID, try with the FOLIO IRI prefix
-    if not owl_class and not iri.startswith("http"):
-        full_iri = f"https://folio.openlegalstandard.org/{iri}"
-        owl_class = folio[full_iri]
-
-    # Strategy 4: Try with just the ID part in the FOLIO dictionary directly
-    if not owl_class:
-        # One last attempt by checking all classes
-        for cls in folio.classes:
-            if hasattr(cls, "iri") and (cls.iri.endswith(iri) or iri.endswith(cls.iri)):
-                owl_class = cls
-                break
+    owl_class = resolve_class(entry, iri)
 
     if not owl_class:
         # Return empty template if class not found
         return request.app.state.templates.TemplateResponse(
-            "components/class_details.html", {"request": request, "class_data": None}
+            "components/class_details.html",
+            {
+                "request": request,
+                "class_data": None,
+                "ontology_key": entry.key,
+                "in_ontology": entry.contains,
+            },
+            status_code=404 if entry.key == "canon" else 200,
         )
 
     # Prepare node data
@@ -1334,6 +1282,8 @@ async def get_class_details_html(request: Request, iri: str) -> Response:
         "components/class_details.html",
         {
             "request": request,
+            "ontology_key": entry.key,
+            "in_ontology": entry.contains,
             "class_data": class_data,
             "folio_graph": simplified_folio_graph,
             "domain_properties": domain_properties,
@@ -1355,8 +1305,13 @@ async def explore_taxonomy_tree(request: Request) -> Response:
     # Preserve any query params (e.g. ?node=...)
     target = "/explore/tree"
     node = request.query_params.get("node")
+    params = {}
     if node:
-        target += f"?node={node}&type=class"
+        params.update(node=node, type="class")
+    if "ontology" in request.query_params:
+        params["ontology"] = request.query_params["ontology"]
+    if params:
+        target += "?" + urlencode(params)
     return RedirectResponse(url=target, status_code=301)
 
 
