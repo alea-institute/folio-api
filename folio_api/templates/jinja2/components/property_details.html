@@ -76,7 +76,15 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11l5-5m0 0l5 5m-5-5v12" />
                         </svg>
                         <div>
+                            {% if ontology_key|default('folio') == 'canon' %}
+                                {% if in_ontology(parent.iri) %}
+                                <a href="#" class="font-medium text-blue-600 hover:text-blue-800 transition-colors duration-150 group-hover:underline" onclick='selectNodeByIri({{ parent.iri|tojson }}); return false;'>{{ parent.label|strip_folio_prefix }}</a>
+                                {% else %}
+                                <span>{{ parent.label|strip_folio_prefix }}</span>
+                                {% endif %}
+                            {% else %}
                             <a href="#" class="font-medium text-blue-600 hover:text-blue-800 transition-colors duration-150 group-hover:underline" onclick="selectNodeByIri('{{ parent.iri }}'); return false;">{{ parent.label|strip_folio_prefix }}</a>
+                            {% endif %}
                             <p class="text-sm text-gray-600 mt-0.5 line-clamp-2">{{ parent.definition }}</p>
                         </div>
                     </div>
@@ -103,7 +111,15 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 13l-5 5m0 0l-5-5m5 5V6" />
                         </svg>
                         <div>
+                            {% if ontology_key|default('folio') == 'canon' %}
+                                {% if in_ontology(child.iri) %}
+                                <a href="#" class="font-medium text-blue-600 hover:text-blue-800 transition-colors duration-150 group-hover:underline" onclick='selectNodeByIri({{ child.iri|tojson }}); return false;'>{{ child.label|strip_folio_prefix }}</a>
+                                {% else %}
+                                <span>{{ child.label|strip_folio_prefix }}</span>
+                                {% endif %}
+                            {% else %}
                             <a href="#" class="font-medium text-blue-600 hover:text-blue-800 transition-colors duration-150 group-hover:underline" onclick="selectNodeByIri('{{ child.iri }}'); return false;">{{ child.label|strip_folio_prefix }}</a>
+                            {% endif %}
                             <p class="text-sm text-gray-600 mt-0.5 line-clamp-2">{{ child.definition }}</p>
                         </div>
                     </div>
@@ -124,7 +140,15 @@
             Inverse Property
         </h4>
         <div class="bg-purple-50 rounded-lg p-4 border-l-3 border-purple-200">
+            {% if ontology_key|default('folio') == 'canon' %}
+                {% if in_ontology(prop_data.inverse.iri) %}
+                <a href="#" class="font-medium text-purple-700 hover:text-purple-900 hover:underline" onclick='selectNodeByIri({{ prop_data.inverse.iri|tojson }}); return false;'>{{ prop_data.inverse.label|strip_folio_prefix }}</a>
+                {% else %}
+                <span>{{ prop_data.inverse.label|strip_folio_prefix }}</span>
+                {% endif %}
+            {% else %}
             <a href="#" class="font-medium text-purple-700 hover:text-purple-900 hover:underline" onclick="selectNodeByIri('{{ prop_data.inverse.iri }}'); return false;">{{ prop_data.inverse.label|strip_folio_prefix }}</a>
+            {% endif %}
         </div>
     </section>
     {% endif %}
@@ -146,7 +170,15 @@
                     <div class="flex items-start">
                         <span class="text-teal-500 mr-2 mt-1">&bull;</span>
                         <div>
+                            {% if ontology_key|default('folio') == 'canon' %}
+                                {% if in_ontology(cls.iri) %}
+                                <a href="#" class="font-medium text-teal-700 hover:text-teal-900 transition-colors duration-150 group-hover:underline" onclick='selectNodeByIri({{ cls.iri|tojson }}); return false;'>{{ cls.label }}</a>
+                                {% else %}
+                                <span>{{ cls.label }}</span>
+                                {% endif %}
+                            {% else %}
                             <a href="{{ cls.iri }}/html" class="font-medium text-teal-700 hover:text-teal-900 transition-colors duration-150 group-hover:underline">{{ cls.label }}</a>
+                            {% endif %}
                             {% if cls.definition %}
                             <p class="text-sm text-gray-600 mt-0.5 line-clamp-2">{{ cls.definition }}</p>
                             {% endif %}
@@ -176,7 +208,15 @@
                     <div class="flex items-start">
                         <span class="text-orange-500 mr-2 mt-1">&bull;</span>
                         <div>
+                            {% if ontology_key|default('folio') == 'canon' %}
+                                {% if in_ontology(cls.iri) %}
+                                <a href="#" class="font-medium text-orange-700 hover:text-orange-900 transition-colors duration-150 group-hover:underline" onclick='selectNodeByIri({{ cls.iri|tojson }}); return false;'>{{ cls.label }}</a>
+                                {% else %}
+                                <span>{{ cls.label }}</span>
+                                {% endif %}
+                            {% else %}
                             <a href="{{ cls.iri }}/html" class="font-medium text-orange-700 hover:text-orange-900 transition-colors duration-150 group-hover:underline">{{ cls.label }}</a>
+                            {% endif %}
                             {% if cls.definition %}
                             <p class="text-sm text-gray-600 mt-0.5 line-clamp-2">{{ cls.definition }}</p>
                             {% endif %}

@@ -29,6 +29,17 @@ const SECTIONS = {
     }
 };
 
+const explorerPage = document.querySelector('[data-ontology]');
+const ontologyKey = explorerPage ? explorerPage.dataset.ontology : 'folio';
+const treeBlocked = explorerPage && explorerPage.dataset.treeState === 'blocked';
+
+function ontologyUrl(value) {
+    const url = new URL(value, window.location.origin);
+    if (ontologyKey === 'canon') url.searchParams.set('ontology', 'canon');
+    else url.searchParams.delete('ontology');
+    return url;
+}
+
 // Cache and state
 const nodeDataCache = new Map();
 const MAX_CACHE_SIZE = 200;
@@ -44,7 +55,7 @@ async function getNodeData(nodeId, sectionType) {
 
     const cfg = SECTIONS[sectionType];
     const extractedId = extractIdFromIri(nodeId);
-    const response = await fetch(cfg.nodeDataEndpoint + encodeURIComponent(extractedId));
+    const response = await fetch(ontologyUrl(cfg.nodeDataEndpoint + encodeURIComponent(extractedId)));
     if (!response.ok) throw new Error('Failed to fetch node data: ' + response.status);
     const data = await response.json();
 
@@ -112,7 +123,7 @@ function loadTreeNodes(nodeId, container, sectionType) {
     container.append('<li class="loading-indicator"><span>Loading...</span></li>');
 
     const cfg = SECTIONS[sectionType];
-    fetch(cfg.treeDataEndpoint + '?node_id=' + encodeURIComponent(nodeId))
+    fetch(ontologyUrl(cfg.treeDataEndpoint + '?node_id=' + encodeURIComponent(nodeId)))
         .then(r => { if (!r.ok) throw new Error('Network error'); return r.json(); })
         .then(data => {
             // A full-root request may have started before search mode was enabled.
@@ -241,7 +252,7 @@ async function fetchAndMergeChildren(nodeId, container, sectionType, { control }
     list.append(indicator);
     activatedControl.prop('disabled', true);
     try {
-        const response = await fetch(SECTIONS[sectionType].treeDataEndpoint + '?node_id=' + encodeURIComponent(nodeId));
+        const response = await fetch(ontologyUrl(SECTIONS[sectionType].treeDataEndpoint + '?node_id=' + encodeURIComponent(nodeId)));
         if (!stillSearching()) return false;
         if (!response.ok) throw new Error('Network error');
         const children = await response.json();
@@ -439,7 +450,7 @@ function loadDetails(iri, sectionType, updateUrl) {
     if (!detailsContainer) return;
 
     if (updateUrl) {
-        const url = new URL(window.location);
+        const url = ontologyUrl(window.location.href);
         url.searchParams.set('node', iri);
         url.searchParams.set('type', sectionType);
         history.pushState({ nodeId: iri, type: sectionType }, '', url);
@@ -455,7 +466,7 @@ function loadDetails(iri, sectionType, updateUrl) {
     }
 
     // Fetch the server-rendered HTML fragment
-    fetch(cfg.detailsEndpoint + encodeURIComponent(nodeId))
+    fetch(ontologyUrl(cfg.detailsEndpoint + encodeURIComponent(nodeId)))
         .then(response => {
             if (!response.ok) throw new Error('Could not fetch rendered template');
             return response.text();
@@ -465,7 +476,7 @@ function loadDetails(iri, sectionType, updateUrl) {
         })
         .catch(() => {
             // Fallback: fetch JSON and render client-side
-            fetch(cfg.nodeDataEndpoint + encodeURIComponent(nodeId))
+            fetch(ontologyUrl(cfg.nodeDataEndpoint + encodeURIComponent(nodeId)))
                 .then(r => { if (!r.ok) throw new Error('Network error'); return r.json(); })
                 .then(data => {
                     detailsContainer.innerHTML = '<div class="p-4"><h3 class="text-2xl font-semibold mb-2 text-[--color-primary]">' + (data.label || 'Unknown') + '</h3><p class="text-gray-700">' + (data.definition || '') + '</p></div>';
@@ -504,9 +515,9 @@ function selectNodeByIri(iri) {
     }
 
     // Node not in DOM — try both path APIs in parallel to find it
-    const classPath = fetch(SECTIONS.class.pathEndpoint + encodeURIComponent(extractIdFromIri(iri)))
+    const classPath = fetch(ontologyUrl(SECTIONS.class.pathEndpoint + encodeURIComponent(extractIdFromIri(iri))))
         .then(r => r.ok ? r.json() : null).catch(() => null);
-    const propertyPath = fetch(SECTIONS.property.pathEndpoint + encodeURIComponent(extractIdFromIri(iri)))
+    const propertyPath = fetch(ontologyUrl(SECTIONS.property.pathEndpoint + encodeURIComponent(extractIdFromIri(iri))))
         .then(r => r.ok ? r.json() : null).catch(() => null);
 
     Promise.all([classPath, propertyPath]).then(([classResult, propertyResult]) => {
@@ -983,7 +994,7 @@ function collapseOneLevel() {
 }
 
 function getCurrentSelectedNodeId() {
-    const url = new URL(window.location);
+    const url = ontologyUrl(window.location.href);
     const nodeParam = url.searchParams.get('node');
     if (nodeParam) return nodeParam;
     const selectedNode = $('.tree-node.selected');
@@ -991,7 +1002,7 @@ function getCurrentSelectedNodeId() {
 }
 
 function resetUrlParameters() {
-    const url = new URL(window.location);
+    const url = ontologyUrl(window.location.href);
     if (url.searchParams.has('node')) {
         url.searchParams.delete('node');
         url.searchParams.delete('type');
@@ -1075,6 +1086,7 @@ function setupHistoryNavigation() {
 
     // Listen for back/forward
     window.addEventListener('popstate', function(event) {
+        window.history.replaceState(event.state, '', ontologyUrl(window.location.href));
         if (event.state && event.state.nodeId) {
             const type = event.state.type || 'class';
             loadAndSelectNode(event.state.nodeId, type, false);
@@ -1144,9 +1156,9 @@ function searchUnified(query) {
     const propSec = document.getElementById('property-section');
 
     // Fire both searches in parallel
-    const classSearch = fetch(SECTIONS.class.searchEndpoint + '?query=' + encodeURIComponent(query))
+    const classSearch = fetch(ontologyUrl(SECTIONS.class.searchEndpoint + '?query=' + encodeURIComponent(query)))
         .then(r => r.json()).catch(() => ({ matches: [], tree: {} }));
-    const propSearch = fetch(SECTIONS.property.searchEndpoint + '?query=' + encodeURIComponent(query))
+    const propSearch = fetch(ontologyUrl(SECTIONS.property.searchEndpoint + '?query=' + encodeURIComponent(query)))
         .then(r => r.json()).catch(() => ({ matches: [], tree: {} }));
 
     Promise.all([classSearch, propSearch]).then(([classData, propData]) => {
@@ -1385,6 +1397,7 @@ function escapeRegEx(string) {
 
 // ---------- Main initialization ----------
 function initializeUnifiedTree() {
+    if (treeBlocked) return;
     if (typeof $ === 'undefined') {
         const treeEl = document.getElementById('explore-tree');
         if (treeEl) treeEl.innerHTML = '<div class="p-4 text-yellow-800 bg-yellow-100 rounded"><h3 class="font-medium">Unable to load tree</h3><p>JavaScript libraries needed for the tree are not available.</p></div>';

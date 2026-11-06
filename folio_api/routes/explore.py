@@ -6,7 +6,9 @@ Unified explore routes for the FOLIO API — combined class + property tree view
 from pathlib import Path
 
 # packages
-from fastapi import APIRouter, Query, Request, status
+from fastapi import APIRouter, HTTPException, Query, Request, status
+
+from folio_api.ontologies import requested_ontology
 from folio import FOLIO, OWLClass, OWLObjectProperty
 from starlette.responses import JSONResponse, Response
 
@@ -323,6 +325,13 @@ async def get_entity_graph(
 )
 async def explore_tree(request: Request) -> Response:
     """Unified tree explorer combining classes (nouns) and properties (verbs)."""
+    ontology_key, canon_state = requested_ontology(request)
+    if ontology_key is None:
+        raise HTTPException(404, "Unknown ontology")
+    tree_status = None
+    if ontology_key == "canon" and canon_state != "ready":
+        tree_status = "Canon loading" if canon_state == "loading" else "Canon unavailable"
+
     typeahead_js_path = Path(__file__).parent.parent / "static" / "js" / "typeahead_search.js"
     typeahead_js_source = typeahead_js_path.read_text(encoding="utf-8")
 
@@ -332,5 +341,8 @@ async def explore_tree(request: Request) -> Response:
             "request": request,
             "typeahead_js_source": typeahead_js_source,
             "config": request.app.state.config,
+            "ontology_key": ontology_key,
+            "canon_state": canon_state,
+            "tree_status": tree_status,
         },
     )
