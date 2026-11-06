@@ -25,9 +25,14 @@ def test_folio_page(client):
     html = response.text
     tags = Tags(html)
     assert '<h1 class="text-3xl font-bold">FOLIO Ontology Explorer</h1>' in html
-    assert tags.find('div', **{'role': 'group', 'aria-label': 'Ontology view'})
-    assert tags.find('a', href='/explore/tree', **{'aria-current': 'page'})
-    assert not tags.find('a', href='/explore/tree?ontology=canon', **{'aria-current': 'page'})
+    assert not tags.find('div', **{'aria-label': 'Ontology view'})
+    header = re.search(r'<header\b[^>]*>(.*?)</header>', html, re.S)[1]
+    switches = Tags(header).find('a', href='/explore/tree?ontology=canon')
+    assert len(switches) == 1
+    assert switches[0]['aria-label'] == 'Switch to the Catholic Semantic Canon'
+    assert 'text-white/40' in switches[0]['class'].split()
+    assert re.search(r'<a\b[^>]*href="/explore/tree\?ontology=canon"[^>]*>Catholic Semantic Canon</a>', header)
+    assert not tags.find('a', **{'aria-current': 'page'})
     assert tags.find('button', id='tab-graph')
     assert 'FOLIO Website' in html and 'Learn More' in html
 
@@ -37,9 +42,20 @@ def test_canon_page(client):
     assert response.status_code == 200
     html = response.text
     tags = Tags(html)
-    assert '<h1 class="text-3xl font-bold">Canon</h1>' in html
-    assert tags.find('a', href='/explore/tree?ontology=canon', **{'aria-current': 'page'})
-    assert not tags.find('a', href='/explore/tree', **{'aria-current': 'page'})
+    assert '<h1 class="text-3xl font-bold">Catholic Semantic Canon</h1>' in html
+    assert '<title>Catholic Semantic Canon</title>' in html
+    assert tags.find('meta', name='author', content='Catholic Semantic Canon')
+    assert not tags.find('div', **{'aria-label': 'Ontology view'})
+    header = re.search(r'<header\b[^>]*>(.*?)</header>', html, re.S)[1]
+    switches = Tags(header).find('a', href='/explore/tree')
+    assert len(switches) == 1
+    assert switches[0]['aria-label'] == 'Switch to FOLIO'
+    assert 'text-white/40' in switches[0]['class'].split()
+    switch = re.search(r'<a\b[^>]*href="/explore/tree"[^>]*>FOLIO</a>', header)
+    assert switch
+    assert 'FOLIO' not in header.replace(switch[0], '')
+    assert switch[0].count('FOLIO') == 2
+    assert not tags.find('a', **{'aria-current': 'page'})
     assert not tags.find('button', id='tab-graph')
     assert 'grid-cols-1' in tags.find('div', id='detail-tabs')[0]['class']
     assert 'FOLIO Website' not in html and 'Learn More' not in html
@@ -49,7 +65,7 @@ def test_canon_page(client):
     assert tags.find('div', **{'data-ontology': 'canon', 'data-tree-state': 'ready'})
     # Switching views always starts at the other ontology's roots.
     assert tags.find('a', href='/explore/tree')
-    assert tags.find('a', href='/explore/tree?ontology=canon')
+    assert not tags.find('a', href='/explore/tree?ontology=canon')
 
 
 def test_unknown_ontology(client):
@@ -57,9 +73,9 @@ def test_unknown_ontology(client):
 
 
 @pytest.mark.parametrize('state,message', [
-    ('loading', 'Canon loading'),
-    ('failed', 'Canon unavailable'),
-    ('disabled', 'Canon unavailable'),
+    ('loading', 'Catholic Semantic Canon is loading'),
+    ('failed', 'Catholic Semantic Canon is unavailable'),
+    ('disabled', 'Catholic Semantic Canon is unavailable'),
 ])
 def test_canon_not_ready(client, state, message):
     registry = client.app.state.ontologies
@@ -70,12 +86,17 @@ def test_canon_not_ready(client, state, message):
         folio_response = client.get('/explore/tree')
         assert folio_response.status_code == 200
         assert 'aria-label="Ontology view"' not in folio_response.text
+        assert not Tags(folio_response.text).find('a', href='/explore/tree?ontology=canon')
+        assert not Tags(folio_response.text).find('a', **{'aria-label': 'Switch to the Catholic Semantic Canon'})
         assert 'id="tab-graph"' in folio_response.text
         response = client.get('/explore/tree?ontology=canon')
         assert response.status_code == 200
         html = response.text
         tags = Tags(html)
         assert 'aria-label="Ontology view"' not in html
+        assert not tags.find('a', **{'aria-label': 'Switch to FOLIO'})
+        header = re.search(r'<header\b[^>]*>(.*?)</header>', html, re.S)[1]
+        assert not Tags(header).find('a', href='/explore/tree')
         assert html.count(f'<p role="status">{message}</p>') == 2
         assert tags.find('div', **{'data-tree-state': 'blocked'})
         assert tags.find('a', href='/explore/tree')

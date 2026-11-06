@@ -1,13 +1,17 @@
 {% extends "layouts/base.html" %}
 
-{% block title %}{% if ontology_key == "canon" %}Canon{% else %}FOLIO Ontology Explorer{% endif %}{% endblock %}
+{% if ontology_key == "canon" and tree_status %}
+{% set tree_status = "Catholic Semantic Canon is loading" if canon_state == "loading" else "Catholic Semantic Canon is unavailable" %}
+{% endif %}
+
+{% block title %}{% if ontology_key == "canon" %}Catholic Semantic Canon{% else %}FOLIO Ontology Explorer{% endif %}{% endblock %}
 
 {% block meta_description %}{% if ontology_key == "canon" %}Interactive explorer for classes and properties in a unified tree view{% else %}Interactive explorer for FOLIO classes and properties in a unified tree view{% endif %}{% endblock %}
-{% block meta_author %}{% if ontology_key == "canon" %}Canon{% else %}{{ super() }}{% endif %}{% endblock %}
+{% block meta_author %}{% if ontology_key == "canon" %}Catholic Semantic Canon{% else %}{{ super() }}{% endif %}{% endblock %}
 {% block footer %}{% if ontology_key == "canon" %}{% include "components/canon_footer.html" %}{% else %}{{ super() }}{% endif %}{% endblock %}
 {% block meta_keywords %}legal, ontology, standard, open, information, taxonomy, properties, tree, explorer{% endblock %}
 
-{% block header_title %}{% if ontology_key == "canon" %}Canon{% else %}FOLIO Ontology Explorer{% endif %}{% endblock %}
+{% block header_title %}{% if ontology_key == "canon" %}Catholic Semantic Canon{% else %}FOLIO Ontology Explorer{% endif %}{% endblock %}
 {% block header_subtitle %}{% if ontology_key == "canon" %}Navigate classes and properties{% else %}Navigate FOLIO classes and properties{% endif %}{% endblock %}
 
 {# Full-bleed layout: no container constraint or padding on <main> for this page #}
@@ -17,8 +21,11 @@
 <header class="bg-[--color-primary] py-2 text-white">
     <div class="container mx-auto px-4">
         <div class="flex justify-between items-center">
-            <div>
-                <h1 class="text-3xl font-bold">{% if ontology_key == "canon" %}Canon{% else %}FOLIO Ontology Explorer{% endif %}</h1>
+            <div class="flex flex-wrap items-baseline gap-x-3">
+                <h1 class="text-3xl font-bold">{% if ontology_key == "canon" %}Catholic Semantic Canon{% else %}FOLIO Ontology Explorer{% endif %}</h1>
+                {% if canon_state == "ready" %}
+                <a href="{% if ontology_key == 'canon' %}/explore/tree{% else %}/explore/tree?ontology=canon{% endif %}" aria-label="{% if ontology_key == 'canon' %}Switch to FOLIO{% else %}Switch to the Catholic Semantic Canon{% endif %}" class="text-xs font-normal text-white/40 hover:text-white hover:underline underline-offset-4 focus-visible:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[--color-primary] rounded-sm transition-colors duration-150 motion-reduce:transition-none">{% if ontology_key == 'canon' %}FOLIO{% else %}Catholic Semantic Canon{% endif %}</a>
+                {% endif %}
             </div>
             {% if ontology_key != "canon" %}
             <div class="hidden md:block header-buttons">
@@ -27,12 +34,6 @@
             </div>
             {% endif %}
         </div>
-        {% if canon_state == "ready" %}
-        <div role="group" aria-label="Ontology view" class="flex gap-2 py-2">
-            <a href="/explore/tree" {% if ontology_key == "folio" %}aria-current="page"{% endif %} class="px-3 py-1 rounded border border-white {% if ontology_key == 'folio' %}bg-white text-[--color-primary]{% else %}text-white hover:bg-white/10{% endif %} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2">FOLIO</a>
-            <a href="/explore/tree?ontology=canon" {% if ontology_key == "canon" %}aria-current="page"{% endif %} class="px-3 py-1 rounded border border-white {% if ontology_key == 'canon' %}bg-white text-[--color-primary]{% else %}text-white hover:bg-white/10{% endif %} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2">Canon</a>
-        </div>
-        {% endif %}
     </div>
 </header>
 {% endblock %}
