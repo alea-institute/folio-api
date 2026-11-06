@@ -18,21 +18,23 @@
 {% block main_class %}{% endblock %}
 
 {% block header %}
-<header class="bg-[--color-primary] py-2 text-white">
+<header class="relative bg-[--color-primary] py-2 text-white">
     <div class="container mx-auto px-4">
         <div class="flex justify-between items-center">
-            <div class="flex flex-wrap items-baseline gap-x-3">
+            <div>
                 <h1 class="text-3xl font-bold">{% if ontology_key == "canon" %}Catholic Semantic Canon{% else %}FOLIO Ontology Explorer{% endif %}</h1>
+            </div>
+            <div class="flex items-center gap-3">
+                {% if ontology_key != "canon" %}
+                <div class="hidden md:block header-buttons">
+                    <a href="https://openlegalstandard.org/" target="_blank" class="inline-block bg-transparent text-white border border-white font-semibold px-4 py-2 rounded hover:bg-white hover:bg-opacity-10 transition-colors duration-200 mr-2">FOLIO Website</a>
+                    <a href="https://openlegalstandard.org/education/" target="_blank" class="inline-block bg-transparent text-white border border-white font-semibold px-4 py-2 rounded hover:bg-white hover:bg-opacity-10 transition-colors duration-200">Learn More</a>
+                </div>
+                {% endif %}
                 {% if canon_state == "ready" %}
-                <a href="{% if ontology_key == 'canon' %}/explore/tree{% else %}/explore/tree?ontology=canon{% endif %}" aria-label="{% if ontology_key == 'canon' %}Switch to FOLIO{% else %}Switch to the Catholic Semantic Canon{% endif %}" class="text-xs font-normal text-white/40 hover:text-white hover:underline underline-offset-4 focus-visible:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[--color-primary] rounded-sm transition-colors duration-150 motion-reduce:transition-none">{% if ontology_key == 'canon' %}FOLIO{% else %}Catholic Semantic Canon{% endif %}</a>
+                <a href="{% if ontology_key == 'canon' %}/explore/tree{% else %}/explore/tree?ontology=canon{% endif %}" aria-label="{% if ontology_key == 'canon' %}Switch to FOLIO{% else %}Switch to the Catholic Semantic Canon{% endif %}" title="{% if ontology_key == 'canon' %}FOLIO{% else %}Catholic Semantic Canon{% endif %}" class="inline-flex items-center justify-center absolute right-1 bottom-0.5 w-5 h-5 text-base md:static md:w-7 md:h-7 md:text-2xl leading-none font-light select-none rounded-sm text-[rgb(38_88_142)] hover:text-white focus-visible:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[--color-primary] transition-colors duration-150 motion-reduce:transition-none"><span aria-hidden="true">+</span></a>
                 {% endif %}
             </div>
-            {% if ontology_key != "canon" %}
-            <div class="hidden md:block header-buttons">
-                <a href="https://openlegalstandard.org/" target="_blank" class="inline-block bg-transparent text-white border border-white font-semibold px-4 py-2 rounded hover:bg-white hover:bg-opacity-10 transition-colors duration-200 mr-2">FOLIO Website</a>
-                <a href="https://openlegalstandard.org/education/" target="_blank" class="inline-block bg-transparent text-white border border-white font-semibold px-4 py-2 rounded hover:bg-white hover:bg-opacity-10 transition-colors duration-200">Learn More</a>
-            </div>
-            {% endif %}
         </div>
     </div>
 </header>

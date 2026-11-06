@@ -30,8 +30,12 @@ def test_folio_page(client):
     switches = Tags(header).find('a', href='/explore/tree?ontology=canon')
     assert len(switches) == 1
     assert switches[0]['aria-label'] == 'Switch to the Catholic Semantic Canon'
-    assert 'text-white/40' in switches[0]['class'].split()
-    assert re.search(r'<a\b[^>]*href="/explore/tree\?ontology=canon"[^>]*>Catholic Semantic Canon</a>', header)
+    assert switches[0]['title'] == 'Catholic Semantic Canon'
+    assert 'text-[rgb(38_88_142)]' in switches[0]['class'].split()
+    switch = re.search(r'<a\b[^>]*href="/explore/tree\?ontology=canon"[^>]*><span aria-hidden="true">\+</span></a>', header)
+    assert switch
+    assert 'Catholic Semantic Canon' not in re.sub(r'<[^>]+>', '', header)
+    assert header.index('Learn More</a>') < switch.start()
     assert not tags.find('a', **{'aria-current': 'page'})
     assert tags.find('button', id='tab-graph')
     assert 'FOLIO Website' in html and 'Learn More' in html
@@ -50,8 +54,9 @@ def test_canon_page(client):
     switches = Tags(header).find('a', href='/explore/tree')
     assert len(switches) == 1
     assert switches[0]['aria-label'] == 'Switch to FOLIO'
-    assert 'text-white/40' in switches[0]['class'].split()
-    switch = re.search(r'<a\b[^>]*href="/explore/tree"[^>]*>FOLIO</a>', header)
+    assert switches[0]['title'] == 'FOLIO'
+    assert 'text-[rgb(38_88_142)]' in switches[0]['class'].split()
+    switch = re.search(r'<a\b[^>]*href="/explore/tree"[^>]*><span aria-hidden="true">\+</span></a>', header)
     assert switch
     assert 'FOLIO' not in header.replace(switch[0], '')
     assert switch[0].count('FOLIO') == 2
