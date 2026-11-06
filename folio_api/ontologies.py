@@ -1,15 +1,17 @@
 import asyncio
+import hashlib
 import logging
 import os
 import threading
 from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Literal, get_args
 from urllib.parse import urlencode
 
 from fastapi import HTTPException, Request
 from folio import FOLIO, OWLClass, OWLObjectProperty
+from folio.graph import DEFAULT_CACHE_DIR
 
 CANON_SOURCE_URL = "https://raw.githubusercontent.com/CatholicOS/ontology-semantic-canon/main/sources/ontology-semantic-canon.owl"
 CANON_IRI_BASE = "https://ontology.catholicos.catholic/"
@@ -88,22 +90,45 @@ class OntologyRegistry:
         return self.canon_state
 
     async def load_canon(self) -> None:
+        cache_cleanup = "cache cleanup not attempted"
         try:
             # Let ASGI startup finish before submitting any heavy work.
             await asyncio.sleep(0)
-            executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="canon-load")
-            try:
-                entry = await asyncio.get_running_loop().run_in_executor(
-                    executor, build_canon_entry
-                )
-            finally:
-                # A running build cannot be interrupted. Retire its dedicated
-                # thread without blocking ASGI shutdown or reusing its priority.
-                executor.shutdown(wait=False, cancel_futures=True)
+            loop = asyncio.get_running_loop()
+            future = loop.create_future()
+
+            def deliver(entry, error):
+                # Cancellation propagates to the future. Only the loop touches it.
+                if future.done():
+                    return
+                if error is not None:
+                    future.set_exception(error)
+                else:
+                    future.set_result(entry)
+
+            def build():
+                nonlocal cache_cleanup
+                entry, error = None, None
+                try:
+                    entry = build_canon_entry()
+                except Exception as exc:
+                    error = exc
+                    cache_cleanup = remove_canon_cache()
+                try:
+                    loop.call_soon_threadsafe(deliver, entry, error)
+                except RuntimeError:
+                    # Shutdown may have closed the loop while the build ran.
+                    pass
+
+            # Daemon workers do not participate in concurrent.futures' exit join.
+            threading.Thread(target=build, name="canon-load", daemon=True).start()
+            entry = await future
             self.entries["canon"] = entry
             self.canon_state = "ready"
         except Exception:
-            logging.getLogger("folio_api").warning("Canon unavailable", exc_info=True)
+            logging.getLogger("folio_api").warning(
+                "Canon unavailable; %s", cache_cleanup, exc_info=True
+            )
             self.canon_state = "failed"
         self._settled.set()
 
@@ -173,6 +198,21 @@ def make_folio_entry(folio: FOLIO, property_children: dict) -> OntologyEntry:
         "folio", folio, FOLIO_IRI_BASE, tuple(cls.iri for cls in roots),
         frozenset(HIDDEN_ROOT_PROPERTY_IRIS), property_children,
     )
+
+
+def canon_cache_path() -> Path:
+    # Match folio.graph.FOLIO.load_cache/save_cache for source_type="http".
+    digest = hashlib.blake2b(CANON_SOURCE_URL.encode()).hexdigest()
+    return Path(DEFAULT_CACHE_DIR) / "http" / f"{digest}.owl"
+
+
+def remove_canon_cache() -> str:
+    path = canon_cache_path()
+    try:
+        path.unlink(missing_ok=True)
+    except OSError as exc:
+        return f"could not remove Canon cache {path}: {exc}"
+    return f"removed Canon cache if present: {path}"
 
 
 def build_canon_entry() -> OntologyEntry:

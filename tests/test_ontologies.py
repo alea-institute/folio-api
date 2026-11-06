@@ -3,10 +3,14 @@
 import asyncio
 import logging
 import os
+import subprocess
+import sys
+import textwrap
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from copy import copy
+from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
@@ -145,7 +149,20 @@ def test_folio_serves_while_canon_load_is_blocked(monkeypatch, _booted_app, foli
             assert client.portal.call(app.state.ontologies.wait_until_settled) == "ready"
 
 
-def test_canon_failure_logs_once_and_folio_serves(monkeypatch, folio):
+def test_canon_failure_logs_once_and_folio_serves(monkeypatch, folio, tmp_path):
+    from folio import FOLIO
+
+    monkeypatch.setattr(ontologies, "DEFAULT_CACHE_DIR", tmp_path)
+    # Let the library generate its actual filenames, including the Canon's.
+    FOLIO.save_cache("truncated Canon", cache_path=tmp_path, source_type="http",
+                     http_url=ontologies.CANON_SOURCE_URL)
+    FOLIO.save_cache("other HTTP ontology", cache_path=tmp_path, source_type="http",
+                     http_url="https://example.invalid/other.owl")
+    FOLIO.save_cache("FOLIO cache", cache_path=tmp_path, source_type="github")
+    canon_cache = ontologies.canon_cache_path()
+    assert canon_cache.is_file()
+    preserved = {path: path.read_bytes() for path in tmp_path.rglob("*.owl")
+                 if path != canon_cache}
     loader = Mock(side_effect=ValueError("broken Canon"))
     monkeypatch.setattr(ontologies, "build_canon_entry", loader)
     warning = Mock()
@@ -156,6 +173,11 @@ def test_canon_failure_logs_once_and_folio_serves(monkeypatch, folio):
             assert app.state.ontologies.get("canon") is None
             assert client.get("/info/health").status_code == 200
             warning.assert_called_once()
+            assert "removed Canon cache" in warning.call_args.args[1]
+            assert not canon_cache.exists()
+            assert {path: path.read_bytes() for path in tmp_path.rglob("*.owl")} == preserved
+            assert (tmp_path / "http").is_dir()
+            assert (tmp_path / "github").is_dir()
 
 
 def test_disabled_canon_never_calls_loader(monkeypatch, folio):
@@ -167,6 +189,58 @@ def test_disabled_canon_never_calls_loader(monkeypatch, folio):
             assert app.state.ontologies.get("canon") is None
             assert client.get("/info/health").status_code == 200
         loader.assert_not_called()
+
+
+def test_process_exits_with_canon_worker_still_blocked():
+    script = textwrap.dedent("""
+        import asyncio
+        import threading
+        from unittest.mock import MagicMock, patch
+        from tests.support import isolated_environment, make_test_config
+
+        with isolated_environment() as environment:
+            from fastapi import FastAPI
+            from folio_api import api, ontologies
+
+            entered = threading.Event()
+            gate = threading.Event()
+
+            def held():
+                assert threading.current_thread().name == "canon-load"
+                assert threading.current_thread().daemon
+                entered.set()
+                gate.wait()  # Deliberately never released, even after shutdown.
+
+            folio = MagicMock()
+            folio.__getitem__.return_value = None
+            folio.object_properties = []
+            folio.llm = None
+            app = FastAPI()
+            app.state.mcp_app = FastAPI()
+
+            async def run():
+                async with api.lifespan_handler(app):
+                    async with asyncio.timeout(3):
+                        while not entered.is_set():
+                            await asyncio.sleep(0.01)
+                    assert app.state.ontologies.canon_state == "loading"
+                assert app.state.ontologies.get("canon") is None
+                assert not gate.is_set()
+
+            with patch.object(api, "load_config", make_test_config), \
+                 patch.object(api, "initialize_folio", return_value=folio), \
+                 patch.object(ontologies, "build_canon_entry", held), \
+                 patch("folio_mcp.server.set_shared_folio"):
+                asyncio.run(run())
+            environment.assert_clean()
+            print("shutdown completed with blocked Canon worker")
+    """)
+    result = subprocess.run(
+        [sys.executable, "-c", script], cwd=Path(__file__).resolve().parents[1],
+        capture_output=True, text=True, timeout=10,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "shutdown completed with blocked Canon worker" in result.stdout
 
 
 @pytest.mark.asyncio

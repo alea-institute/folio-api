@@ -102,6 +102,24 @@ def test_shared_class_id_selects_requested_ontology(client, canon, folio, endpoi
 
 
 @pytest.mark.parametrize("endpoint", ["tree/node", "class-details", "tree/path"])
+def test_canon_full_iri_preserves_namespace_for_shared_class_id(client, canon, folio, endpoint):
+    shared = next(cls for cls in canon.folio.classes
+                  if cls.iri.startswith(CANON_IRI_BASE)
+                  and FOLIO_IRI_BASE + cls.iri.rsplit("/", 1)[-1] in folio.iri_to_index)
+    foreign_iri = FOLIO_IRI_BASE + shared.iri.rsplit("/", 1)[-1]
+    response = client.get(_entity_url("taxonomy", endpoint, foreign_iri),
+                          params={"ontology": "canon"})
+    assert response.status_code == 404
+    response = _get(client, _entity_url("taxonomy", endpoint, shared.iri), ontology="canon")
+    if endpoint == "class-details":
+        assert response.context["class_data"]["iri"] == shared.iri
+    elif endpoint == "tree/path":
+        assert response.json()["path"][-1]["iri"] == shared.iri
+    else:
+        assert response.json()["iri"] == shared.iri
+
+
+@pytest.mark.parametrize("endpoint", ["tree/node", "class-details", "tree/path"])
 def test_folio_only_class_is_not_found_in_canon(client, canon, folio, endpoint):
     canon_ids = {cls.iri.rsplit("/", 1)[-1] for cls in canon.folio.classes}
     cls = next(cls for cls in folio.classes if cls.iri.rsplit("/", 1)[-1] not in canon_ids)

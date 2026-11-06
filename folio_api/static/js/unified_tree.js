@@ -73,7 +73,7 @@ async function getNodeData(nodeId, sectionType) {
 
 // ---------- IRI helpers ----------
 function extractIdFromIri(iri) {
-    if (!iri || !iri.startsWith('http')) return iri;
+    if (ontologyKey === 'canon' || !iri || !iri.startsWith('http')) return iri;
     const parts = iri.split('/').filter(p => p.trim().length > 0);
     return parts.length > 0 ? parts[parts.length - 1] : iri;
 }
@@ -459,11 +459,7 @@ function loadDetails(iri, sectionType, updateUrl) {
     detailsContainer.innerHTML = '<div class="flex justify-center items-center h-64"><div class="spinner-border animate-spin inline-block w-8 h-8 border-4 rounded-full text-blue-600" role="status"><span class="sr-only">Loading...</span></div></div>';
 
     const cfg = SECTIONS[sectionType];
-    let nodeId = iri;
-    if (iri.startsWith('http')) {
-        const parts = iri.split('/').filter(p => p.trim().length > 0);
-        if (parts.length > 0) nodeId = parts[parts.length - 1];
-    }
+    const nodeId = extractIdFromIri(iri);
 
     // Fetch the server-rendered HTML fragment
     fetch(ontologyUrl(cfg.detailsEndpoint + encodeURIComponent(nodeId)))
