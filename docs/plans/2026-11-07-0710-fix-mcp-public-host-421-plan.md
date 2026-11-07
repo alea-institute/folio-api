@@ -36,6 +36,16 @@ allows:
 Keeping protection on (rather than disabling it) preserves the SDK's defense
 against browser-driven DNS rebinding while admitting the real public names.
 
+Review follow-ups (2026-11-07): the default list also carries the DEV preview,
+`folio-api.dev.openlegalstandard.org`, which answered 421 too. Portless loopback
+names (`localhost`, `127.0.0.1`, `[::1]`) are admitted because the dev Caddy serves
+port 80, so clients omit the port.
+
+Deliberate limit: a browser page served from any other origin (for example a hosted
+MCP inspector) gets 403 "Invalid Origin header", even though the REST API's CORS
+allows `*`. That origin check is the DNS-rebinding defense. Hosted connectors and
+CLI clients send no Origin header and are unaffected.
+
 ## Verification
 
 - A test drives the real app: `POST /mcp` with `Host: folio.openlegalstandard.org`

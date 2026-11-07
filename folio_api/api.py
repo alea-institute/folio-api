@@ -398,16 +398,31 @@ def get_app() -> FastAPI:
 
     public_hosts = api_config.get(
         "mcp_allowed_hosts",
-        ["folio.openlegalstandard.org", "soli.openlegalstandard.org"],
+        [
+            "folio.openlegalstandard.org",
+            "soli.openlegalstandard.org",
+            "folio-api.dev.openlegalstandard.org",
+        ],
     )
     # SDK defaults allow loopback only; Caddy forwards the public Host.
     folio_mcp_server.settings.transport_security = TransportSecuritySettings(
         enable_dns_rebinding_protection=True,
-        allowed_hosts=["127.0.0.1:*", "localhost:*", "[::1]:*", *public_hosts],
+        allowed_hosts=[
+            "127.0.0.1:*",
+            "localhost:*",
+            "[::1]:*",
+            "127.0.0.1",
+            "localhost",
+            "[::1]",
+            *public_hosts,
+        ],
         allowed_origins=[
             "http://127.0.0.1:*",
             "http://localhost:*",
             "http://[::1]:*",
+            "http://127.0.0.1",
+            "http://localhost",
+            "http://[::1]",
             *(f"https://{host}" for host in public_hosts),
         ],
     )

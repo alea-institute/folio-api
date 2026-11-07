@@ -28,21 +28,38 @@ def test_mcp_public_hosts_allowed_and_unlisted_host_rejected(started_client):
             "clientInfo": {"name": "t", "version": "0"},
         },
     }
-    for host, expected_status in (
-        ("folio.openlegalstandard.org", 200),
-        ("soli.openlegalstandard.org", 200),
-        ("evil.example", 421),
+    for headers_extra, expected_status in (
+        ({"Host": "folio.openlegalstandard.org"}, 200),
+        ({"Host": "soli.openlegalstandard.org"}, 200),
+        ({"Host": "folio-api.dev.openlegalstandard.org"}, 200),
+        ({"Host": "localhost"}, 200),
+        ({"Host": "localhost:8000"}, 200),
+        (
+            {
+                "Host": "folio.openlegalstandard.org",
+                "Origin": "https://folio.openlegalstandard.org",
+            },
+            200,
+        ),
+        (
+            {
+                "Host": "folio.openlegalstandard.org",
+                "Origin": "https://evil.example",
+            },
+            403,
+        ),
+        ({"Host": "evil.example"}, 421),
     ):
         response = started_client.post(
             "/mcp",
             headers={
-                "Host": host,
                 "Content-Type": "application/json",
                 "Accept": "application/json, text/event-stream",
+                **headers_extra,
             },
             json=body,
         )
-        assert response.status_code == expected_status, (host, response.text)
+        assert response.status_code == expected_status, (headers_extra, response.text)
 
 
 def test_folio_loaded(folio):
