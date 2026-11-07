@@ -17,6 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from folio import FOLIO
+from mcp.server.transport_security import TransportSecuritySettings
 from alea_llm_client import (
     AnthropicModel,
     GoogleModel,
@@ -395,6 +396,21 @@ def get_app() -> FastAPI:
     # does not cascade ASGI lifespan events into mounted sub-apps).
     from folio_mcp.server import mcp as folio_mcp_server
 
+    public_hosts = api_config.get(
+        "mcp_allowed_hosts",
+        ["folio.openlegalstandard.org", "soli.openlegalstandard.org"],
+    )
+    # SDK defaults allow loopback only; Caddy forwards the public Host.
+    folio_mcp_server.settings.transport_security = TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=["127.0.0.1:*", "localhost:*", "[::1]:*", *public_hosts],
+        allowed_origins=[
+            "http://127.0.0.1:*",
+            "http://localhost:*",
+            "http://[::1]:*",
+            *(f"https://{host}" for host in public_hosts),
+        ],
+    )
     mcp_app = folio_mcp_server.streamable_http_app()
     app_instance.state.mcp_app = mcp_app
     app_instance.mount("/", mcp_app)

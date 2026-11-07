@@ -23,16 +23,22 @@ def _test_environment(request):
 
 
 @pytest.fixture(scope="session")
-def _booted_app(_test_environment):
-    """Start the FastAPI app once per test session so the lifespan
-    loads the FOLIO ontology and builds the property_children reverse
-    index. Returns the live app instance.
-    """
+def started_client(_test_environment):
+    """Requests needing the app's running lifespan (the MCP session manager) must use this client."""
     from folio_api.api import app
 
     with TestClient(app) as started:
         started.portal.call(app.state.ontologies.wait_until_settled)
-        yield app
+        yield started
+
+
+@pytest.fixture(scope="session")
+def _booted_app(started_client):
+    """Start the FastAPI app once per test session so the lifespan
+    loads the FOLIO ontology and builds the property_children reverse
+    index. Returns the live app instance.
+    """
+    return started_client.app
 
 
 @pytest.fixture
