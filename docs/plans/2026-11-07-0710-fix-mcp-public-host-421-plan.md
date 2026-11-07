@@ -1,7 +1,7 @@
 ---
 title: "fix: MCP endpoint answers 421 on the public hostnames"
 type: fix
-status: active
+status: completed
 date: 2026-11-07
 ---
 
