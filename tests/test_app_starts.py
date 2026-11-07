@@ -16,6 +16,52 @@ def test_app_boots(client):
     assert "paths" in body and len(body["paths"]) > 0, "no routes registered"
 
 
+def test_mcp_public_hosts_allowed_and_unlisted_host_rejected(started_client):
+    """Public MCP initialization works while unlisted hosts remain blocked."""
+    body = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2025-03-26",
+            "capabilities": {},
+            "clientInfo": {"name": "t", "version": "0"},
+        },
+    }
+    for headers_extra, expected_status in (
+        ({"Host": "folio.openlegalstandard.org"}, 200),
+        ({"Host": "soli.openlegalstandard.org"}, 200),
+        ({"Host": "folio-api.dev.openlegalstandard.org"}, 200),
+        ({"Host": "localhost"}, 200),
+        ({"Host": "localhost:8000"}, 200),
+        (
+            {
+                "Host": "folio.openlegalstandard.org",
+                "Origin": "https://folio.openlegalstandard.org",
+            },
+            200,
+        ),
+        (
+            {
+                "Host": "folio.openlegalstandard.org",
+                "Origin": "https://evil.example",
+            },
+            403,
+        ),
+        ({"Host": "evil.example"}, 421),
+    ):
+        response = started_client.post(
+            "/mcp",
+            headers={
+                "Content-Type": "application/json",
+                "Accept": "application/json, text/event-stream",
+                **headers_extra,
+            },
+            json=body,
+        )
+        assert response.status_code == expected_status, (headers_extra, response.text)
+
+
 def test_folio_loaded(folio):
     """folio fixture returns a populated FOLIO ontology."""
     assert folio is not None
