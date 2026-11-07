@@ -96,7 +96,27 @@
     return document.getElementById('entity-graph-pane');
   }
 
+  var _mount = null;
+  var _renderFrame = null;
+  var _focusVersion = 0;
+  var _pendingFocus = null;
+
+  function _disposeMount() {
+    if (_renderFrame !== null) cancelAnimationFrame(_renderFrame);
+    _renderFrame = null;
+    _pendingFocus = null;
+    if (_mount) {
+      _mount.observer.disconnect();
+      if (_mount.frame !== null) cancelAnimationFrame(_mount.frame);
+      window.removeEventListener('resize', _mount.schedule);
+      _mount = null;
+    }
+    _panMouseUp();
+    _nodeDragUp();
+  }
+
   function clearStates() {
+    _disposeMount();
     var pane = _pane();
     if (!pane) return;
     pane.innerHTML = '';
@@ -106,7 +126,7 @@
   function showEmpty() {
     var pane = _pane();
     if (!pane) return;
-    pane.removeAttribute('aria-busy');
+    clearStates();
     pane.innerHTML =
       '<div class="flex flex-col items-center justify-center w-full h-full p-6 gap-6 text-center">' +
         '<div class="text-gray-300">' + ICONS.share + '</div>' +
@@ -120,6 +140,7 @@
   function showSkeleton() {
     var pane = _pane();
     if (!pane) return;
+    clearStates();
     pane.setAttribute('aria-busy', 'true');
     pane.innerHTML =
       '<div class="flex flex-col items-center justify-center w-full h-full gap-4 entity-graph-skeleton" role="status" aria-live="polite">' +
@@ -134,7 +155,7 @@
   function showError(entityLabel, onRetry) {
     var pane = _pane();
     if (!pane) return;
-    pane.removeAttribute('aria-busy');
+    clearStates();
     var safeLabel = (entityLabel == null) ? '' : String(entityLabel);
     pane.innerHTML =
       '<div class="flex items-center justify-center w-full h-full p-6">' +
@@ -437,60 +458,180 @@
     return map;
   }
 
-  // renderMinimap — draws node rectangles + current viewport rect onto the
-  // #graph-minimap canvas. Ported from folio-enrich renderMinimap() pattern.
-  // No-op if the canvas or node positions are not available.
+  function _viewportSize() {
+    if (!_mount || !_mount.viewport.isConnected) return null;
+    var vp = _mount.viewport;
+    if (!vp.clientWidth || !vp.clientHeight) return null;
+    var rect = vp.getBoundingClientRect();
+    return { w: rect.width, h: rect.height };
+  }
+
+  function _measureNodes() {
+    if (!_viewportSize()) return;
+    _mount.nodes.forEach(function (el) {
+      var iri = el.getAttribute('data-iri');
+      var pos = state.nodePositions[iri];
+      var live = state.liveNodeMap[iri];
+      // offset sizes are unscaled and include the selected node's child button.
+      if (!pos || !live) return;
+      if (pos.w !== el.offsetWidth || pos.h !== el.offsetHeight) {
+        pos.w = live.w = el.offsetWidth;
+        pos.h = live.h = el.offsetHeight;
+        _redrawIncidentEdges(iri, _mount.edges);
+      }
+    });
+  }
+
+  function _graphBounds() {
+    var positions = Object.values(state.nodePositions);
+    if (!positions.length) return null;
+    return {
+      left: Math.min.apply(null, positions.map(function (p) { return p.x; })),
+      top: Math.min.apply(null, positions.map(function (p) { return p.y; })),
+      right: Math.max.apply(null, positions.map(function (p) { return p.x + p.w; })),
+      bottom: Math.max.apply(null, positions.map(function (p) { return p.y + p.h; }))
+    };
+  }
+
+  function _zoomAt(factor, x, y) {
+    var t = state.transform;
+    var scale = Math.max(0.2, Math.min(4, t.scale * factor));
+    t.x = x - (x - t.x) * scale / t.scale;
+    t.y = y - (y - t.y) * scale / t.scale;
+    t.scale = scale;
+    applyTransform();
+  }
+
+  function _buildControls() {
+    var group = document.createElement('div');
+    group.id = 'graph-controls';
+    group.setAttribute('role', 'group');
+    group.setAttribute('aria-label', 'Graph view controls');
+    var actions = [
+      ['left', 'Pan left', _svg('', _path('M15 5l-7 7 7 7'))],
+      ['up', 'Pan up', _svg('', _path('M5 15l7-7 7 7'))],
+      ['down', 'Pan down', _svg('', _path('M5 9l7 7 7-7'))],
+      ['right', 'Pan right', _svg('', _path('M9 5l7 7-7 7'))],
+      ['out', 'Zoom out', _svg('', _path('M5 12h14'))],
+      ['in', 'Zoom in', _svg('', _path('M5 12h14M12 5v14'))],
+      ['fit', 'Fit graph', 'Fit']
+    ];
+    actions.forEach(function (action) {
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'graph-view-button';
+      button.dataset.graphAction = action[0];
+      button.setAttribute('aria-label', action[1]);
+      button.setAttribute('aria-controls', 'graph-viewport');
+      button.title = action[1];
+      button.innerHTML = action[2];
+      button.addEventListener('click', function () {
+        var size = _viewportSize();
+        if (!size || !_mount || _mount.controls !== group || button.getAttribute('aria-disabled') === 'true') return;
+        var t = state.transform;
+        switch (action[0]) {
+          case 'left': t.x += 80; applyTransform(); break;
+          case 'right': t.x -= 80; applyTransform(); break;
+          case 'up': t.y += 80; applyTransform(); break;
+          case 'down': t.y -= 80; applyTransform(); break;
+          case 'in': _zoomAt(1.12, size.w / 2, size.h / 2); break;
+          case 'out': _zoomAt(1 / 1.12, size.w / 2, size.h / 2); break;
+          case 'fit': fitGraph(); break;
+        }
+        _mount.announcement.textContent = action[1] + '. ' + _mount.summary.textContent;
+      });
+      group.appendChild(button);
+    });
+    return group;
+  }
+
   function renderMinimap() {
-    var canvas = document.getElementById('graph-minimap');
-    if (!canvas) return;
+    var size = _viewportSize();
+    if (!size) return;
+    var positions = Object.values(state.nodePositions);
+    var bounds = _graphBounds();
+    var t = state.transform;
+    var view = { left: -t.x / t.scale, top: -t.y / t.scale,
+      right: (size.w - t.x) / t.scale, bottom: (size.h - t.y) / t.scale };
+    var visible = positions.filter(function (p) {
+      return p.x + p.w >= view.left && p.x <= view.right &&
+        p.y + p.h >= view.top && p.y <= view.bottom;
+    }).length;
+    var summary = visible + ' of ' + positions.length + ' nodes visible · ' +
+      Math.round(t.scale * 100) + '% zoom.' +
+      (positions.length && !visible ? ' Use Fit graph to return.' : '');
+    if (_mount.summary.textContent !== summary) _mount.summary.textContent = summary;
+    // Hidden overflow can scroll on focus, independently of the graph camera.
+    // Keep clipped child actions out of Tab order as the camera moves.
+    if (_mount.childButton) {
+      var buttonRect = _mount.childButton.getBoundingClientRect();
+      var viewRect = _mount.viewport.getBoundingClientRect();
+      var childVisible = buttonRect.right > viewRect.left && buttonRect.left < viewRect.right &&
+        buttonRect.bottom > viewRect.top && buttonRect.top < viewRect.bottom;
+      var tabIndex = childVisible ? 0 : -1;
+      if (_mount.childButton.tabIndex !== tabIndex || !_mount.childButton.hasAttribute('tabindex')) {
+        _mount.childButton.tabIndex = tabIndex;
+      }
+    }
+    _mount.controls.querySelectorAll('button').forEach(function (button) {
+      var action = button.dataset.graphAction;
+      var disabled = String(!bounds ||
+        (action === 'in' && t.scale >= 4) || (action === 'out' && t.scale <= 0.2));
+      if (button.getAttribute('aria-disabled') !== disabled) button.setAttribute('aria-disabled', disabled);
+    });
+
+    var canvas = _mount.canvas;
+    var cw = canvas.clientWidth, ch = canvas.clientHeight;
+    if (!cw || !ch) return;
+    var ratio = window.devicePixelRatio || 1;
+    var width = Math.round(cw * ratio), height = Math.round(ch * ratio);
+    if (canvas.width !== width || canvas.height !== height) {
+      canvas.width = width;
+      canvas.height = height;
+    }
     var ctx = canvas.getContext('2d');
-    var cw = canvas.width;
-    var ch = canvas.height;
+    if (!ctx) return;
+    // Reset, never accumulate, the backing-store scale.
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
     ctx.clearRect(0, 0, cw, ch);
+    if (!bounds) return;
+    var left = Math.min(bounds.left, view.left), top = Math.min(bounds.top, view.top);
+    var w = Math.max(bounds.right, view.right) - left || 1;
+    var h = Math.max(bounds.bottom, view.bottom) - top || 1;
+    var scale = Math.min((cw - 12) / w, (ch - 12) / h);
+    var ox = (cw - w * scale) / 2, oy = (ch - h * scale) / 2;
+    ctx.fillStyle = '#2563eb';
+    positions.forEach(function (p) {
+      ctx.fillRect(ox + (p.x - left) * scale, oy + (p.y - top) * scale,
+        Math.max(2, p.w * scale), Math.max(2, p.h * scale));
+    });
+    ctx.strokeStyle = '#111827';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(ox + (view.left - left) * scale, oy + (view.top - top) * scale,
+      (view.right - view.left) * scale, (view.bottom - view.top) * scale);
+  }
 
-    var positions = Object.values(state.nodePositions || {});
-    if (positions.length === 0) return;
-
-    var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    for (var i = 0; i < positions.length; i++) {
-      var p = positions[i];
-      if (p.x < minX) minX = p.x;
-      if (p.y < minY) minY = p.y;
-      if (p.x + p.w > maxX) maxX = p.x + p.w;
-      if (p.y + p.h > maxY) maxY = p.y + p.h;
-    }
-    var gw = (maxX - minX) || 1;
-    var gh = (maxY - minY) || 1;
-    var scale = Math.min((cw - 8) / gw, (ch - 8) / gh);
-    var ox = (cw - gw * scale) / 2;
-    var oy = (ch - gh * scale) / 2;
-
-    // Draw node rectangles (blue-tinted fill)
-    ctx.fillStyle = 'rgba(59,130,246,0.35)';
-    for (var j = 0; j < positions.length; j++) {
-      var q = positions[j];
-      ctx.fillRect(
-        ox + (q.x - minX) * scale,
-        oy + (q.y - minY) * scale,
-        Math.max(q.w * scale, 2),
-        Math.max(q.h * scale, 2)
-      );
-    }
-
-    // Draw viewport rect
-    var vp = document.getElementById('graph-viewport');
-    if (vp && state.transform) {
-      var vpW = vp.clientWidth;
-      var vpH = vp.clientHeight;
-      var t = state.transform;
-      var rx = ox + (-t.x / t.scale - minX) * scale;
-      var ry = oy + (-t.y / t.scale - minY) * scale;
-      var rw = (vpW / t.scale) * scale;
-      var rh = (vpH / t.scale) * scale;
-      ctx.strokeStyle = 'rgba(107,114,128,0.5)';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(rx, ry, rw, rh);
-    }
+  function _observeMount(mount) {
+    mount.schedule = function () {
+      if (_mount !== mount || mount.frame !== null) return;
+      mount.frame = requestAnimationFrame(function () {
+        mount.frame = null;
+        if (_mount !== mount || !_viewportSize()) return;
+        if (mount.needsFit) {
+          mount.needsFit = false;
+          fitGraph();
+        } else {
+          _measureNodes();
+          renderMinimap();
+        }
+      });
+    };
+    mount.observer = new ResizeObserver(mount.schedule);
+    mount.observer.observe(mount.viewport);
+    mount.observer.observe(mount.canvas);
+    mount.nodes.forEach(function (node) { mount.observer.observe(node); });
+    window.addEventListener('resize', mount.schedule);
+    mount.schedule();
   }
 
   // _mountGraph — actual DOM construction.
@@ -518,20 +659,14 @@
     maxX += 16;
     maxY += 16;
 
-    pane.innerHTML = '';
-    pane.removeAttribute('aria-busy');
+    clearStates();
+
+    var controls = _buildControls();
+    pane.appendChild(controls);
 
     // Scaffolding: viewport > transform > (svg + nodes-div).
     var viewport = document.createElement('div');
     viewport.id = 'graph-viewport';
-    // CSS owns cursor:grab; absolute+inset fill pane minus legend bar (28px).
-    viewport.style.position = 'absolute';
-    viewport.style.top = '0';
-    viewport.style.left = '0';
-    viewport.style.right = '0';
-    viewport.style.bottom = '28px';   // reserve space for legend bar
-    viewport.style.overflow = 'hidden';
-
     var xform = document.createElement('div');
     xform.id = 'graph-transform';
     xform.className = 'absolute top-0 left-0';
@@ -824,15 +959,26 @@
     xform.appendChild(nodesDiv);
     viewport.appendChild(xform);
 
-    // Minimap canvas (bottom-right corner, above legend bar).
     var minimapCanvas = document.createElement('canvas');
     minimapCanvas.id = 'graph-minimap';
     minimapCanvas.width = 140;
     minimapCanvas.height = 90;
     minimapCanvas.setAttribute('aria-hidden', 'true');
-    viewport.appendChild(minimapCanvas);
-
     pane.appendChild(viewport);
+    var overview = document.createElement('div');
+    overview.className = 'graph-overview';
+    overview.appendChild(minimapCanvas);
+    var summary = document.createElement('p');
+    summary.id = 'graph-view-summary';
+    overview.appendChild(summary);
+    pane.appendChild(overview);
+    var announcement = document.createElement('span');
+    announcement.className = 'sr-only';
+    announcement.id = 'graph-view-announcement';
+    announcement.setAttribute('role', 'status');
+    announcement.setAttribute('aria-live', 'polite');
+    announcement.setAttribute('aria-atomic', 'true');
+    pane.appendChild(announcement);
 
     // Legend bar — ported from folio-enrich graph-modal-legend + folio-mapper legend footer.
     var legend = document.createElement('div');
@@ -866,14 +1012,13 @@
       '<span class="graph-legend-hint">Click to select • Drag node to rearrange • Scroll to zoom • Drag canvas to pan</span>';
     pane.appendChild(legend);
 
+    _mount = { viewport: viewport, canvas: minimapCanvas, controls: controls,
+      summary: summary, announcement: announcement, edges: edgesGroup,
+      childButton: nodesDiv.querySelector('.graph-node-children-btn'),
+      nodes: Array.from(nodesDiv.children), frame: null, needsFit: !preserveZoom };
+    _observeMount(_mount);
     wirePanZoom();
-    if (preserveZoom) {
-      applyTransform();
-    } else {
-      requestAnimationFrame(fitGraph);
-    }
-    // Initial minimap render (deferred so layout is measured).
-    requestAnimationFrame(renderMinimap);
+    applyTransform();
 
     _perfMark('eg:render:end');
     _perfMeasure('eg:render', 'eg:render:start', 'eg:render:end');
@@ -892,57 +1037,28 @@
   }
 
   function fitGraph() {
-    var vp = document.getElementById('graph-viewport');
-    if (!vp) return;
-    var rect = vp.getBoundingClientRect();
-    var vw = rect.width;
-    var vh = rect.height;
-    if (vw === 0 || vh === 0) {
-      requestAnimationFrame(fitGraph);
-      return;
-    }
-
-    var gd = state.graphData;
-    var layout = gd && gd.layout;
-    if (!layout) return;
-    var laidChildren = layout.children || [];
-    var gw = 0;
-    var gh = 0;
-    for (var i = 0; i < laidChildren.length; i++) {
-      var c = laidChildren[i];
-      var rx = (c.x || 0) + (c.width || 0);
-      var ry = (c.y || 0) + (c.height || 0);
-      if (rx > gw) gw = rx;
-      if (ry > gh) gh = ry;
-    }
-    if (gw === 0 || gh === 0) return;
-
-    var pad = 16;
-    var availW = vw - 2 * pad;
-    var availH = vh - 2 * pad;
-    var scale = Math.min(availW / gw, availH / gh, 1);
-    if (scale < 0.2) scale = 0.2;
-
-    var tx = (vw - gw * scale) / 2;
-    var ty = (vh - gh * scale) / 2;
-    state.transform = { x: tx, y: ty, scale: scale };
+    var size = _viewportSize();
+    if (!size) return;
+    _measureNodes();
+    var bounds = _graphBounds();
+    if (!bounds) return;
+    var w = bounds.right - bounds.left || 1;
+    var h = bounds.bottom - bounds.top || 1;
+    var scale = Math.max(0.2, Math.min((size.w - 32) / w, (size.h - 32) / h, 1));
+    state.transform = {
+      x: (size.w - w * scale) / 2 - bounds.left * scale,
+      y: (size.h - h * scale) / 2 - bounds.top * scale,
+      scale: scale
+    };
     applyTransform();
   }
 
   function _onWheel(e) {
+    var size = _viewportSize();
+    if (!size) return;
     e.preventDefault();
-    var vp = document.getElementById('graph-viewport');
-    if (!vp) return;
-    var rect = vp.getBoundingClientRect();
-    var mx = e.clientX - rect.left;
-    var my = e.clientY - rect.top;
-    var oldScale = state.transform.scale;
-    var zoomFactor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
-    var newScale = Math.max(0.2, Math.min(4.0, oldScale * zoomFactor));
-    state.transform.x = mx - (mx - state.transform.x) * (newScale / oldScale);
-    state.transform.y = my - (my - state.transform.y) * (newScale / oldScale);
-    state.transform.scale = newScale;
-    applyTransform();
+    var rect = _mount.viewport.getBoundingClientRect();
+    _zoomAt(e.deltaY < 0 ? 1.12 : 1 / 1.12, e.clientX - rect.left, e.clientY - rect.top);
   }
 
   var _panning = false;
@@ -1116,9 +1232,33 @@
 
   function renderGraph(graphData, opts) {
     if (!graphData || !graphData.layout) return;
+    var pane = _pane();
+    var focused = document.activeElement;
+    var focusRequest = null;
+    if (opts && opts.preserveZoom) {
+      if (pane && pane.contains(focused)) {
+        var node = focused.closest('.graph-node');
+        focusRequest = { action: focused.dataset.graphAction,
+          iri: node && node.getAttribute('data-iri'), version: _focusVersion };
+      } else if (focused === document.body && _pendingFocus && _pendingFocus.version === _focusVersion) {
+        // A superseded render has already removed the focused DOM.
+        focusRequest = _pendingFocus;
+      }
+    }
     clearStates();
-    requestAnimationFrame(function () {
+    _pendingFocus = focusRequest;
+    _renderFrame = requestAnimationFrame(function () {
+      _renderFrame = null;
       _mountGraph(graphData, opts);
+      if (!focusRequest || !_mount || !_viewportSize() || state.activeTab !== 'graph' ||
+          _focusVersion !== focusRequest.version || document.activeElement !== document.body) return;
+      var target = focusRequest.action && pane.querySelector('[data-graph-action="' + focusRequest.action + '"]');
+      if (!target && focusRequest.iri) {
+        var match = _mount.nodes.find(function (el) { return el.getAttribute('data-iri') === focusRequest.iri; });
+        target = match && match.querySelector('.graph-node-children-btn');
+      }
+      if (target && target.tabIndex < 0) target = null;
+      (target || _mount.controls.querySelector('button')).focus({ preventScroll: true });
     });
   }
 
@@ -1126,6 +1266,7 @@
 
   function init() {
     document.addEventListener('entity:selected', _onEntitySelected);
+    document.addEventListener('focusin', function () { _focusVersion++; _pendingFocus = null; });
     var fromUrl = _readUrlSelection();
     if (fromUrl) {
       state.lastSelectedIri = fromUrl.iri;
@@ -1166,6 +1307,7 @@
       return;
     }
     if (state.currentIri === iri && state.graphData && state.graphData.layout) {
+      if (_mount) _mount.schedule();
       return;
     }
     refreshFor(iri, type).catch(function (err) {
@@ -1325,16 +1467,19 @@
       panel.dataset.fsTrapWired = '1';
       panel.addEventListener('keydown', function (e) {
         if (e.key !== 'Tab' || !state.isFullscreen) return;
-        var focusables = panel.querySelectorAll(
+        var focusables = Array.from(panel.querySelectorAll(
           'button:not([disabled]), [href], [tabindex="0"], input:not([disabled])'
-        );
+        )).filter(function (el) {
+          return el.tabIndex >= 0 && el.getClientRects().length &&
+            getComputedStyle(el).visibility !== 'hidden';
+        });
         if (focusables.length === 0) return;
         var first = focusables[0];
         var last = focusables[focusables.length - 1];
-        if (e.shiftKey && document.activeElement === first) {
+        if (e.shiftKey && (document.activeElement === first || !focusables.includes(document.activeElement))) {
           e.preventDefault();
           last.focus();
-        } else if (!e.shiftKey && document.activeElement === last) {
+        } else if (!e.shiftKey && (document.activeElement === last || !focusables.includes(document.activeElement))) {
           e.preventDefault();
           first.focus();
         }
