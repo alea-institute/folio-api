@@ -187,6 +187,13 @@ function beginNavigation(restoring = false) {
             setNodeExpanded($(this).parent('.tree-node'), false);
         }
     });
+    $('.loading-indicator').remove();
+    $('.expand-icon, .siblings-toggle, .tree-retry').each(function() {
+        const control = $(this);
+        if (control.data('loadGeneration') !== undefined) {
+            control.prop('disabled', false).removeData('loadGeneration');
+        }
+    });
     searchGeneration++;
     revealGeneration++;
     selectionGeneration++;
@@ -698,7 +705,11 @@ function loadClassDetails(iri) {
 async function selectNodeByIri(iri) {
     if (navigationBusy) return;
     const existing = $('.tree-node').filter(function() { return this.dataset.id === iri; }).first();
-    if (existing.length) return selectNode(existing);
+    if (existing.length) {
+        const details = selectNode(existing);
+        existing[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return details;
+    }
     const generation = beginNavigation();
     try {
         if (isSearchFilterActive()) {
@@ -719,6 +730,7 @@ async function selectNodeByIri(iri) {
             const node = findOccurrence(type, path);
             if (!node.length) throw new Error('Node not found');
             selectNode(node, false, { generation });
+            node[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
         if (generation !== searchGeneration) return;
         finishNavigation(generation, 'push', selectionUrl(captureSelection()));
@@ -927,7 +939,9 @@ async function loadAndSelectNode(nodeId, sectionType, generation) {
         node = findOccurrence(sectionType, path);
     }
     if (!node.length) { historyNotice('That item is no longer available in the tree.'); return false; }
-    const loaded = await selectNode(node, false, { generation, notify: false });
+    const details = selectNode(node, false, { generation, notify: false });
+    node[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const loaded = await details;
     if (generation === searchGeneration && !loaded) throw new Error('Could not restore details');
     return loaded;
 }
