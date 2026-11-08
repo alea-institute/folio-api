@@ -53,6 +53,7 @@ let navigationBusy = false;
 let restoringHistory = false;
 let selectionGeneration = 0;
 let detailsPending = false;
+let detailOnlySelection = null;
 let restoreRequests = null;
 let historySaveToken = 0;
 const branchLoads = new WeakMap();
@@ -80,7 +81,7 @@ function occurrenceContainer(type, path) {
 
 function captureSelection() {
     const selected = $('.tree-node.selected').first();
-    return selected.length ? { type: selected.attr('data-type'), path: occurrencePath(selected) } : null;
+    return selected.length ? { type: selected.attr('data-type'), path: occurrencePath(selected) } : detailOnlySelection;
 }
 
 function captureView() {
@@ -124,6 +125,8 @@ function savedView(state) {
     const selection = view.selection;
     if (selection !== null && (!selection || !Object.hasOwn(SECTIONS, selection.type) ||
         !path(selection.path) || !selection.path.length)) return null;
+    if (selection?.detailOnly !== undefined &&
+        (selection.detailOnly !== true || selection.path.length !== 1 || view.query)) return null;
     return view;
 }
 
@@ -217,9 +220,10 @@ function finishNavigation(generation, mode, url) {
     if (mode) writeView(mode, url);
 }
 
-function notifySelection(node) {
+function notifySelection() {
+    const selection = captureSelection();
     document.dispatchEvent(new CustomEvent('entity:selected', {
-        detail: node && node.length ? { iri: node.attr('data-id'), type: node.attr('data-type') }
+        detail: selection ? { iri: selection.path.at(-1), type: selection.type }
             : { iri: null, type: null }
     }));
 }
@@ -227,14 +231,24 @@ function notifySelection(node) {
 function clearSelection() {
     selectionGeneration++;
     detailsPending = false;
+    detailOnlySelection = null;
     $('.tree-node.selected').removeClass('selected');
     document.getElementById('class-details').innerHTML = '<div class="p-4 text-gray-500"><h3>Select an item</h3><p>Choose a class or property from the tree to view its details</p></div>';
 }
 
 function resumeSelection(generation) {
-    const node = $('.tree-node.selected').first();
-    if (node.length && detailsPending) loadDetails(node.attr('data-id'), node.attr('data-type'), generation);
-    notifySelection(node);
+    const selection = captureSelection();
+    if (selection && detailsPending) loadDetails(selection.path.at(-1), selection.type, generation);
+    notifySelection();
+}
+
+function selectDetailsOnly(iri, type, generation, notify = true) {
+    if (generation !== searchGeneration) return Promise.resolve(false);
+    clearSelection();
+    detailOnlySelection = { type, path: [iri], detailOnly: true };
+    const details = loadDetails(iri, type, generation);
+    if (notify) notifySelection();
+    return details;
 }
 
 async function childData(nodeId, sectionType, generation) {
@@ -618,17 +632,18 @@ function selectNode(li, updateUrl = true, { generation, reveal = true, notify = 
     if (updateUrl && li.hasClass('selected') && !navigationBusy) {
         ensureNodeVisible(li);
         saveViewSoon();
-        if (notify) notifySelection(li);
+        if (notify) notifySelection();
         return loadDetails(li.attr('data-id'), li.attr('data-type'));
     }
     const ownsNavigation = generation === undefined;
     if (ownsNavigation) generation = beginNavigation();
     if (generation !== searchGeneration) return Promise.resolve(false);
     if (reveal) ensureNodeVisible(li);
+    detailOnlySelection = null;
     $('.tree-node.selected').removeClass('selected');
     li.addClass('selected');
     const details = loadDetails(li.attr('data-id'), li.attr('data-type'), generation);
-    if (notify) notifySelection(li);
+    if (notify) notifySelection();
     if (ownsNavigation) finishNavigation(generation, updateUrl ? 'push' : null, selectionUrl(captureSelection()));
     return details;
 }
@@ -728,9 +743,12 @@ async function selectNodeByIri(iri) {
             await loadNodePath(path, type, generation);
             if (generation !== searchGeneration) return;
             const node = findOccurrence(type, path);
-            if (!node.length) throw new Error('Node not found');
-            selectNode(node, false, { generation });
-            node[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+            if (node.length) {
+                selectNode(node, false, { generation });
+                node[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } else {
+                selectDetailsOnly(path.at(-1), type, generation);
+            }
         }
         if (generation !== searchGeneration) return;
         finishNavigation(generation, 'push', selectionUrl(captureSelection()));
@@ -923,6 +941,7 @@ window.selectNodeByIri = selectNodeByIri;
 async function loadAndSelectNode(nodeId, sectionType, generation) {
     const root = $('#' + SECTIONS[sectionType].rootListId);
     let node = root.find('.tree-node').filter(function() { return this.dataset.id === nodeId; }).first();
+    let detailOnlyId;
     if (!node.length) {
         const response = await fetch(ontologyUrl(SECTIONS[sectionType].pathEndpoint + encodeURIComponent(extractIdFromIri(nodeId))));
         if (generation !== searchGeneration) return false;
@@ -934,13 +953,15 @@ async function loadAndSelectNode(nodeId, sectionType, generation) {
         const data = await response.json();
         if (generation !== searchGeneration) return false;
         const path = (data.path || []).map(item => item.iri);
+        if (!path.length) throw new Error('Could not find node path');
+        detailOnlyId = path.at(-1);
         await loadNodePath(path, sectionType, generation);
         if (generation !== searchGeneration) return false;
         node = findOccurrence(sectionType, path);
     }
-    if (!node.length) { historyNotice('That item is no longer available in the tree.'); return false; }
-    const details = selectNode(node, false, { generation, notify: false });
-    node[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const details = node.length ? selectNode(node, false, { generation, notify: false })
+        : selectDetailsOnly(detailOnlyId, sectionType, generation, false);
+    if (node.length) node[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
     const loaded = await details;
     if (generation === searchGeneration && !loaded) throw new Error('Could not restore details');
     return loaded;
@@ -1187,7 +1208,10 @@ async function restoreHistory(state, initial = false) {
                 root.toggle(section.open);
                 $('#' + SECTIONS[type].sectionId + ' .section-chevron').toggleClass('collapsed', !section.open);
             }
-            if (snapshot.selection) {
+            if (snapshot.selection?.detailOnly) {
+                await loadAndSelectNode(snapshot.selection.path[0], snapshot.selection.type, generation);
+                if (generation !== searchGeneration) return;
+            } else if (snapshot.selection) {
                 const node = findOccurrence(snapshot.selection.type, snapshot.selection.path);
                 if (node.length) {
                     const loaded = await selectNode(node, false, { generation, reveal: false, notify: false });
@@ -1205,7 +1229,7 @@ async function restoreHistory(state, initial = false) {
             if (nodeId) await loadAndSelectNode(nodeId, type, generation);
         }
         if (generation !== searchGeneration) return;
-        notifySelection($('.tree-node.selected').first());
+        notifySelection();
         finishNavigation(generation, initial && !snapshot ? 'replace' : null);
         if (missing) historyNotice('Some saved branches or the selected item are no longer available. The remaining view has been restored.');
     } catch (_) {
@@ -1269,7 +1293,7 @@ async function searchUnified(query) {
         if (data.every(result => result.matches.length === 0)) {
             await clearFilterMode(generation);
             if (generation !== searchGeneration) return;
-            notifySelection(null);
+            notifySelection();
         } else {
             renderSearchResults(query, data);
             const first = $('.tree-node-highlighted').first();
@@ -1486,7 +1510,7 @@ async function resetTreeSearch() {
     try {
         await clearFilterMode(generation);
         if (generation !== searchGeneration) return;
-        notifySelection(null);
+        notifySelection();
         finishNavigation(generation, 'push', selectionUrl(null));
     } catch (_) {
         if (generation !== searchGeneration) return;
