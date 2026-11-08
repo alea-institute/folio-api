@@ -72,6 +72,48 @@ class TreeHistoryBrowserTests(ExplorerBrowserCase):
         await expect(self.node("p-beta")).to_be_visible()
         await expect(self.page.locator("#explore-search-input")).to_have_value("alpha")
 
+    async def test_details_navigation_scrolls_loaded_and_new_targets_into_view(self):
+        await self.open()
+        for index in range(60):
+            identity = iri(f"c-extra-root-{index}")
+            self.fixtures.nodes[identity] = {
+                "id": identity,
+                "label": f"Extra Concept {index}",
+                "type": "class",
+                "children": [],
+                "parents": [],
+            }
+            self.fixtures.roots["class"].append(identity)
+        await self.page.reload()
+        await self.settled()
+        await expect(self.page.locator("#class-tree-root > .tree-node")).to_have_count(
+            62
+        )
+        target = self.node("p-beta").locator(":scope > .node-content")
+        for loaded in (False, True):
+            with self.subTest(target_already_loaded=loaded):
+                await self.choose("c-root")
+                if loaded:
+                    await expect(target).not_to_be_in_viewport()
+                else:
+                    await expect(target).to_have_count(0)
+                length = await self.page.evaluate("history.length")
+                await self.page.get_by_role(
+                    "link", name="Related Beta Relation"
+                ).click()
+                await self.selected("p-beta")
+                await expect(target).to_be_in_viewport()
+                self.assertEqual(await self.page.evaluate("history.length"), length + 1)
+        with self.subTest(legacy_node_link=True):
+            await self.page.evaluate(
+                "iri => history.replaceState(null, '', '?node=' + encodeURIComponent(iri) + '&type=property')",
+                iri("p-beta"),
+            )
+            await self.page.reload()
+            await self.settled()
+            await self.selected("p-beta")
+            await expect(target).to_be_in_viewport()
+
     async def settled(self):
         await expect(self.page.locator("#explore-tree")).to_have_attribute(
             "aria-busy", "false"
@@ -549,6 +591,53 @@ class TreeHistoryBrowserTests(ExplorerBrowserCase):
         await self.selected("p-alpha")
         await expect(self.node("c-alpha-child")).to_be_visible()
         await expect(self.page.locator(".loading-indicator")).to_have_count(0)
+
+    async def test_canceled_branch_controls_retry_before_old_response(self):
+        for prefix, other, endpoint in (
+            ("c", "p", "/taxonomy/tree/data"),
+            ("p", "c", "/properties/tree/data"),
+        ):
+            for action in ("expand", "siblings"):
+                with self.subTest(section=prefix, action=action):
+                    await self.open()
+                    await self.search("alpha")
+                    await self.choose(prefix + "-alpha")
+                    if action == "expand":
+                        parent = prefix + "-alpha"
+                        control = self.node(parent).locator(
+                            ":scope > .node-content > .expand-icon"
+                        )
+                        child = prefix + "-alpha-child"
+                    else:
+                        parent = prefix + "-root"
+                        control = self.node(parent).locator(
+                            ":scope > .children-container > .siblings-row > button"
+                        )
+                        child = prefix + "-context"
+                    key = endpoint + "?node_id=" + quote(iri(parent), safe="")
+                    requests_before = self.fixtures.requests[key]
+                    obsolete = self.fixtures.hold(key)
+                    await control.click()
+                    await obsolete.wait()
+                    await self.choose(other + "-alpha")
+                    await expect(self.page.locator(".loading-indicator")).to_have_count(
+                        0
+                    )
+                    current = self.fixtures.hold(key)
+                    await control.click()
+                    await current.wait()
+                    await self.release_response(obsolete)
+                    if action == "expand":
+                        await control.click()
+                    else:
+                        await expect(control).to_be_disabled()
+                    await self.release_response(current)
+                    await expect(self.node(child)).to_be_visible()
+                    await self.selected(other + "-alpha")
+                    await expect(self.page.locator(".loading-indicator")).to_have_count(
+                        0
+                    )
+                    self.assertEqual(self.fixtures.requests[key], requests_before + 2)
 
     async def test_mobile_dark_history_preserves_property_selection(self):
         await self.page.set_viewport_size({"width": 390, "height": 844})
