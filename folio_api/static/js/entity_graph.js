@@ -970,7 +970,7 @@
   var _panStartXform = { x: 0, y: 0 };
 
   function _panMouseDown(e) {
-    if (e.button !== 0) return;
+    if (navigationPending || e.button !== 0) return;
     if (e.target && e.target.closest && e.target.closest('.graph-node')) return;
     _panning = true;
     _panStart = { x: e.clientX, y: e.clientY };
@@ -1021,6 +1021,7 @@
   };
 
   function _nodeDragStart(e, nodeEl, iri, edgesGroup) {
+    if (navigationPending) return;
     e.stopPropagation();   // prevent pan handler from also activating
     _dragState.active = true;
     _dragState.nodeEl = nodeEl;
