@@ -119,6 +119,67 @@ class TreeHistoryBrowserTests(ExplorerBrowserCase):
             "aria-busy", "false"
         )
 
+    async def test_legacy_links_outside_curated_roots_restore_details_and_graph(self):
+        for kind, prefix in (("class", "c"), ("property", "p")):
+            with self.subTest(section=kind):
+                self.fixtures.roots[kind].remove(iri(prefix + "-other"))
+                target = iri(prefix + "-beta")
+                await self.page.goto(
+                    "https://explorer.test/explore/tree?node="
+                    + quote(target, safe="")
+                    + "&type="
+                    + kind
+                )
+                await self.settled()
+                details = self.page.locator("#class-details [data-details-iri]")
+                await expect(details).to_have_attribute("data-details-iri", target)
+                await expect(self.node(prefix + "-other")).to_have_count(0)
+                await expect(self.page.locator(".tree-node.selected")).to_have_count(0)
+                await self.page.locator("#tab-graph").click()
+                graph = self.page.locator(".graph-node-selected")
+                await expect(graph).to_have_attribute("data-iri", target)
+                await self.choose("c-root")
+                length = await self.page.evaluate("history.length")
+                await self.page.go_back()
+                await self.settled()
+                await expect(details).to_have_attribute("data-details-iri", target)
+                await expect(graph).to_have_attribute("data-iri", target)
+                await expect(self.node(prefix + "-other")).to_have_count(0)
+                self.assertEqual(await self.page.evaluate("history.length"), length)
+                await self.page.reload()
+                await self.settled()
+                await expect(details).to_have_attribute("data-details-iri", target)
+                await self.page.locator("#tab-graph").click()
+                await expect(graph).to_have_attribute("data-iri", target)
+                await self.page.go_forward()
+                await self.settled()
+                await self.selected("c-root")
+                await expect(graph).to_have_attribute("data-iri", iri("c-root"))
+
+    async def test_details_link_outside_curated_roots_survives_history_and_clear(self):
+        self.fixtures.roots["property"].remove(iri("p-other"))
+        await self.page.goto("https://explorer.test/explore/tree")
+        await self.settled()
+        await self.choose("c-root")
+        length = await self.page.evaluate("history.length")
+        await self.page.get_by_role("link", name="Related Beta Relation").click()
+        details = self.page.locator("#class-details [data-details-iri]")
+        await expect(details).to_have_attribute("data-details-iri", iri("p-beta"))
+        self.assertEqual(await self.page.evaluate("history.length"), length + 1)
+        await self.page.go_back()
+        await self.settled()
+        await self.selected("c-root")
+        await self.page.go_forward()
+        await self.settled()
+        await expect(details).to_have_attribute("data-details-iri", iri("p-beta"))
+        await self.search("alpha")
+        await self.page.locator("#explore-search-input").press("Escape")
+        await self.settled()
+        await expect(details).to_have_count(0)
+        self.assertIsNone(
+            await self.page.evaluate("history.state.folioExplorer.selection")
+        )
+
     async def choose(self, name, within=None):
         await self.node(name, within).locator(":scope > .node-content").click()
         await self.selected(name)
