@@ -276,3 +276,68 @@ class GraphHistoryBrowserTests(ExplorerBrowserCase):
         await self.graph_selected("c-alpha")
         await self.release_response(barrier)
         await self.graph_selected("c-alpha")
+
+    async def test_pending_navigation_cannot_start_graph_drags(self):
+        for gesture in ("pan", "node"):
+            with self.subTest(gesture=gesture):
+                await self.open()
+                await self.search("alpha")
+                await self.page.locator("#tab-graph").click()
+                await self.graph_selected("c-alpha")
+                viewport = self.page.locator("#graph-viewport")
+                target = (
+                    viewport
+                    if gesture == "pan"
+                    else self.page.locator(".graph-node-selected")
+                )
+                box = await target.bounding_box()
+                x = box["x"] + (box["width"] - 5 if gesture == "pan" else 10)
+                y = box["y"] + (box["height"] - 5 if gesture == "pan" else 10)
+                barrier = self.fixtures.hold("/taxonomy/tree/search?query=beta")
+                await self.page.locator("#explore-search-input").fill("beta")
+                await self.page.locator("#explore-search-input").press("Enter")
+                await barrier.wait()
+                try:
+                    await self.page.mouse.move(x, y)
+                    await self.page.mouse.down()
+                    await expect(viewport).not_to_have_class(
+                        re.compile("graph-grabbing")
+                    )
+                    await expect(self.page.locator("body")).not_to_have_css(
+                        "cursor", "grabbing"
+                    )
+                    await self.release_response(barrier)
+                    await self.graph_selected("c-beta")
+                    transform = self.page.locator("#graph-transform")
+                    await expect(transform).to_have_attribute(
+                        "style", re.compile("transform: translate")
+                    )
+                    before = await transform.get_attribute("style")
+                    await self.page.mouse.move(x - 40, y - 40)
+                    await expect(transform).to_have_attribute("style", before)
+                    await self.graph_selected("c-beta")
+                finally:
+                    barrier.release()
+                    await self.page.mouse.up()
+
+                target = (
+                    viewport
+                    if gesture == "pan"
+                    else self.page.locator(".graph-node-selected")
+                )
+                box = await target.bounding_box()
+                x = box["x"] + (box["width"] - 5 if gesture == "pan" else 10)
+                y = box["y"] + (box["height"] - 5 if gesture == "pan" else 10)
+                await self.page.mouse.move(x, y)
+                await self.page.mouse.down()
+                try:
+                    if gesture == "pan":
+                        await expect(viewport).to_have_class(
+                            re.compile("graph-grabbing")
+                        )
+                    else:
+                        await expect(self.page.locator("body")).to_have_css(
+                            "cursor", "grabbing"
+                        )
+                finally:
+                    await self.page.mouse.up()
