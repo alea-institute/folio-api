@@ -200,6 +200,8 @@ def initialize_folio(folio_config: Dict[str, Any], llm_config: Dict[str, Any]) -
             - api_key: Optional API key (falls back to env var)
             - effort: Universal effort level ("low", "medium", "high")
             - tier: Universal service tier ("flex", "standard", "priority")
+            - llm_kwargs: Optional object of provider parameters passed to every
+              LLM call, overriding effort/tier (e.g. {"reasoning_effort": "low"})
 
     Returns:
         FOLIO: Initialized FOLIO instance
@@ -220,6 +222,16 @@ def initialize_folio(folio_config: Dict[str, Any], llm_config: Dict[str, Any]) -
         llm_api_key = os.getenv(_API_KEY_ENV_VARS.get(llm_engine, "OPENAI_API_KEY"))
     llm_effort = llm_config.get("effort", None)
     llm_tier = llm_config.get("tier", None)
+    # Provider parameters passed verbatim to every LLM call, overriding what
+    # effort/tier map to. alea-llm-client <= 0.3.3 only maps effort/tier for
+    # gpt-5.x and silently drops them for gpt-6*, so e.g.
+    # {"reasoning_effort": "low"} must be set here for those models.
+    llm_kwargs = llm_config.get("llm_kwargs", None)
+    if llm_kwargs is not None and not isinstance(llm_kwargs, dict):
+        raise ValueError(
+            "config.llm.llm_kwargs must be an object mapping parameter names "
+            f"to values, got {type(llm_kwargs).__name__}"
+        )
 
     # Create the LLM. The provider's client (e.g. alea_llm_client.OpenAIModel)
     # raises ValueError at construction if no api_key can be resolved from
@@ -252,6 +264,7 @@ def initialize_folio(folio_config: Dict[str, Any], llm_config: Dict[str, Any]) -
         github_repo_branch=folio_config["branch"],
         use_cache=True,
         llm=llm,
+        llm_kwargs=llm_kwargs,
         effort=llm_effort,
         tier=llm_tier,
     )

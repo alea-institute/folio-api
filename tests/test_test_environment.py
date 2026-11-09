@@ -198,3 +198,52 @@ def test_local_owl_dispatches_by_source_url():
 
     assert FOLIO.load_owl(source_type="http", http_url=CANON_SOURCE_URL) == load_canon_snapshot()
     assert FOLIO.load_owl(source_type="github") == load_snapshot()
+
+
+def _capture_folio_kwargs(monkeypatch):
+    """Replace FOLIO in folio_api.api with a recorder of its constructor kwargs."""
+    import folio_api.api as api
+
+    captured = {}
+
+    def fake_folio(**kwargs):
+        captured.update(kwargs)
+        return object()
+
+    monkeypatch.setattr(api, "FOLIO", fake_folio)
+    return captured
+
+
+def test_llm_kwargs_config_is_passed_to_folio(monkeypatch):
+    """config.llm.llm_kwargs reaches FOLIO, e.g. reasoning_effort for gpt-6*.
+
+    alea-llm-client <= 0.3.3 drops config.llm.effort for gpt-6 models, so an
+    explicit llm_kwargs block is the way to set provider parameters.
+    """
+    from folio_api.api import initialize_folio
+
+    captured = _capture_folio_kwargs(monkeypatch)
+    config = make_test_config()
+    initialize_folio(
+        config["folio"],
+        {**config["llm"], "llm_kwargs": {"reasoning_effort": "low"}},
+    )
+    assert captured["llm_kwargs"] == {"reasoning_effort": "low"}
+
+
+def test_llm_kwargs_defaults_to_none(monkeypatch):
+    from folio_api.api import initialize_folio
+
+    captured = _capture_folio_kwargs(monkeypatch)
+    config = make_test_config()
+    initialize_folio(config["folio"], config["llm"])
+    assert captured["llm_kwargs"] is None
+
+
+def test_llm_kwargs_must_be_a_mapping(monkeypatch):
+    from folio_api.api import initialize_folio
+
+    _capture_folio_kwargs(monkeypatch)
+    config = make_test_config()
+    with pytest.raises(ValueError, match="llm_kwargs"):
+        initialize_folio(config["folio"], {**config["llm"], "llm_kwargs": "low"})
