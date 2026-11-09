@@ -225,7 +225,7 @@ async def search_label(request: Request, query: str) -> OWLSearchResults:
             "definition": "A legally binding agreement between two or more parties.",
             ...
           },
-          0.95  // Relevance score
+          95.0  // Relevance score (0-100)
         ],
         [...]
       ]
@@ -233,7 +233,8 @@ async def search_label(request: Request, query: str) -> OWLSearchResults:
     ```
 
     Note: The results are returned as a list of tuples, each containing an OWLClass object
-    and a numeric relevance score between 0 and 1, with higher scores indicating better matches.
+    and a numeric relevance score between 0 and 100, with higher scores indicating better matches
+    (results are returned best first).
     """
     # check query length
     if not query_length_check(query):
@@ -282,7 +283,7 @@ async def search_definition(request: Request, query: str) -> OWLSearchResults:
             "definition": "Land and anything fixed, immovable, or permanently attached to it.",
             ...
           },
-          0.88  // Relevance score
+          88.0  // Relevance score (0-100)
         ],
         [...]
       ]
@@ -290,7 +291,8 @@ async def search_definition(request: Request, query: str) -> OWLSearchResults:
     ```
 
     Note: The results are returned as a list of tuples, each containing an OWLClass object
-    and a numeric relevance score between 0 and 1, with higher scores indicating better matches.
+    and a numeric relevance score between 0 and 100, with higher scores indicating better matches
+    (results are returned best first).
     """
     # check query length
     if not query_length_check(query):

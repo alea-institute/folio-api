@@ -23,7 +23,7 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 ENV PATH="/app/.local/bin/:$PATH"
 
 # Install Python tools with uv
-RUN uv python install 3.12 \
+RUN uv python install 3.13 \
     && \
     uv tool install pipx \
     && \
