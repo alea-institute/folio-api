@@ -439,8 +439,8 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "fastapi", specifier = ">=0.112.2" },
-    { name = "folio-mcp", url = "https://github.com/alea-institute/folio-mcp/archive/b9e48d25f13d106080484a675d4800ad067b269e.tar.gz" },
-    { name = "folio-python", extras = ["search", "kaos"], url = "https://github.com/alea-institute/folio-python/archive/a960ea36d8a54ca8adfb8df80858a9e44779f92a.tar.gz" },
+    { name = "folio-mcp", url = "https://github.com/alea-institute/folio-mcp/archive/e883d171c6d7a1e04f8768396d6451620c739cfb.tar.gz" },
+    { name = "folio-python", extras = ["search", "kaos"], url = "https://github.com/alea-institute/folio-python/archive/32bf06aa5606e0bc399c8e49d30a5a22e1754f08.tar.gz" },
     { name = "jinja2", specifier = ">=3.1.6" },
     { name = "limits", specifier = ">=3.13,<6" },
     { name = "uvicorn", specifier = ">=0.30.6" },
@@ -462,12 +462,12 @@ dev = [
 [[package]]
 name = "folio-mcp"
 version = "0.4.3"
-source = { url = "https://github.com/alea-institute/folio-mcp/archive/b9e48d25f13d106080484a675d4800ad067b269e.tar.gz" }
+source = { url = "https://github.com/alea-institute/folio-mcp/archive/e883d171c6d7a1e04f8768396d6451620c739cfb.tar.gz" }
 dependencies = [
     { name = "httpx" },
     { name = "mcp", extra = ["cli"] },
 ]
-sdist = { hash = "sha256:f481c4a014d720b85bc2ca9af54bac2abf3be85ce4cb3249c22bea57f23e5809" }
+sdist = { hash = "sha256:3a1fb0caeb6f4b430a44f0a62359c8e36cef6572de67efa182530e50fed6821b" }
 
 [package.metadata]
 requires-dist = [
@@ -480,13 +480,13 @@ provides-extras = ["local"]
 [[package]]
 name = "folio-python"
 version = "0.4.1"
-source = { url = "https://github.com/alea-institute/folio-python/archive/a960ea36d8a54ca8adfb8df80858a9e44779f92a.tar.gz" }
+source = { url = "https://github.com/alea-institute/folio-python/archive/32bf06aa5606e0bc399c8e49d30a5a22e1754f08.tar.gz" }
 dependencies = [
     { name = "httpx" },
     { name = "lxml" },
     { name = "pydantic" },
 ]
-sdist = { hash = "sha256:931e10f61bf3d885ca7cbb2b81c0bc8d72f4f9c0f72d5b952987c3b1567054be" }
+sdist = { hash = "sha256:9aa094c905268720e9796a03ca7d30866fd2f5e24d06477b7dbdd0cee5ecb6da" }
 
 [package.optional-dependencies]
 kaos = [

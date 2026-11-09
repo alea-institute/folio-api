@@ -71,5 +71,8 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 EXPOSE ${PORT}
 
 # Run the application
-CMD ["/bin/bash", "-c", "/app/.local/bin/uv run uvicorn folio_api.api:app --host 0.0.0.0 --port ${PORT}"]
+# Keep idle upstream connections open longer than Caddy's reverse_proxy does
+# (~2 min by default). With uvicorn's default of 5 s, Caddy could reuse a
+# connection uvicorn was closing and answer 502 "connection reset by peer".
+CMD ["/bin/bash", "-c", "/app/.local/bin/uv run uvicorn folio_api.api:app --host 0.0.0.0 --port ${PORT} --timeout-keep-alive ${UVICORN_TIMEOUT_KEEP_ALIVE:-150}"]
 

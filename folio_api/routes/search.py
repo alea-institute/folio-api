@@ -5,10 +5,11 @@ Search routes.
 # imports
 
 # packages
-from fastapi import APIRouter, Request, HTTPException, status
+from fastapi import APIRouter, Query, Request, HTTPException, status
 from folio import FOLIO
 
 # project
+from folio_api.label_index import get_label_index
 from folio_api.models import OWLClassList, OWLSearchResults, OWLObjectPropertyList
 
 # API router
@@ -69,7 +70,18 @@ def query_length_check(query: str) -> bool:
         },
     },
 )
-async def search_prefix(request: Request, query: str) -> OWLClassList:
+async def search_prefix(
+    request: Request,
+    query: str,
+    limit: int | None = Query(
+        None,
+        ge=1,
+        description=(
+            "Optional cap on the number of classes and, separately, of properties "
+            "returned (ranked order is kept). Omit for every match."
+        ),
+    ),
+) -> OWLClassList:
     """
     Search for FOLIO ontology classes whose labels start with or contain the provided search string.
 
@@ -90,6 +102,9 @@ async def search_prefix(request: Request, query: str) -> OWLClassList:
     - Query must be at least 2 characters long (limited to 1024 characters)
     - An HTTP 400 error is returned if query length requirements are not met
     - A successful response with an empty array is returned if no matches are found
+    - `limit` (optional) keeps only the first `limit` classes and the first `limit`
+      properties; autocomplete clients should set it (a two-letter query such as
+      `co` otherwise matches ~5.6k classes, a ~6 MB response)
 
     Example response:
     ```json
@@ -135,8 +150,6 @@ async def search_prefix(request: Request, query: str) -> OWLClassList:
         [] if query == query_title else folio.search_by_prefix(query_title)
     )
 
-    # Then get label matches that aren't already in prefix results
-    label_results = []
 
     # Combine prefix results with deduplication
     prefix_results = []
@@ -153,86 +166,21 @@ async def search_prefix(request: Request, query: str) -> OWLClassList:
                 seen_iris.add(owl_class.iri)
                 prefix_results.append(owl_class)
 
-    # Check all classes for substring matches
-    # In the FOLIO library, classes is a list of OWLClass objects
-    for owl_class in folio.classes:
-        # Skip if we've already seen this IRI in prefix results
-        if owl_class.iri in seen_iris:
-            continue
-
-        # Skip if class has no label
-        if not owl_class.label:
-            continue
-
-        # Check if query is in the label (case-insensitive)
-        # Also check alternative labels for matches
-        label_match = False
-
-        # Check main label
-        if owl_class.label:
-            if (
-                query in owl_class.label
-                or query_lower in owl_class.label.lower()
-                or query_title in owl_class.label
-            ):
-                label_match = True
-
-        # Check alternative labels
-        if not label_match and owl_class.alternative_labels:
-            for alt_label in owl_class.alternative_labels:
-                if alt_label and (
-                    query in alt_label
-                    or query_lower in alt_label.lower()
-                    or query_title in alt_label
-                ):
-                    label_match = True
-                    break
-
-        # Check preferred label (skos:prefLabel)
-        if not label_match and owl_class.preferred_label:
-            if (
-                query in owl_class.preferred_label
-                or query_lower in owl_class.preferred_label.lower()
-                or query_title in owl_class.preferred_label
-            ):
-                label_match = True
-
-        if label_match:
-            seen_iris.add(owl_class.iri)
-            label_results.append(owl_class)
+    # Substring matches in label / alternative labels / preferred label for
+    # classes (then properties), via the precomputed index; same predicate
+    # as the former inline scans, which cost ~60k str.lower() per request.
+    label_index = get_label_index(folio)
+    label_results = label_index.classes.matches(query, exclude=seen_iris)
 
     # Combine results, with prefix matches first
     results = prefix_results + label_results
 
     # Also search properties
-    property_results = []
-    for prop in folio.object_properties:
-        label_match = False
-        if prop.label and (
-            query in prop.label
-            or query_lower in prop.label.lower()
-            or query_title in prop.label
-        ):
-            label_match = True
-        if not label_match and prop.alternative_labels:
-            for alt in prop.alternative_labels:
-                if alt and (
-                    query in alt
-                    or query_lower in alt.lower()
-                    or query_title in alt
-                ):
-                    label_match = True
-                    break
-        # Check preferred label (skos:prefLabel)
-        if not label_match and prop.preferred_label:
-            if (
-                query in prop.preferred_label
-                or query_lower in prop.preferred_label.lower()
-                or query_title in prop.preferred_label
-            ):
-                label_match = True
-        if label_match:
-            property_results.append(prop)
+    property_results = label_index.properties.matches(query)
+
+    if limit is not None:
+        results = results[:limit]
+        property_results = property_results[:limit]
 
     # Return 200 OK with results (empty array if no matches)
     return OWLClassList(classes=results, properties=property_results)
@@ -290,7 +238,7 @@ async def search_label(request: Request, query: str) -> OWLSearchResults:
     """
     # check query length
     if not query_length_check(query):
-        return OWLClassList(classes=[])
+        return OWLSearchResults(results=[])
 
     folio: FOLIO = request.app.state.folio
     return OWLSearchResults(results=folio.search_by_label(query))
@@ -348,7 +296,7 @@ async def search_definition(request: Request, query: str) -> OWLSearchResults:
     """
     # check query length
     if not query_length_check(query):
-        return OWLClassList(classes=[])
+        return OWLSearchResults(results=[])
 
     folio: FOLIO = request.app.state.folio
     return OWLSearchResults(results=folio.search_by_definition(query))
@@ -413,7 +361,7 @@ async def search_llm_area_of_law(
     """
     # check query length
     if not query_length_check(query):
-        return OWLClassList(classes=[])
+        return OWLSearchResults(results=[])
 
     folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
@@ -440,7 +388,7 @@ async def search_asset_types(
     """
     # check query length
     if not query_length_check(query):
-        return OWLClassList(classes=[])
+        return OWLSearchResults(results=[])
 
     folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
@@ -470,7 +418,7 @@ async def search_communication_modalities(
     """
     # check query length
     if not query_length_check(query):
-        return OWLClassList(classes=[])
+        return OWLSearchResults(results=[])
 
     folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
@@ -499,7 +447,7 @@ async def search_currencies(
     """
     # check query length
     if not query_length_check(query):
-        return OWLClassList(classes=[])
+        return OWLSearchResults(results=[])
 
     folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
@@ -527,7 +475,7 @@ async def search_data_formats(
     """
     # check query length
     if not query_length_check(query):
-        return OWLClassList(classes=[])
+        return OWLSearchResults(results=[])
 
     folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
@@ -555,7 +503,7 @@ async def search_document_artifacts(
     """
     # check query length
     if not query_length_check(query):
-        return OWLClassList(classes=[])
+        return OWLSearchResults(results=[])
 
     folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
@@ -583,7 +531,7 @@ async def search_engagement_terms(
     """
     # check query length
     if not query_length_check(query):
-        return OWLClassList(classes=[])
+        return OWLSearchResults(results=[])
 
     folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
@@ -611,7 +559,7 @@ async def search_events(
     """
     # check query length
     if not query_length_check(query):
-        return OWLClassList(classes=[])
+        return OWLSearchResults(results=[])
 
     folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
@@ -641,7 +589,7 @@ async def search_governmental_bodies(
     """
     # check query length
     if not query_length_check(query):
-        return OWLClassList(classes=[])
+        return OWLSearchResults(results=[])
 
     folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
@@ -669,7 +617,7 @@ async def search_industries(
     """
     # check query length
     if not query_length_check(query):
-        return OWLClassList(classes=[])
+        return OWLSearchResults(results=[])
 
     folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
@@ -697,7 +645,7 @@ async def search_legal_authorities(
     """
     # check query length
     if not query_length_check(query):
-        return OWLClassList(classes=[])
+        return OWLSearchResults(results=[])
 
     folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
@@ -717,7 +665,7 @@ async def search_locations(
     """
     # check query length
     if not query_length_check(query):
-        return OWLClassList(classes=[])
+        return OWLSearchResults(results=[])
 
     folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
@@ -737,7 +685,7 @@ async def search_matter_narratives(
     """
     # check query length
     if not query_length_check(query):
-        return OWLClassList(classes=[])
+        return OWLSearchResults(results=[])
 
     folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
@@ -759,7 +707,7 @@ async def search_matter_narrative_formats(
     """
     # check query length
     if not query_length_check(query):
-        return OWLClassList(classes=[])
+        return OWLSearchResults(results=[])
 
     folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
@@ -780,7 +728,7 @@ async def search_objectives(
     """
     # check query length
     if not query_length_check(query):
-        return OWLClassList(classes=[])
+        return OWLSearchResults(results=[])
 
     folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
@@ -807,7 +755,7 @@ async def search_player_actors(
     """
     # check query length
     if not query_length_check(query):
-        return OWLClassList(classes=[])
+        return OWLSearchResults(results=[])
 
     folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
@@ -829,7 +777,7 @@ async def search_standards_compatibilities(
     """
     # check query length
     if not query_length_check(query):
-        return OWLClassList(classes=[])
+        return OWLSearchResults(results=[])
 
     folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
@@ -850,7 +798,7 @@ async def search_statuses(
     """
     # check query length
     if not query_length_check(query):
-        return OWLClassList(classes=[])
+        return OWLSearchResults(results=[])
 
     folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
@@ -870,7 +818,7 @@ async def search_system_identifiers(
     """
     # check query length
     if not query_length_check(query):
-        return OWLClassList(classes=[])
+        return OWLSearchResults(results=[])
 
     folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
