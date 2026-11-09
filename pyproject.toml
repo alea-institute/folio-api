@@ -3,11 +3,11 @@ name = "folio-api"
 version = "0.4.0"
 description = "API for FOLIO - the Federated Open Legal Information Ontology"
 authors = [{ name = "ALEA Institute", email = "hello@aleainstitute.ai" }]
-requires-python = ">=3.10,<4.0.0"
+requires-python = ">=3.13,<4.0.0"
 readme = "README.md"
 license = "MIT"
 dependencies = [
-    "folio-python[search]>=0.3.3",
+    "folio-python[search]>=0.4.1",
     "fastapi>=0.112.2",
     "uvicorn>=0.30.6",
     "jinja2>=3.1.6",
@@ -67,6 +67,13 @@ line_length = 120
 addopts = "--cov=folio_api --cov-report=term-missing --cov-report=xml"
 
 [tool.uv.sources]
+# folio-python 0.4.1 (bounded search caches, alea-institute/folio-python@1b4fb34)
+# is tagged on GitHub but not on PyPI. Pinned to the v0.4.1 tag's commit
+# archive (no git needed in the image). Drop this once 0.4.1+ is on PyPI.
+# To try another folio-python build (e.g. one with a `kaos` extra), change this
+# URL to that commit's archive, add the extra to the dependency above, and run
+# `uv lock` (see docs in the PR description).
+folio-python = { url = "https://github.com/alea-institute/folio-python/archive/35814e6e405c3a17d7a2240d8ea0efe7b4179461.tar.gz" }
 # folio-mcp 0.4.3 (shared-backend + event-loop fixes) is not on PyPI yet.
 # Pinned to the merge commit's GitHub archive (no git needed in the image).
 # Drop this once 0.4.3 is published.

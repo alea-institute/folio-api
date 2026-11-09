@@ -1,7 +1,11 @@
-"""Compatibility fixes for the pinned folio-python release.
+"""Compatibility fixes for older folio-python releases.
 
-Remove this module once folio-api depends on a folio-python release that
-includes alea-institute/folio-python@1b4fb34 ("bound query result caches").
+folio-api now pins folio-python 0.4.1, which includes
+alea-institute/folio-python@1b4fb34 ("bound query result caches"), so the
+patch below is a no-op (tests/test_folio_compat.py asserts that). It is kept
+as a guard while folio-python is installed from a GitHub archive pin that may
+be swapped for another build; remove it once a bounded release is the floor
+on PyPI.
 """
 
 from functools import lru_cache

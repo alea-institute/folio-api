@@ -41,7 +41,8 @@ from folio_api.ontologies import OntologyRegistry, build_property_children, make
 from folio_api.rate_limit import RateLimitConfig, RateLimitMiddleware
 
 # folio-python <= 0.4.0 caches every distinct fuzzy search forever (~600 KiB
-# each); bound it before any FOLIO instance searches. See folio_compat.
+# each); bound it before any FOLIO instance searches. No-op on the pinned
+# 0.4.1, which bounds it upstream. See folio_compat.
 bound_folio_search_cache()
 
 _DEFAULT_LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
