@@ -16,6 +16,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.routing import Route
 from folio import FOLIO
 from mcp.server.transport_security import TransportSecuritySettings
 from alea_llm_client import (
@@ -382,18 +383,20 @@ def get_app() -> FastAPI:
     app_instance.include_router(folio_api.routes.properties.router)
     app_instance.include_router(folio_api.routes.explore.router)
     app_instance.include_router(folio_api.routes.connections.router)
-    # root.router has /{iri} catch-all, so it must be registered last
-    app_instance.include_router(folio_api.routes.root.router)
 
-    # Mount the FOLIO MCP server at the app root, relying on its own default
-    # streamable_http_path ("/mcp") to define the live endpoint. Mounting the
-    # sub-app AT "/mcp" instead (i.e. Mount("/mcp", mcp_app) with the default
-    # inner path) would nest it at "/mcp/mcp", and even correcting the inner
-    # path to "/" would still require a trailing slash on every request
-    # (Starlette's Mount regex is "<path>/{path:path}", which never matches
-    # the bare mount path with nothing after it). Stash the sub-app on state
-    # so lifespan_handler can enter its session-manager lifespan (Starlette
-    # does not cascade ASGI lifespan events into mounted sub-apps).
+    # The FOLIO MCP server is a Starlette sub-app that serves its own
+    # streamable_http_path ("/mcp"). It is routed with an exact
+    # Route(path, endpoint=mcp_app) registered BEFORE root.router, because:
+    # - root.router's /{iri} catch-all matches "/mcp" for GET. When MCP was
+    #   only mounted after it, GET /mcp (the streamable-HTTP SSE stream) got
+    #   the IRI lookup's 404, which MCP clients read as "session expired".
+    # - Mount("/mcp", mcp_app) would nest the endpoint at "/mcp/mcp", and
+    #   Starlette's Mount never matches the bare mount path anyway.
+    # Route passes the full, unstripped path to mcp_app, so its own "/mcp"
+    # route and any middleware it carries still apply, for every method.
+    # The sub-app is stashed on state so lifespan_handler can enter its
+    # session-manager lifespan (Starlette does not cascade ASGI lifespan
+    # events into sub-apps).
     from folio_mcp.server import mcp as folio_mcp_server
 
     public_hosts = api_config.get(
@@ -428,7 +431,16 @@ def get_app() -> FastAPI:
     )
     mcp_app = folio_mcp_server.streamable_http_app()
     app_instance.state.mcp_app = mcp_app
-    app_instance.mount("/", mcp_app)
+    app_instance.router.routes.append(
+        Route(
+            folio_mcp_server.settings.streamable_http_path,
+            endpoint=mcp_app,
+            include_in_schema=False,
+        )
+    )
+
+    # root.router has the /{iri} catch-all, so it must be registered last
+    app_instance.include_router(folio_api.routes.root.router)
 
     return app_instance
 
