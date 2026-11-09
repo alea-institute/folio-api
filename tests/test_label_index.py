@@ -116,3 +116,9 @@ def test_context_sensitive_lowering_matches_reference():
             if field_matches(e, query, query.lower(), query.title())
         ]
         assert [e.iri for e in haystacks.matches(query)] == want, repr(query)
+
+
+@pytest.mark.parametrize("query", ["", "a"])
+def test_tree_search_ignores_one_character_queries(client, query):
+    body = client.get("/taxonomy/tree/search", params={"query": query}).json()
+    assert body == {"matches": [], "tree": {}}

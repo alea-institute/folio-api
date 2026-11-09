@@ -890,6 +890,12 @@ async def search_taxonomy_tree(
     """
     folio: FOLIO = entry.folio
 
+    # Same floor as /properties/tree/search and the explorer UI: a 1-character
+    # query matches nearly every class (~10 MB, ~6 s on the event loop before
+    # this module's other fixes) and is never sent by the frontend.
+    if not query or len(query) < 2:
+        return JSONResponse(content={"matches": [], "tree": {}})
+
     def _get_match_field(cls, q_lower):
         """Determine which field matched the search query."""
         if cls.label and q_lower in cls.label.lower():
