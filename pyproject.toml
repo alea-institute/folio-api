@@ -67,15 +67,15 @@ line_length = 120
 addopts = "--cov=folio_api --cov-report=term-missing --cov-report=xml"
 
 [tool.uv.sources]
-# folio-python is pinned to main at the merge of alea-institute/folio-python#28
-# (32bf06a, v0.4.1 + kaos search): bounded search caches plus the optional
+# folio-python is pinned to main at the merge of alea-institute/folio-python#29
+# (53b51c4: v0.4.1 + #28 kaos search + #29 LLM query expansion): bounded search caches plus the optional
 # `kaos` extra (kaos-nlp-core BM25 label/definition search, Python >= 3.13).
 # Neither is on PyPI yet; the commit archive needs no git in the image.
 # Set FOLIO_SEARCH_BACKEND=rapidfuzz to force the old RapidFuzz search path.
 # Plain v0.4.1 (no kaos): use .../archive/35814e6e405c3a17d7a2240d8ea0efe7b4179461.tar.gz
 # and drop `kaos` from the extras above, then `uv lock`.
-folio-python = { url = "https://github.com/alea-institute/folio-python/archive/32bf06aa5606e0bc399c8e49d30a5a22e1754f08.tar.gz" }
-# folio-mcp main at the merge of alea-institute/folio-mcp#6 (e883d17): 0.4.3
-# shared-backend fixes + #5 cancellation fix + #6 demo hardening (input
-# validation, capped outputs). Not on PyPI; drop once released.
-folio-mcp = { url = "https://github.com/alea-institute/folio-mcp/archive/e883d171c6d7a1e04f8768396d6451620c739cfb.tar.gz" }
+folio-python = { url = "https://github.com/alea-institute/folio-python/archive/53b51c49717b0ebeade4d255db7b75fbb7737fe9.tar.gz" }
+# folio-mcp main at the merge of alea-institute/folio-mcp#8 (b6a3086): 0.4.3
+# shared-backend fixes + #5 cancellation + #6 demo hardening + #9 short-ID
+# self-exclusion + #8 search_expanded tool. Not on PyPI; drop once released.
+folio-mcp = { url = "https://github.com/alea-institute/folio-mcp/archive/b6a3086672863ae99df23587367631aa3aabde3b.tar.gz" }
