@@ -25,15 +25,15 @@ wheels = [
 
 [[package]]
 name = "alea-llm-client"
-version = "0.3.3"
+version = "0.3.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx", extra = ["http2"] },
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/2d/79/e43775a1a3f6aba46d158aceb7989634070a6bf030febf863f942522a9ff/alea_llm_client-0.3.3.tar.gz", hash = "sha256:9da8ed66606d5b43b587fab62b58a519b50bc4e74f4ffa55a21cb467803fc0a6", size = 59222, upload-time = "2026-03-16T22:21:35.995Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/29/eb/7cffba5947ed600f434882e49b9358dbcf3d3f33579d4cac8d28c6e07a3d/alea_llm_client-0.3.4.tar.gz", hash = "sha256:a05654a26c2abd88e541f79d6fc1b80b049db0e706f99d3eada222d34fcf6c54", size = 59573, upload-time = "2026-11-09T15:50:13.88Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/c2/99/191ea17f418acdbb2ed3e20e95e727d821c72ca1d520eaea67766ed86d62/alea_llm_client-0.3.3-py3-none-any.whl", hash = "sha256:dc6b6e2c0cf7bb9dabea929492703f326e2f81b42ce67dcd7f772163b5b5e785", size = 74406, upload-time = "2026-03-16T22:21:34.896Z" },
+    { url = "https://files.pythonhosted.org/packages/bc/02/d4f9b76843c33063f1304d531cf0014935f0b34dbb94ebd97f28253241a5/alea_llm_client-0.3.4-py3-none-any.whl", hash = "sha256:7a6a7f24bb8d6256ce9cdc4001e78b9b134d3ecd4ddf6e517d5bb97b310e5fb9", size = 74775, upload-time = "2026-11-09T15:50:12.846Z" },
 ]
 
 [[package]]
@@ -416,7 +416,7 @@ version = "0.4.0"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
-    { name = "folio-mcp" },
+    { name = "folio-mcp", extra = ["kaos"] },
     { name = "folio-python", extra = ["kaos", "search"] },
     { name = "jinja2" },
     { name = "limits" },
@@ -439,8 +439,8 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "fastapi", specifier = ">=0.112.2" },
-    { name = "folio-mcp", url = "https://github.com/alea-institute/folio-mcp/archive/b6a3086672863ae99df23587367631aa3aabde3b.tar.gz" },
-    { name = "folio-python", extras = ["search", "kaos"], url = "https://github.com/alea-institute/folio-python/archive/53b51c49717b0ebeade4d255db7b75fbb7737fe9.tar.gz" },
+    { name = "folio-mcp", extras = ["kaos"], specifier = ">=0.4.5" },
+    { name = "folio-python", extras = ["search", "kaos"], specifier = ">=0.4.2" },
     { name = "jinja2", specifier = ">=3.1.6" },
     { name = "limits", specifier = ">=3.13,<6" },
     { name = "uvicorn", specifier = ">=0.30.6" },
@@ -461,32 +461,35 @@ dev = [
 
 [[package]]
 name = "folio-mcp"
-version = "0.4.3"
-source = { url = "https://github.com/alea-institute/folio-mcp/archive/b6a3086672863ae99df23587367631aa3aabde3b.tar.gz" }
+version = "0.4.5"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx" },
     { name = "mcp", extra = ["cli"] },
 ]
-sdist = { hash = "sha256:248b890edb7e1ea13c4bcd43c4320014955b0aafb22169ee80b6d39612d47b0e" }
-
-[package.metadata]
-requires-dist = [
-    { name = "folio-python", extras = ["search"], marker = "extra == 'local'", specifier = ">=0.3.3" },
-    { name = "httpx", specifier = ">=0.27" },
-    { name = "mcp", extras = ["cli"], specifier = ">=1.26,<2" },
+sdist = { url = "https://files.pythonhosted.org/packages/f9/70/d7229b831909002ca2fcf472ca02c7bf8f94d0087f113a4859ffd6dc5747/folio_mcp-0.4.5.tar.gz", hash = "sha256:bd0a54f430ae8c49a508a2363b4e3708c3a05581424163863737bfbfdbf45ba9", size = 32277, upload-time = "2026-11-09T15:53:58.308Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/da/6a/f872c5cd8d1dd8ba1712ca271add2360e665be223a76ec1b1a37ef246f20/folio_mcp-0.4.5-py3-none-any.whl", hash = "sha256:9f5be2917e6714a0df9c6823fb0d8b40754353e077c45ec82e692e0b5248ee77", size = 37809, upload-time = "2026-11-09T15:53:57.429Z" },
 ]
-provides-extras = ["local"]
+
+[package.optional-dependencies]
+kaos = [
+    { name = "kaos-citations" },
+]
 
 [[package]]
 name = "folio-python"
-version = "0.4.1"
-source = { url = "https://github.com/alea-institute/folio-python/archive/53b51c49717b0ebeade4d255db7b75fbb7737fe9.tar.gz" }
+version = "0.4.2"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx" },
     { name = "lxml" },
     { name = "pydantic" },
 ]
-sdist = { hash = "sha256:30794688caa3a9b8b5b6507adc9bef32e451c10fe0ddb3da1878ec067a3a1db8" }
+sdist = { url = "https://files.pythonhosted.org/packages/df/a7/c55df4524cf26ab75c8f473ac2221c910a0fccfead4d551773ac2cb78430/folio_python-0.4.2.tar.gz", hash = "sha256:8345ef1fb05d58a6628dd64a48337aaead296db6554bdd77e77f3c6eb771e627", size = 45390, upload-time = "2026-11-09T15:48:54.81Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ba/6d/94be01c07fd6d68d63a14a5a5e2db5dab12dc16bdb2dd9dfbe2a192187ec/folio_python-0.4.2-py3-none-any.whl", hash = "sha256:b9e291758cca045b0308cadf01e50e92799b56d9349f7628875f2efb3771e877", size = 46870, upload-time = "2026-11-09T15:48:53.789Z" },
+]
 
 [package.optional-dependencies]
 kaos = [
@@ -497,18 +500,6 @@ search = [
     { name = "marisa-trie" },
     { name = "rapidfuzz" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "alea-llm-client", marker = "extra == 'search'", specifier = ">=0.3.3" },
-    { name = "httpx", specifier = ">=0.27.2" },
-    { name = "kaos-nlp-core", marker = "python_full_version >= '3.13' and extra == 'kaos'", specifier = ">=0.1.15,<0.2" },
-    { name = "lxml", specifier = ">=6.1.0" },
-    { name = "marisa-trie", marker = "extra == 'search'", specifier = ">=1.2.0,<2" },
-    { name = "pydantic", specifier = ">=2.8.2" },
-    { name = "rapidfuzz", marker = "extra == 'search'", specifier = ">=3.10.0,<4" },
-]
-provides-extras = ["search", "kaos"]
 
 [[package]]
 name = "h11"
@@ -665,6 +656,33 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/19/74/a633ee74eb36c44aa6d1095e7cc5569bebf04342ee146178e2d36600708b/jsonschema_specifications-2025.9.1.tar.gz", hash = "sha256:b540987f239e745613c7a9176f3edb72b832a4ac465cf02712288397832b5e8d", size = 32855, upload-time = "2025-09-08T01:34:59.186Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/41/45/1a4ed80516f02155c51f51e8cedb3c1902296743db0bbc66608a0db2814f/jsonschema_specifications-2025.9.1-py3-none-any.whl", hash = "sha256:98802fee3a11ee76ecaca44429fda8a41bff98b00a0f2838151b113f210cc6fe", size = 18437, upload-time = "2025-09-08T01:34:57.871Z" },
+]
+
+[[package]]
+name = "kaos-citations"
+version = "0.1.7"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "kaos-core" },
+    { name = "kaos-nlp-core" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/83/c8/211c83bdb464284bddf4c93c4087060e366271963578f242d9f1d2c3a521/kaos_citations-0.1.7.tar.gz", hash = "sha256:f14068a26aa1047700d9cb7b4487378c63f37ddfac9450a9f67727a5b5f64f45", size = 372569, upload-time = "2026-09-29T16:52:21.462Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/9d/6a/6c00305a0fc9d93a0b945248132ccc306cbfae2ba53acc6b0aafb4fbb206/kaos_citations-0.1.7-py3-none-any.whl", hash = "sha256:d42c10b8020da371221a8de9956d1b6f9c5d6a703e6d2145bd92b1cac432809b", size = 351144, upload-time = "2026-09-29T16:52:19.359Z" },
+]
+
+[[package]]
+name = "kaos-core"
+version = "0.1.5"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "click" },
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/7f/55/b85de46e86b17d0fdb9097ca2cce9221a5e5ca358e1ccb65a459ab3b561d/kaos_core-0.1.5.tar.gz", hash = "sha256:8e38a30d5c850e6fd18d73514e6989bdc85991d1b04ddb9374ea564ac2a80732", size = 205228, upload-time = "2026-06-23T19:45:52.928Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ee/c4/c4a98b03e3ca454d456f76b0949daa656a39496b79a99bdc73eb50b786b4/kaos_core-0.1.5-py3-none-any.whl", hash = "sha256:36c2c1c56ecd554d39d4d33bb9bf18bbc33c4c00af3ea77d4675e7d084b3b20a", size = 153333, upload-time = "2026-06-23T19:45:51.635Z" },
 ]
 
 [[package]]
