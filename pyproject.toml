@@ -11,7 +11,7 @@ dependencies = [
     "fastapi>=0.112.2",
     "uvicorn>=0.30.6",
     "jinja2>=3.1.6",
-    "folio-mcp>=0.2.0",
+    "folio-mcp>=0.4.3",
     "limits>=3.13,<6",
 ]
 
@@ -65,3 +65,9 @@ line_length = 120
 
 [tool.pytest.ini_options]
 addopts = "--cov=folio_api --cov-report=term-missing --cov-report=xml"
+
+[tool.uv.sources]
+# folio-mcp 0.4.3 (shared-backend + event-loop fixes) is not on PyPI yet.
+# Pinned to the merge commit's GitHub archive (no git needed in the image).
+# Drop this once 0.4.3 is published.
+folio-mcp = { url = "https://github.com/alea-institute/folio-mcp/archive/b9e48d25f13d106080484a675d4800ad067b269e.tar.gz" }
