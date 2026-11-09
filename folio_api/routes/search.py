@@ -307,7 +307,7 @@ async def search_label(request: Request, query: str) -> OWLSearchResults:
     """
     # check query length
     if not query_length_check(query):
-        return OWLClassList(classes=[])
+        return OWLSearchResults(results=[])
 
     folio: FOLIO = request.app.state.folio
     return OWLSearchResults(results=folio.search_by_label(query))
@@ -364,7 +364,7 @@ async def search_definition(request: Request, query: str) -> OWLSearchResults:
     """
     # check query length
     if not query_length_check(query):
-        return OWLClassList(classes=[])
+        return OWLSearchResults(results=[])
 
     folio: FOLIO = request.app.state.folio
     return OWLSearchResults(results=folio.search_by_definition(query))
@@ -429,7 +429,7 @@ async def search_llm_area_of_law(
     """
     # check query length
     if not query_length_check(query):
-        return OWLClassList(classes=[])
+        return OWLSearchResults(results=[])
 
     folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
@@ -456,7 +456,7 @@ async def search_asset_types(
     """
     # check query length
     if not query_length_check(query):
-        return OWLClassList(classes=[])
+        return OWLSearchResults(results=[])
 
     folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
@@ -486,7 +486,7 @@ async def search_communication_modalities(
     """
     # check query length
     if not query_length_check(query):
-        return OWLClassList(classes=[])
+        return OWLSearchResults(results=[])
 
     folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
@@ -515,7 +515,7 @@ async def search_currencies(
     """
     # check query length
     if not query_length_check(query):
-        return OWLClassList(classes=[])
+        return OWLSearchResults(results=[])
 
     folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
@@ -543,7 +543,7 @@ async def search_data_formats(
     """
     # check query length
     if not query_length_check(query):
-        return OWLClassList(classes=[])
+        return OWLSearchResults(results=[])
 
     folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
@@ -571,7 +571,7 @@ async def search_document_artifacts(
     """
     # check query length
     if not query_length_check(query):
-        return OWLClassList(classes=[])
+        return OWLSearchResults(results=[])
 
     folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
@@ -599,7 +599,7 @@ async def search_engagement_terms(
     """
     # check query length
     if not query_length_check(query):
-        return OWLClassList(classes=[])
+        return OWLSearchResults(results=[])
 
     folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
@@ -627,7 +627,7 @@ async def search_events(
     """
     # check query length
     if not query_length_check(query):
-        return OWLClassList(classes=[])
+        return OWLSearchResults(results=[])
 
     folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
@@ -657,7 +657,7 @@ async def search_governmental_bodies(
     """
     # check query length
     if not query_length_check(query):
-        return OWLClassList(classes=[])
+        return OWLSearchResults(results=[])
 
     folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
@@ -685,7 +685,7 @@ async def search_industries(
     """
     # check query length
     if not query_length_check(query):
-        return OWLClassList(classes=[])
+        return OWLSearchResults(results=[])
 
     folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
@@ -713,7 +713,7 @@ async def search_legal_authorities(
     """
     # check query length
     if not query_length_check(query):
-        return OWLClassList(classes=[])
+        return OWLSearchResults(results=[])
 
     folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
@@ -733,7 +733,7 @@ async def search_locations(
     """
     # check query length
     if not query_length_check(query):
-        return OWLClassList(classes=[])
+        return OWLSearchResults(results=[])
 
     folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
@@ -753,7 +753,7 @@ async def search_matter_narratives(
     """
     # check query length
     if not query_length_check(query):
-        return OWLClassList(classes=[])
+        return OWLSearchResults(results=[])
 
     folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
@@ -775,7 +775,7 @@ async def search_matter_narrative_formats(
     """
     # check query length
     if not query_length_check(query):
-        return OWLClassList(classes=[])
+        return OWLSearchResults(results=[])
 
     folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
@@ -796,7 +796,7 @@ async def search_objectives(
     """
     # check query length
     if not query_length_check(query):
-        return OWLClassList(classes=[])
+        return OWLSearchResults(results=[])
 
     folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
@@ -823,7 +823,7 @@ async def search_player_actors(
     """
     # check query length
     if not query_length_check(query):
-        return OWLClassList(classes=[])
+        return OWLSearchResults(results=[])
 
     folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
@@ -845,7 +845,7 @@ async def search_standards_compatibilities(
     """
     # check query length
     if not query_length_check(query):
-        return OWLClassList(classes=[])
+        return OWLSearchResults(results=[])
 
     folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
@@ -866,7 +866,7 @@ async def search_statuses(
     """
     # check query length
     if not query_length_check(query):
-        return OWLClassList(classes=[])
+        return OWLSearchResults(results=[])
 
     folio: FOLIO = request.app.state.folio
     return OWLSearchResults(
@@ -886,7 +886,7 @@ async def search_system_identifiers(
     """
     # check query length
     if not query_length_check(query):
-        return OWLClassList(classes=[])
+        return OWLSearchResults(results=[])
 
     folio: FOLIO = request.app.state.folio
     return OWLSearchResults(

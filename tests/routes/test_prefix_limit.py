@@ -36,3 +36,31 @@ def test_typeahead_requests_a_limited_payload():
         Path(__file__).parents[2] / "folio_api" / "static" / "js" / "typeahead_search.js"
     ).read_text(encoding="utf-8")
     assert "url: '/search/prefix?query=%QUERY&limit=' + SUGGESTION_LIMIT" in source
+
+
+def _scored_search_paths():
+    from folio_api.models import OWLSearchResults
+    from folio_api.routes.search import router
+
+    return sorted(
+        route.path for route in router.routes if getattr(route, "response_model", None) is OWLSearchResults
+    )
+
+
+def test_scored_search_routes_are_discovered():
+    paths = _scored_search_paths()
+    assert "/search/label" in paths and "/search/definition" in paths
+    assert len(paths) >= 20
+
+
+def test_too_short_query_is_an_empty_result_not_a_500(client):
+    # These returned OWLClassList against an OWLSearchResults response_model:
+    # FastAPI's response validation turned every 1-character query into a 500.
+    # All scored routes share the fix; probe a few so the session-wide
+    # /search/llm/ rate-limit bucket (10/minute) is not exhausted.
+    paths = ["/search/label", "/search/definition", "/search/llm/events"]
+    assert set(paths) <= set(_scored_search_paths())
+    for path in paths:
+        response = client.get(path, params={"query": "a"})
+        assert response.status_code == 200, (path, response.status_code)
+        assert response.json() == {"results": []}, path
