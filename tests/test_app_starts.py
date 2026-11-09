@@ -88,6 +88,77 @@ def test_iri_route_still_serves_concepts_after_mcp_route(started_client):
     assert response.json()["label"] == "Contract Law"
 
 
+def _mcp_post(client, body, session_id=None):
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json, text/event-stream",
+        "Host": "folio.openlegalstandard.org",
+    }
+    if session_id:
+        headers["mcp-session-id"] = session_id
+    return client.post("/mcp", headers=headers, json=body)
+
+
+def _mcp_open_session(client):
+    response = _mcp_post(
+        client,
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2025-03-26",
+                "capabilities": {},
+                "clientInfo": {"name": "t", "version": "0"},
+            },
+        },
+    )
+    assert response.status_code == 200, response.text
+    session_id = response.headers["mcp-session-id"]
+    _mcp_post(
+        client,
+        {"jsonrpc": "2.0", "method": "notifications/initialized"},
+        session_id,
+    )
+    return session_id
+
+
+def test_mcp_sessions_keep_in_process_graph_after_a_session_ends(
+    started_client, _booted_app
+):
+    """Every MCP session must use folio-api's in-process graph, not just the first.
+
+    folio-mcp <= 0.4.2 cleared the injected backend whenever any session ended,
+    so later sessions fell back to an APIBackend calling the public REST API:
+    PROD's MCP server called itself through its own rate limiter (429s).
+    """
+    from folio_mcp import server as mcp_server
+
+    first = _mcp_open_session(started_client)
+    response = started_client.delete(
+        "/mcp",
+        headers={"mcp-session-id": first, "Host": "folio.openlegalstandard.org"},
+    )
+    assert response.status_code == 200, response.text
+
+    second = _mcp_open_session(started_client)
+    response = _mcp_post(
+        started_client,
+        {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {"name": "search_concepts", "arguments": {"query": "contract"}},
+        },
+        second,
+    )
+    assert response.status_code == 200, response.text
+    assert "Contract" in response.text, response.text[:300]
+
+    backend = mcp_server._current_backend()
+    assert backend.folio is _booted_app.state.folio, type(backend).__name__
+
+
 def test_folio_loaded(folio):
     """folio fixture returns a populated FOLIO ontology."""
     assert folio is not None

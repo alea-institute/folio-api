@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.10, <4.0.0"
 resolution-markers = [
     "python_full_version >= '3.12'",
@@ -564,7 +564,7 @@ name = "exceptiongroup"
 version = "1.3.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "typing-extensions", marker = "python_full_version < '3.11'" },
+    { name = "typing-extensions" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/50/79/66800aadf48771f6b62f7eb014e352e5d06856655206165d775e675a02c9/exceptiongroup-1.3.1.tar.gz", hash = "sha256:8b412432c6055b0b7d14c310000ae93352ed6754f70fa8f7c34141f91c4e3219", size = 30371, upload-time = "2025-11-21T23:01:54.787Z" }
 wheels = [
@@ -616,7 +616,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "fastapi", specifier = ">=0.112.2" },
-    { name = "folio-mcp", specifier = ">=0.2.0" },
+    { name = "folio-mcp", url = "https://github.com/alea-institute/folio-mcp/archive/b9e48d25f13d106080484a675d4800ad067b269e.tar.gz" },
     { name = "folio-python", extras = ["search"], specifier = ">=0.3.3" },
     { name = "jinja2", specifier = ">=3.1.6" },
     { name = "limits", specifier = ">=3.13,<6" },
@@ -638,16 +638,21 @@ dev = [
 
 [[package]]
 name = "folio-mcp"
-version = "0.4.1"
-source = { registry = "https://pypi.org/simple" }
+version = "0.4.3"
+source = { url = "https://github.com/alea-institute/folio-mcp/archive/b9e48d25f13d106080484a675d4800ad067b269e.tar.gz" }
 dependencies = [
     { name = "httpx" },
     { name = "mcp", extra = ["cli"] },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ea/ae/2a637de1b6be11c3314e8230cac4020ddbefaf626197998a8c7fb6cc2f7b/folio_mcp-0.4.1.tar.gz", hash = "sha256:0d44aac0a75b37b213e9c99a40f86eab71f3a292b9ee96ab7aeb3b7830d7d063", size = 15992, upload-time = "2026-04-02T13:50:07.03Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/bd/5f/155d8c8faea1a20da42619db6e92eac32578ed1fbbc42f38ba361d6787cb/folio_mcp-0.4.1-py3-none-any.whl", hash = "sha256:f49845f43970858a03ee84f4002962c77ddb74cce26c233f90ddc4c0def270c3", size = 19628, upload-time = "2026-04-02T13:50:08.842Z" },
+sdist = { hash = "sha256:f481c4a014d720b85bc2ca9af54bac2abf3be85ce4cb3249c22bea57f23e5809" }
+
+[package.metadata]
+requires-dist = [
+    { name = "folio-python", extras = ["search"], marker = "extra == 'local'", specifier = ">=0.3.3" },
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "mcp", extras = ["cli"], specifier = ">=1.26,<2" },
 ]
+provides-extras = ["local"]
 
 [[package]]
 name = "folio-python"
