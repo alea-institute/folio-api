@@ -40,6 +40,7 @@ from folio_api.folio_compat import bound_folio_search_cache
 from folio_api.label_index import get_label_index
 from folio_api.ontologies import OntologyRegistry, build_property_children, make_folio_entry
 from folio_api.rate_limit import RateLimitConfig, RateLimitMiddleware
+from folio_api.response_cache import DEFAULT_MAX_BYTES, ResponseCacheMiddleware
 
 # folio-python <= 0.4.0 caches every distinct fuzzy search forever (~600 KiB
 # each); bound it before any FOLIO instance searches. See folio_compat.
@@ -325,6 +326,18 @@ def get_app() -> FastAPI:
             "url": "https://creativecommons.org/licenses/by/4.0/deed.en",
         },
         lifespan=lifespan_handler,
+    )
+
+    # Cache rendered explorer responses (tree search, details fragments, tree
+    # data, entity graph, typeahead). Added first so it is the INNERMOST
+    # middleware: rate limiting and CORS still apply to cache hits.
+    # ``api.response_cache_mb``: total body budget in MiB; 0 disables.
+    cache_mb = api_config.get("response_cache_mb")
+    app_instance.add_middleware(
+        ResponseCacheMiddleware,  # type: ignore
+        max_bytes=(
+            DEFAULT_MAX_BYTES if cache_mb is None else int(float(cache_mb) * 1024 * 1024)
+        ),
     )
 
     # App-level rate limiting (portable across Caddy/Traefik/Coolify/Railway).
