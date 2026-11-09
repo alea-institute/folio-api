@@ -20,58 +20,27 @@
         return label || '';
     }
 
+    // Suggestions shown in the dropdown, and requested from the API.
+    const SUGGESTION_LIMIT = 20;
+
     /**
      * Initializes typeahead search functionality
      */
     function initializeTypeahead() {
-        // Try multiple query forms to improve matching (lowercase, titlecase, etc.)
+        // /search/prefix is case-insensitive (prefix and substring), so one
+        // request per query is enough. (This used to retry the lowercase and
+        // titlecase forms whenever a query had no results: up to three
+        // identical, rate-limited requests per keystroke.)
         function searchWithMultipleQueryForms(query, sync, async) {
-            // If no query, return empty results
             if (!query) {
                 return async([]);
             }
-            
-            // Original query as entered by user
-            let originalQuery = query;
-            
-            // Lowercase query
-            let lowercaseQuery = query.toLowerCase();
-            
-            // Titlecase query (capitalize first letter of each word)
-            let titlecaseQuery = query.split(' ')
-                .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-                .join(' ');
-            
-            // First try with the original query
-            results.search(originalQuery, sync, function(results1) {
-                // If we got results, return them
-                if (results1 && results1.length > 0) {
-                    async(results1);
-                    return;
-                }
-                
-                // If original query didn't work, try lowercase
-                if (originalQuery !== lowercaseQuery) {
-                    results.search(lowercaseQuery, sync, function(results2) {
-                        if (results2 && results2.length > 0) {
-                            async(results2);
-                            return;
-                        }
-                        
-                        // If lowercase didn't work, try titlecase
-                        if (originalQuery !== titlecaseQuery && lowercaseQuery !== titlecaseQuery) {
-                            results.search(titlecaseQuery, sync, async);
-                        } else {
-                            async(results2);
-                        }
-                    });
-                } 
-                // If original and lowercase are the same, try titlecase
-                else if (originalQuery !== titlecaseQuery) {
-                    results.search(titlecaseQuery, sync, async);
-                } else {
-                    async(results1);
-                }
+            // Truncate here, not via the dataset's `limit`: typeahead.js 0.11.1
+            // appends async results with `slice(0, limit - count)` AFTER adding
+            // `count`, so a remote answer of 11..20 items showed only 20 - n
+            // of them (exactly 20 showed none).
+            results.search(query, sync, function(suggestions) {
+                async((suggestions || []).slice(0, SUGGESTION_LIMIT));
             });
         }
         
@@ -91,7 +60,9 @@
             },
             queryTokenizer: Bloodhound.tokenizers.whitespace,
             remote: {
-                url: '/search/prefix?query=%QUERY',
+                // Only the first `limit` suggestions are shown; asking the server for
+                // just those keeps e.g. 'co' at a few KB instead of ~6 MB.
+                url: '/search/prefix?query=%QUERY&limit=' + SUGGESTION_LIMIT,
                 wildcard: '%QUERY',
                 transform: function (response) {
                     // track seen IRIs
@@ -141,13 +112,13 @@
         $('#search-input').typeahead({
                 hint: true,
                 highlight: true,
-                minLength: 1
+                minLength: 2 // the API rejects 1-character queries (400)
             },
             {
                 name: 'results',
                 display: 'label',
                 source: searchWithMultipleQueryForms, // Use our custom search function
-                limit: 20, // Increased limit to show more results
+                limit: Infinity, // see searchWithMultipleQueryForms
                 templates: {
                     suggestion: function (data) {
                         // Highlight the matching part of the label if possible
