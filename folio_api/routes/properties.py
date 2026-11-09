@@ -508,10 +508,11 @@ async def search_property_tree(
     # Build tree structure
     tree = {"nodes": {}, "root_nodes": []}
 
+    match_iris = {m["iri"] for m in matches}  # O(1) membership; see taxonomy search
     for node_iri in included_nodes:
         prop = folio.get_property(node_iri)
         if prop:
-            is_match = any(m["iri"] == node_iri for m in matches)
+            is_match = node_iri in match_iris
             tree["nodes"][node_iri] = {
                 "id": node_iri,
                 "label": strip_folio_prefix(prop.label or "Unnamed Property"),

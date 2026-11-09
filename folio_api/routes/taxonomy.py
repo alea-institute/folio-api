@@ -12,6 +12,7 @@ from starlette.responses import Response, JSONResponse, RedirectResponse
 
 # project
 from folio_api.models import OWLClassList
+from folio_api.label_index import get_label_index
 from folio_api.rendering import get_node_neighbors, strip_folio_prefix
 
 from folio_api.ontologies import (
@@ -932,52 +933,11 @@ async def search_taxonomy_tree(
                 seen_iris.add(owl_class.iri)
                 search_results.append(owl_class)
 
-    # Check all classes for substring matches in labels and alternative labels
-    for owl_class in folio.classes:
-        # Skip if we've already seen this IRI in prefix results
-        if owl_class.iri in seen_iris:
-            continue
-
-        # Skip if class has no label
-        if not owl_class.label:
-            continue
-
-        # Check if query is in the label (case-insensitive)
-        # Also check alternative labels for matches
-        label_match = False
-
-        # Check main label
-        if owl_class.label:
-            if (
-                query in owl_class.label
-                or query_lower in owl_class.label.lower()
-                or query_title in owl_class.label
-            ):
-                label_match = True
-
-        # Check alternative labels
-        if not label_match and owl_class.alternative_labels:
-            for alt_label in owl_class.alternative_labels:
-                if alt_label and (
-                    query in alt_label
-                    or query_lower in alt_label.lower()
-                    or query_title in alt_label
-                ):
-                    label_match = True
-                    break
-
-        # Check preferred label (skos:prefLabel)
-        if not label_match and owl_class.preferred_label:
-            if (
-                query in owl_class.preferred_label
-                or query_lower in owl_class.preferred_label.lower()
-                or query_title in owl_class.preferred_label
-            ):
-                label_match = True
-
-        if label_match:
-            seen_iris.add(owl_class.iri)
-            search_results.append(owl_class)
+    # Substring matches in label / alternative labels / preferred label,
+    # via the precomputed index (same predicate as the former inline scan).
+    for owl_class in get_label_index(folio).classes.matches(query, exclude=seen_iris):
+        seen_iris.add(owl_class.iri)
+        search_results.append(owl_class)
 
     # Process search results
     if not search_results:
@@ -1027,13 +987,18 @@ async def search_taxonomy_tree(
         "root_nodes": [],  # Top-level nodes
     }
 
+    # Set membership, not a scan of `matches` per node: that scan was
+    # O(nodes x matches) and took ~0.6 s locally (~3 s on prod) for a short
+    # query such as "la" (~5.6k matches), blocking the event loop.
+    match_iris = {match["iri"] for match in matches}
+
     # Step 1: Add all included nodes to the tree
     for node_iri in included_nodes:
         # Get the class using the standard lookup pattern
         cls = folio[node_iri]
         if cls:
             # Basic node data
-            is_match = any(match["iri"] == node_iri for match in matches)
+            is_match = node_iri in match_iris
             tree["nodes"][node_iri] = {
                 "id": node_iri,
                 "label": cls.label or "Unnamed Class",

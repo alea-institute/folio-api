@@ -9,6 +9,7 @@ from fastapi import APIRouter, Request, HTTPException, status
 from folio import FOLIO
 
 # project
+from folio_api.label_index import get_label_index
 from folio_api.models import OWLClassList, OWLSearchResults, OWLObjectPropertyList
 
 # API router
@@ -135,8 +136,6 @@ async def search_prefix(request: Request, query: str) -> OWLClassList:
         [] if query == query_title else folio.search_by_prefix(query_title)
     )
 
-    # Then get label matches that aren't already in prefix results
-    label_results = []
 
     # Combine prefix results with deduplication
     prefix_results = []
@@ -153,86 +152,17 @@ async def search_prefix(request: Request, query: str) -> OWLClassList:
                 seen_iris.add(owl_class.iri)
                 prefix_results.append(owl_class)
 
-    # Check all classes for substring matches
-    # In the FOLIO library, classes is a list of OWLClass objects
-    for owl_class in folio.classes:
-        # Skip if we've already seen this IRI in prefix results
-        if owl_class.iri in seen_iris:
-            continue
-
-        # Skip if class has no label
-        if not owl_class.label:
-            continue
-
-        # Check if query is in the label (case-insensitive)
-        # Also check alternative labels for matches
-        label_match = False
-
-        # Check main label
-        if owl_class.label:
-            if (
-                query in owl_class.label
-                or query_lower in owl_class.label.lower()
-                or query_title in owl_class.label
-            ):
-                label_match = True
-
-        # Check alternative labels
-        if not label_match and owl_class.alternative_labels:
-            for alt_label in owl_class.alternative_labels:
-                if alt_label and (
-                    query in alt_label
-                    or query_lower in alt_label.lower()
-                    or query_title in alt_label
-                ):
-                    label_match = True
-                    break
-
-        # Check preferred label (skos:prefLabel)
-        if not label_match and owl_class.preferred_label:
-            if (
-                query in owl_class.preferred_label
-                or query_lower in owl_class.preferred_label.lower()
-                or query_title in owl_class.preferred_label
-            ):
-                label_match = True
-
-        if label_match:
-            seen_iris.add(owl_class.iri)
-            label_results.append(owl_class)
+    # Substring matches in label / alternative labels / preferred label for
+    # classes (then properties), via the precomputed index; same predicate
+    # as the former inline scans, which cost ~60k str.lower() per request.
+    label_index = get_label_index(folio)
+    label_results = label_index.classes.matches(query, exclude=seen_iris)
 
     # Combine results, with prefix matches first
     results = prefix_results + label_results
 
     # Also search properties
-    property_results = []
-    for prop in folio.object_properties:
-        label_match = False
-        if prop.label and (
-            query in prop.label
-            or query_lower in prop.label.lower()
-            or query_title in prop.label
-        ):
-            label_match = True
-        if not label_match and prop.alternative_labels:
-            for alt in prop.alternative_labels:
-                if alt and (
-                    query in alt
-                    or query_lower in alt.lower()
-                    or query_title in alt
-                ):
-                    label_match = True
-                    break
-        # Check preferred label (skos:prefLabel)
-        if not label_match and prop.preferred_label:
-            if (
-                query in prop.preferred_label
-                or query_lower in prop.preferred_label.lower()
-                or query_title in prop.preferred_label
-            ):
-                label_match = True
-        if label_match:
-            property_results.append(prop)
+    property_results = label_index.properties.matches(query)
 
     # Return 200 OK with results (empty array if no matches)
     return OWLClassList(classes=results, properties=property_results)
