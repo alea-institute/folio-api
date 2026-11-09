@@ -213,3 +213,15 @@ def test_canon_is_ready_with_all_seven_roots(_booted_app):
         for parent in prop.sub_property_of:
             expected.setdefault(parent, []).append(prop)
     assert entry.property_children == expected
+
+
+def test_mcp_sessions_have_an_idle_timeout(_booted_app):
+    """Abandoned MCP sessions must not live forever.
+
+    mcp 1.27 keeps stateful sessions until DELETE by default; clients that
+    vanish without one leaked ~47 KiB each for the life of the process.
+    """
+    from folio_mcp.server import mcp as folio_mcp_server
+
+    timeout = folio_mcp_server.session_manager.session_idle_timeout
+    assert timeout == 1800, timeout

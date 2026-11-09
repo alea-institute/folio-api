@@ -444,6 +444,13 @@ def get_app() -> FastAPI:
     )
     mcp_app = folio_mcp_server.streamable_http_app()
     app_instance.state.mcp_app = mcp_app
+    # mcp keeps stateful sessions until the client sends DELETE; clients that
+    # just vanish would leak one (~47 KiB) each for the life of the process.
+    # FastMCP does not expose the manager's idle timeout, but the manager
+    # reads this public attribute per session and per request. null disables.
+    folio_mcp_server.session_manager.session_idle_timeout = api_config.get(
+        "mcp_session_idle_timeout", 1800
+    )
     app_instance.router.routes.append(
         Route(
             folio_mcp_server.settings.streamable_http_path,
