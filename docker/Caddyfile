@@ -5,7 +5,13 @@ folio.openlegalstandard.org {
         protocols tls1.2 tls1.3
     }
     log {
-        output file /var/log/caddy/access.log
+        # Keep ~1 year of access logs (Caddy's default keeps only 10 x 100 MiB,
+        # about 24 days at current traffic). ~5.6 MB/day compressed.
+        output file /var/log/caddy/access.log {
+            roll_size 100MiB
+            roll_keep 1000
+            roll_keep_for 8760h
+        }
         format json
     }
     header {
@@ -29,7 +35,13 @@ soli.openlegalstandard.org {
         protocols tls1.2 tls1.3
     }
     log {
-        output file /var/log/caddy/access.log
+        # Keep ~1 year of access logs (Caddy's default keeps only 10 x 100 MiB,
+        # about 24 days at current traffic). ~5.6 MB/day compressed.
+        output file /var/log/caddy/access.log {
+            roll_size 100MiB
+            roll_keep 1000
+            roll_keep_for 8760h
+        }
         format json
     }
     header {
