@@ -22,14 +22,17 @@ def test_basic_search_cache_is_bounded(_booted_app):
     assert info.maxsize is not None and info.maxsize <= 128, info
 
 
-def test_many_distinct_searches_stay_within_bound(folio):
+def test_many_distinct_searches_stay_within_bound(folio, monkeypatch):
+    # _basic_search backs the RapidFuzz path; force it even if kaos is installed.
+    monkeypatch.setenv("FOLIO_SEARCH_BACKEND", "rapidfuzz")
     FOLIO._basic_search.cache_clear()
     for i in range(300):
         folio.search_by_label(f"distinct query {i}", limit=3)
     assert FOLIO._basic_search.cache_info().currsize <= 128
 
 
-def test_repeat_search_is_still_cached(folio):
+def test_repeat_search_is_still_cached(folio, monkeypatch):
+    monkeypatch.setenv("FOLIO_SEARCH_BACKEND", "rapidfuzz")
     first = folio.search_by_label("contract law", limit=5)
     hits = FOLIO._basic_search.cache_info().hits
     second = folio.search_by_label("contract law", limit=5)

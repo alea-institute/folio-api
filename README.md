@@ -292,10 +292,10 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ### API tests
 
-Use Python 3.12 and [uv](https://docs.astral.sh/uv/) 0.9.22, matching CI:
+Use Python 3.13 and [uv](https://docs.astral.sh/uv/) 0.9.22, matching CI:
 
 ```bash
-uv sync --locked --dev --python 3.12
+uv sync --locked --dev --python 3.13
 uv run --no-sync pytest tests -ra --junitxml=test-results/pytest.xml
 uv run --no-sync python scripts/check_pytest_results.py test-results/pytest.xml
 ```

@@ -7,7 +7,7 @@ requires-python = ">=3.13,<4.0.0"
 readme = "README.md"
 license = "MIT"
 dependencies = [
-    "folio-python[search]>=0.4.1",
+    "folio-python[search,kaos]>=0.4.1",
     "fastapi>=0.112.2",
     "uvicorn>=0.30.6",
     "jinja2>=3.1.6",
@@ -67,13 +67,14 @@ line_length = 120
 addopts = "--cov=folio_api --cov-report=term-missing --cov-report=xml"
 
 [tool.uv.sources]
-# folio-python 0.4.1 (bounded search caches, alea-institute/folio-python@1b4fb34)
-# is tagged on GitHub but not on PyPI. Pinned to the v0.4.1 tag's commit
-# archive (no git needed in the image). Drop this once 0.4.1+ is on PyPI.
-# To try another folio-python build (e.g. one with a `kaos` extra), change this
-# URL to that commit's archive, add the extra to the dependency above, and run
-# `uv lock` (see docs in the PR description).
-folio-python = { url = "https://github.com/alea-institute/folio-python/archive/35814e6e405c3a17d7a2240d8ea0efe7b4179461.tar.gz" }
+# folio-python is pinned to alea-institute/folio-python#28 (feat/kaos-search,
+# a960ea3, based on the v0.4.1 tag): bounded search caches plus the optional
+# `kaos` extra (kaos-nlp-core BM25 label/definition search, Python >= 3.13).
+# Neither is on PyPI yet; the commit archive needs no git in the image.
+# Set FOLIO_SEARCH_BACKEND=rapidfuzz to force the old RapidFuzz search path.
+# Plain v0.4.1 (no kaos): use .../archive/35814e6e405c3a17d7a2240d8ea0efe7b4179461.tar.gz
+# and drop `kaos` from the extras above, then `uv lock`.
+folio-python = { url = "https://github.com/alea-institute/folio-python/archive/a960ea36d8a54ca8adfb8df80858a9e44779f92a.tar.gz" }
 # folio-mcp 0.4.3 (shared-backend + event-loop fixes) is not on PyPI yet.
 # Pinned to the merge commit's GitHub archive (no git needed in the image).
 # Drop this once 0.4.3 is published.
