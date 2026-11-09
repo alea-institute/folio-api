@@ -36,14 +36,15 @@ import folio_api.routes.properties
 import folio_api.routes.explore
 import folio_api.routes.connections
 from folio_api.api_config import load_config
-from folio_api.folio_compat import bound_folio_search_cache
+from folio_api.folio_compat import bound_folio_search_cache, warm_search_indices
 from folio_api.label_index import get_label_index
 from folio_api.ontologies import OntologyRegistry, build_property_children, make_folio_entry
 from folio_api.rate_limit import RateLimitConfig, RateLimitMiddleware
 from folio_api.response_cache import DEFAULT_MAX_BYTES, ResponseCacheMiddleware
 
 # folio-python <= 0.4.0 caches every distinct fuzzy search forever (~600 KiB
-# each); bound it before any FOLIO instance searches. See folio_compat.
+# each); bound it before any FOLIO instance searches. No-op on the pinned
+# 0.4.1, which bounds it upstream. See folio_compat.
 bound_folio_search_cache()
 
 _DEFAULT_LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -131,6 +132,10 @@ async def lifespan_handler(app_instance: FastAPI):
         app_instance.state.config["folio"],
         app_instance.state.config["llm"],
     )
+
+    # Build folio-python's lazy search indices now (kaos BM25 build is ~1 s and
+    # holds the GIL) so the first user search does not pay for it.
+    warm_search_indices(app_instance.state.folio, app_instance.state.logger)
 
     # Build reverse index for property children lookups
     app_instance.state.property_children = build_property_children(app_instance.state.folio)
