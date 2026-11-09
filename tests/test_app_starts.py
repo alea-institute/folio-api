@@ -62,6 +62,32 @@ def test_mcp_public_hosts_allowed_and_unlisted_host_rejected(started_client):
         assert response.status_code == expected_status, (headers_extra, response.text)
 
 
+def test_mcp_get_reaches_mcp_server_not_iri_route(started_client):
+    """GET /mcp must be answered by the MCP transport, not the /{iri} catch-all.
+
+    Streamable-HTTP clients open a GET SSE stream after initialize. When the
+    root router's /{iri} route shadowed it, they got the IRI lookup's 404,
+    which the MCP spec defines as "session expired", so clients looped or
+    reported the server as down. Without a session ID the SDK answers 400.
+    """
+    response = started_client.get(
+        "/mcp",
+        headers={
+            "Accept": "text/event-stream",
+            "Host": "folio.openlegalstandard.org",
+        },
+    )
+    assert response.status_code == 400, response.text
+    assert "session" in response.text.lower(), response.text
+
+
+def test_iri_route_still_serves_concepts_after_mcp_route(started_client):
+    """Registering /mcp ahead of /{iri} must not break ordinary IRI lookups."""
+    response = started_client.get("/RCIPwpgRpMs1eVz4vPid0pV")
+    assert response.status_code == 200, response.text
+    assert response.json()["label"] == "Contract Law"
+
+
 def test_folio_loaded(folio):
     """folio fixture returns a populated FOLIO ontology."""
     assert folio is not None
