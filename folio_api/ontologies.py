@@ -13,6 +13,8 @@ from fastapi import HTTPException, Request
 from folio import FOLIO, OWLClass, OWLObjectProperty
 from folio.graph import DEFAULT_CACHE_DIR
 
+from folio_api.label_index import get_label_index
+
 CANON_SOURCE_URL = "https://raw.githubusercontent.com/CatholicOS/ontology-semantic-canon/main/sources/ontology-semantic-canon.owl"
 CANON_IRI_BASE = "https://ontology.catholicos.catholic/"
 FOLIO_IRI_BASE = "https://folio.openlegalstandard.org/"
@@ -228,6 +230,7 @@ def build_canon_entry() -> OntologyEntry:
     ]
     roots.sort(key=lambda cls: (cls.label or "").lower())
     children = build_property_children(canon)
+    get_label_index(canon)  # warm the search index off the event loop
     return OntologyEntry(
         "canon", canon, CANON_IRI_BASE, tuple(cls.iri for cls in roots),
         frozenset(), children,

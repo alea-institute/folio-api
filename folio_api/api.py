@@ -37,6 +37,7 @@ import folio_api.routes.explore
 import folio_api.routes.connections
 from folio_api.api_config import load_config
 from folio_api.folio_compat import bound_folio_search_cache
+from folio_api.label_index import get_label_index
 from folio_api.ontologies import OntologyRegistry, build_property_children, make_folio_entry
 from folio_api.rate_limit import RateLimitConfig, RateLimitMiddleware
 
@@ -132,6 +133,10 @@ async def lifespan_handler(app_instance: FastAPI):
 
     # Build reverse index for property children lookups
     app_instance.state.property_children = build_property_children(app_instance.state.folio)
+
+    # Build the search routes' label index now (~35 ms) rather than on the
+    # first search request.
+    get_label_index(app_instance.state.folio)
 
     # Share FOLIO instance with MCP server
     from folio_mcp.server import set_shared_folio
