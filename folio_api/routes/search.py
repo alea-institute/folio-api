@@ -5,7 +5,7 @@ Search routes.
 # imports
 
 # packages
-from fastapi import APIRouter, Request, HTTPException, status
+from fastapi import APIRouter, Query, Request, HTTPException, status
 from folio import FOLIO
 
 # project
@@ -69,7 +69,18 @@ def query_length_check(query: str) -> bool:
         },
     },
 )
-async def search_prefix(request: Request, query: str) -> OWLClassList:
+async def search_prefix(
+    request: Request,
+    query: str,
+    limit: int | None = Query(
+        None,
+        ge=1,
+        description=(
+            "Optional cap on the number of classes and, separately, of properties "
+            "returned (ranked order is kept). Omit for every match."
+        ),
+    ),
+) -> OWLClassList:
     """
     Search for FOLIO ontology classes whose labels start with or contain the provided search string.
 
@@ -90,6 +101,9 @@ async def search_prefix(request: Request, query: str) -> OWLClassList:
     - Query must be at least 2 characters long (limited to 1024 characters)
     - An HTTP 400 error is returned if query length requirements are not met
     - A successful response with an empty array is returned if no matches are found
+    - `limit` (optional) keeps only the first `limit` classes and the first `limit`
+      properties; autocomplete clients should set it (a two-letter query such as
+      `co` otherwise matches ~5.6k classes, a ~6 MB response)
 
     Example response:
     ```json
@@ -233,6 +247,10 @@ async def search_prefix(request: Request, query: str) -> OWLClassList:
                 label_match = True
         if label_match:
             property_results.append(prop)
+
+    if limit is not None:
+        results = results[:limit]
+        property_results = property_results[:limit]
 
     # Return 200 OK with results (empty array if no matches)
     return OWLClassList(classes=results, properties=property_results)
