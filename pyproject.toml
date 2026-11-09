@@ -71,3 +71,7 @@ addopts = "--cov=folio_api --cov-report=term-missing --cov-report=xml"
 # Pinned to the merge commit's GitHub archive (no git needed in the image).
 # Drop this once 0.4.3 is published.
 folio-mcp = { url = "https://github.com/alea-institute/folio-mcp/archive/b9e48d25f13d106080484a675d4800ad067b269e.tar.gz" }
+# TEMPORARY: folio-python feat/llm-query-expansion (FOLIO.search_expanded, stacked on
+# the kaos BM25 PR #28) so CI exercises /search/llm/expanded. The integrator re-points
+# this at the merged folio-python release/commit.
+folio-python = { url = "https://github.com/alea-institute/folio-python/archive/d4e29b163f3bf325afeb7578a2546279a2e7ec04.tar.gz" }

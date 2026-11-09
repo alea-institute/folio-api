@@ -5,8 +5,11 @@ Search routes.
 # imports
 
 # packages
+from typing import List, Literal
+
 from fastapi import APIRouter, Query, Request, HTTPException, status
-from folio import FOLIO
+from folio import FOLIO, OWLClass
+from pydantic import BaseModel, Field
 
 # project
 from folio_api.label_index import get_label_index
@@ -930,3 +933,137 @@ async def query_properties(
         limit=limit,
     )
     return OWLObjectPropertyList(properties=results)
+
+
+# ── LLM Query Expansion ───────────────────────────────────────────────
+
+# hard ceiling on the expansion LLM call; on timeout the route returns plain label results
+EXPANDED_SEARCH_LLM_TIMEOUT = 8.0
+
+
+class ExpandedSearchHit(BaseModel):
+    """One fused search hit from LLM query-expansion search."""
+
+    owl_class: OWLClass = Field(description="The matching FOLIO class")
+    score: float = Field(
+        description="Weighted reciprocal-rank-fusion score (higher is better; comparable only within one response)"
+    )
+    matched_via: List[str] = Field(
+        description="The query and/or expansion terms whose searches returned this class, strongest first"
+    )
+
+
+class ExpandedSearchResults(BaseModel):
+    """Results of an LLM query-expansion search."""
+
+    query: str = Field(description="The (normalised) query that was searched")
+    expansions: List[str] = Field(
+        description="LLM-generated synonyms and related legal terms that were also searched"
+    )
+    expansion_source: Literal["llm", "cache", "none"] = Field(
+        description='"llm" (fresh call), "cache" (cached expansions) or "none" (LLM unavailable/failed: plain label search)'
+    )
+    results: List[ExpandedSearchHit] = Field(description="Fused hits, best first")
+
+
+@router.get(
+    "/llm/expanded",
+    tags=["search"],
+    response_model=ExpandedSearchResults,
+    summary="Natural-Language Search with LLM Query Expansion",
+    description="Expand a natural-language query into legal synonyms and terms of art with an LLM, "
+    "search FOLIO for each, and merge the results with reciprocal rank fusion",
+    status_code=status.HTTP_200_OK,
+    responses={
+        status.HTTP_200_OK: {
+            "description": "Fused results and the expansions used",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "query": "my landlord won't fix the heat",
+                        "expansions": [
+                            "Implied Warranty of Habitability",
+                            "Landlord-Tenant Law",
+                            "Constructive Eviction",
+                        ],
+                        "expansion_source": "llm",
+                        "results": [
+                            {
+                                "owl_class": {
+                                    "iri": "https://folio.openlegalstandard.org/RBRosNDPt8cNUuRnoPqYufN",
+                                    "label": "Breach of Implied Warranty of Habitability",
+                                },
+                                "score": 0.0328,
+                                "matched_via": ["Implied Warranty of Habitability"],
+                            }
+                        ],
+                    }
+                }
+            },
+        },
+        status.HTTP_400_BAD_REQUEST: {"description": "Query too short or too long"},
+    },
+)
+async def search_llm_expanded(
+    request: Request,
+    query: str,
+    limit: int = Query(10, ge=1, le=50, description="Maximum number of results"),
+    include_definitions: bool = Query(
+        True, description="Also search class definitions (at half weight)"
+    ),
+    max_expansions: int = Query(
+        8, ge=0, le=10, description="Maximum LLM expansions to search (0 = plain label search)"
+    ),
+) -> ExpandedSearchResults:
+    """
+    Search FOLIO with a natural-language or situational query, e.g. a client's
+    description of their problem.
+
+    An LLM rewrites the query into 5-10 synonyms, legal terms of art and related
+    concepts (for "my landlord won't fix the heat": "Implied Warranty of
+    Habitability", "Constructive Eviction", ...). The original query and every
+    expansion are searched by label and by definition, and the ranked lists are
+    merged by class IRI with score-weighted reciprocal rank fusion. A concept whose
+    label closely matches the query itself stays first. Each hit reports
+    `matched_via`, the terms that found it.
+
+    Expansions are cached per normalised query, so repeated queries skip the LLM.
+    If the LLM is unavailable, slow (>8 s) or returns garbage, the route still
+    returns 200 with plain label-search results, `expansions: []` and
+    `expansion_source: "none"`.
+
+    Use `/search/label` or `/search/prefix` when you already know the concept name.
+    """
+    if not query_length_check(query.strip()):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Query must be between {MIN_QUERY_LENGTH} and {MAX_QUERY_LENGTH} characters",
+        )
+
+    folio: FOLIO = request.app.state.folio
+    if not hasattr(folio, "search_expanded"):
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail="Expanded search requires folio-python with FOLIO.search_expanded",
+        )
+
+    result = await folio.search_expanded(
+        query,
+        limit=limit,
+        include_definitions=include_definitions,
+        max_expansions=max_expansions,
+        timeout=EXPANDED_SEARCH_LLM_TIMEOUT,
+    )
+    return ExpandedSearchResults(
+        query=result.query,
+        expansions=result.expansions,
+        expansion_source=result.expansion_source,
+        results=[
+            ExpandedSearchHit(
+                owl_class=hit.owl_class,
+                score=round(hit.score, 6),
+                matched_via=hit.matched_via,
+            )
+            for hit in result.hits
+        ],
+    )
