@@ -31,7 +31,7 @@ The application and its normal Tailwind CDN styling must be available.
 
 To capture current visual evidence, add
 `--fa6-evidence-dir docs/plans/evidence`. This writes three `fa-6-graph-controls-*.png`
-images and preserves the historical fa-2 captures. The inherited
+images plus `fa-6-canon-details.png`, and preserves the historical fa-2 captures. The inherited
 `--graph-evidence-dir` option writes fa-2 filenames; use a scratch directory when
 reproducing those. Screenshots are captured after a graph has expanded, with
 keyboard focus visible. Missing app,
