@@ -50,6 +50,7 @@
   let graphGeneration = 0;
   let layoutGeneration = 0;
   let renderedData = null;
+  let initialFitPending = false;
   let navigationPending = false;
 
   function scheduleGraphFrame(callback, generation = graphGeneration) {
@@ -947,6 +948,7 @@
     var ty = (vh - gh * scale) / 2;
     state.transform = { x: tx, y: ty, scale: scale };
     applyTransform();
+    initialFitPending = false;
   }
 
   function _onWheel(e) {
@@ -1176,6 +1178,7 @@
       state.nodePositions = {};
       state.liveNodeMap = {};
       renderedData = null;
+      initialFitPending = false;
       showEmpty();
       return;
     }
@@ -1206,6 +1209,7 @@
     if (navigationPending) return null;
     if (!force && iri === state.currentIri && type === state.currentType &&
         state.graphData && renderedData === state.graphData) {
+      if (initialFitPending) scheduleGraphFrame(fitGraph);
       return state.graphData;
     }
     const generation = ++graphGeneration;
@@ -1217,6 +1221,7 @@
     state.expandedIris = new Set();
     state.graphData = null;
     renderedData = null;
+    initialFitPending = true;
     var url = '/explore/api/entity-graph/' + encodeURIComponent(iri);
     try {
       const response = await fetch(url, { headers: { 'Accept': 'application/json' } });

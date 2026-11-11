@@ -1,0 +1,13 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-11-11T08:45:50Z",
+  "trigger": "precompact-auto",
+  "phase": "",
+  "phase_dir": "",
+  "git": {
+    "branch": "drawdown/fa-5",
+    "head": "0f68b1b",
+    "modified_files": 9
+  },
+  "note": "Auto-saved by PreCompact hook. Run /gsd-resume-work in a fresh session."
+}

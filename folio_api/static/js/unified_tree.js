@@ -1285,6 +1285,20 @@ async function fetchSearch(query) {
     }));
 }
 
+async function recoverNavigationFailure(generation, interruptedRestore, message) {
+    if (generation !== searchGeneration) return;
+    finishNavigation(generation);
+    if (interruptedRestore) {
+        const recovery = restoreHistory(history.state);
+        const recoveryGeneration = searchGeneration;
+        await recovery;
+        if (recoveryGeneration !== searchGeneration || restoringHistory) return;
+    } else {
+        resumeSelection(generation);
+    }
+    historyNotice(message);
+}
+
 async function searchUnified(query) {
     if (!query || query.length < 2) return;
     const interruptedRestore = restoringHistory;
@@ -1303,17 +1317,7 @@ async function searchUnified(query) {
         }
         finishNavigation(generation, 'push', selectionUrl(captureSelection()));
     } catch (_) {
-        if (generation !== searchGeneration) return;
-        finishNavigation(generation);
-        if (interruptedRestore) {
-            const recovery = restoreHistory(history.state);
-            const recoveryGeneration = searchGeneration;
-            await recovery;
-            if (recoveryGeneration !== searchGeneration || restoringHistory) return;
-        } else {
-            resumeSelection(generation);
-        }
-        historyNotice('Search could not be loaded. Please try again.');
+        return recoverNavigationFailure(generation, interruptedRestore, 'Search could not be loaded. Please try again.');
     }
 }
 
@@ -1322,9 +1326,9 @@ function renderSearchResults(query, [classData, propData]) {
     document.getElementById('explore-search-input').value = query;
     const classSec = document.getElementById('class-section');
     const propSec = document.getElementById('property-section');
-    lastSearchTrees = { class: classData.tree || null, property: propData.tree || null };
-    const classMatches = classData.matches || [];
-    const propMatches = propData.matches || [];
+    lastSearchTrees = { class: classData.tree, property: propData.tree };
+    const classMatches = classData.matches;
+    const propMatches = propData.matches;
     const totalMatches = classMatches.length + propMatches.length;
 
     // Add filter controls
@@ -1334,7 +1338,7 @@ function renderSearchResults(query, [classData, propData]) {
     const classRoot = document.getElementById(SECTIONS.class.rootListId);
     delete classRoot.dataset.loaded;
     classRoot.innerHTML = '';
-    if (classMatches.length > 0 && classData.tree) {
+    if (classMatches.length > 0) {
         renderFilteredTree(classData.tree, classRoot, 'class', query);
         classSec.style.display = '';
         // Ensure section is expanded
@@ -1352,7 +1356,7 @@ function renderSearchResults(query, [classData, propData]) {
     const propRoot = document.getElementById(SECTIONS.property.rootListId);
     delete propRoot.dataset.loaded;
     propRoot.innerHTML = '';
-    if (propMatches.length > 0 && propData.tree) {
+    if (propMatches.length > 0) {
         renderFilteredTree(propData.tree, propRoot, 'property', query);
         propSec.style.display = '';
         const propChevron = propSec.querySelector('.section-chevron');
@@ -1515,17 +1519,7 @@ async function resetTreeSearch() {
         notifySelection();
         finishNavigation(generation, 'push', selectionUrl(null));
     } catch (_) {
-        if (generation !== searchGeneration) return;
-        finishNavigation(generation);
-        if (interruptedRestore) {
-            const recovery = restoreHistory(history.state);
-            const recoveryGeneration = searchGeneration;
-            await recovery;
-            if (recoveryGeneration !== searchGeneration || restoringHistory) return;
-        } else {
-            resumeSelection(generation);
-        }
-        historyNotice('The full tree could not be loaded. Please try again.');
+        return recoverNavigationFailure(generation, interruptedRestore, 'The full tree could not be loaded. Please try again.');
     }
 }
 

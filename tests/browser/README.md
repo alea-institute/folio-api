@@ -48,7 +48,9 @@ FOLIO_BROWSER_SCREENSHOTS=1 uv run --group browser python -m unittest discover -
 
 After Back/Forward assertions pass, that command writes
 `docs/plans/evidence/fa-5-tree-history-back.png` and
-`docs/plans/evidence/fa-5-tree-history-forward.png`. Screenshot capture requires
+`docs/plans/evidence/fa-5-tree-history-forward.png`. The hidden-tab graph
+regression also writes `docs/plans/evidence/fa-5-graph-history-refit.png` after
+asserting that the restored graph fits. Screenshot capture requires
 `FOLIO_BROWSER_TAILWIND`; a behavioral-only run may omit it, but then utility CSS
 is absent and that run does not constitute visual verification.
 
@@ -62,6 +64,12 @@ delayed responses, and URL normalization without replacing the saved view.
 Both class and property journeys assert independently expanded branches, query,
 selection, and details after Back and Forward. The older `fa-1` screenshots and
 verification receipt remain historical provenance from PR #33.
+
+Normal tree journeys live in `tree_history_browser.py`; failure, retry, and
+stale-response cases live in `tree_history_recovery_browser.py`, using the same
+shared helpers and discovery command. Graph tests also verify that a canceled
+initial fit resumes when its cached render is reopened, while completed user
+zoom remains intact.
 
 The fixtures contain equivalent class/property trees (`c-` / `p-` identifiers),
 `alpha`, `beta`, and `shared` searches, context siblings with retained children,

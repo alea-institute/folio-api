@@ -399,3 +399,26 @@ class ExplorerBrowserCase(unittest.IsolatedAsyncioTestCase):
             await self.page.screenshot(
                 path=str(destination), full_page=True, animations="disabled"
             )
+
+    async def settled(self):
+        await expect(self.page.locator("#explore-tree")).to_have_attribute(
+            "aria-busy", "false"
+        )
+
+    async def choose(self, name, within=None):
+        await self.node(name, within).locator(":scope > .node-content").click()
+        await self.selected(name)
+
+    async def expand(self, name, within=None):
+        await self.node(name, within).locator(
+            ":scope > .node-content > .expand-icon"
+        ).click()
+
+    async def release_response(self, barrier):
+        async with self.page.expect_response(
+            lambda response: barrier.contains in response.url
+        ):
+            barrier.release()
+        await self.page.evaluate(
+            "() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))"
+        )

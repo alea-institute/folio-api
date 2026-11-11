@@ -51,6 +51,48 @@ class GraphHistoryBrowserTests(ExplorerBrowserCase):
         await self.page.locator("#tab-graph").click()
         await self.graph_selected("c-alpha")
 
+    async def test_hidden_graph_reselection_finishes_fit_and_preserves_user_zoom(self):
+        await self.open()
+        await self.search("alpha")
+        for index in range(11):
+            parent = iri(f"c-wide-parent-{index}")
+            self.fixtures.nodes[parent] = {
+                "id": parent,
+                "label": f"Wide parent {index}",
+                "type": "class",
+                "parents": [],
+                "children": [iri("c-alpha")],
+            }
+            self.fixtures.nodes[iri("c-alpha")]["parents"].append(parent)
+        barrier = self.fixtures.hold("/explore/api/entity-graph/" + iri("c-alpha"))
+        await self.page.locator("#tab-graph").click()
+        await barrier.wait()
+        await self.page.locator("#tab-details").click()
+        await self.release_response(barrier)
+        await self.graph_selected("c-alpha")
+        await self.node("c-alpha").locator(":scope > .node-content").click()
+        await self.selected("c-alpha")
+        await self.page.locator("#tab-graph").click()
+        selected = self.page.locator(".graph-node-selected")
+        await expect(selected).to_be_in_viewport(ratio=1)
+        await self.screenshot("fa-5-graph-history-refit.png")
+
+        transform = self.page.locator("#graph-transform")
+        fitted = await transform.get_attribute("style")
+        viewport = self.page.locator("#graph-viewport")
+        await viewport.hover()
+        await self.page.mouse.wheel(0, -120)
+        await expect(transform).not_to_have_attribute("style", fitted)
+        zoomed = await transform.get_attribute("style")
+        await self.page.locator("#tab-details").click()
+        await self.node("c-alpha").locator(":scope > .node-content").click()
+        await self.selected("c-alpha")
+        await self.page.locator("#tab-graph").click()
+        await self.page.evaluate(
+            "() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))"
+        )
+        await expect(transform).to_have_attribute("style", zoomed)
+
     async def test_clear_and_initial_entry_clear_active_and_remembered_graph(self):
         await self.open()
         await self.search("alpha")
