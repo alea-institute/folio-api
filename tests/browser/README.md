@@ -9,7 +9,7 @@ configuration, or loads the live ontology. Existing pytest discovery is unchange
 Install the test-only dependencies and browser:
 
 ```bash
-uv sync --group browser
+uv sync --locked --dev --group browser --python 3.13
 uv run --group browser playwright install chromium
 ```
 
@@ -47,10 +47,21 @@ FOLIO_BROWSER_SCREENSHOTS=1 uv run --group browser python -m unittest discover -
 ```
 
 After Back/Forward assertions pass, that command writes
-`docs/plans/evidence/fa-1-tree-history-back.png` and
-`docs/plans/evidence/fa-1-tree-history-forward.png`. Screenshot capture requires
+`docs/plans/evidence/fa-5-tree-history-back.png` and
+`docs/plans/evidence/fa-5-tree-history-forward.png`. Screenshot capture requires
 `FOLIO_BROWSER_TAILWIND`; a behavioral-only run may omit it, but then utility CSS
 is absent and that run does not constitute visual verification.
+
+The ontology suite renders separate FOLIO and Canon documents with explicit
+template context. Canon fixtures use full IRIs with matching local names in
+different namespaces. Requests must match the rendered document's ontology;
+cross-ontology requests and Canon graph requests fail the suite. Coverage includes
+document switching, legacy links, details fallback, Clear/Collapse, blocked Canon,
+delayed responses, and URL normalization without replacing the saved view.
+
+Both class and property journeys assert independently expanded branches, query,
+selection, and details after Back and Forward. The older `fa-1` screenshots and
+verification receipt remain historical provenance from PR #33.
 
 The fixtures contain equivalent class/property trees (`c-` / `p-` identifiers),
 `alpha`, `beta`, and `shared` searches, context siblings with retained children,

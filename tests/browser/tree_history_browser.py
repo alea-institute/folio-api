@@ -40,28 +40,73 @@ class TreeHistoryBrowserTests(ExplorerBrowserCase):
         await expect(self.node("c-alpha-child")).to_be_hidden()
 
     async def test_back_and_forward_restore_query_and_context(self):
+        await self.restore_query_and_context("c", screenshots=True)
+
+    async def test_property_back_and_forward_restore_query_and_context(self):
+        await self.restore_query_and_context("p")
+
+    async def restore_query_and_context(self, prefix, screenshots=False):
         await self.open()
         await self.search("alpha")
-        button = self.node("c-root").locator(
+        button = self.node(prefix + "-root").locator(
             ":scope > .children-container > .siblings-row > button"
         )
         await button.click()
-        await self.node("c-context").locator(
+        await self.node(prefix + "-context").locator(
             ":scope > .node-content > .expand-icon"
         ).click()
-        await self.node("c-context-child").locator(":scope > .node-content").click()
-        await self.selected("c-context-child")
+        await self.node(prefix + "-context-child").locator(
+            ":scope > .node-content"
+        ).click()
+        await self.selected(prefix + "-context-child")
         await self.search("beta")
         await self.selected("c-beta")
+        await self.node(prefix + "-other").locator(
+            ":scope > .children-container > .siblings-row > button"
+        ).click()
+        await self.expand(prefix + "-shared")
+        await expect(self.node(prefix + "-deep")).to_be_visible()
+        if prefix == "p":
+            await self.choose("p-beta")
+        length = await self.page.evaluate("history.length")
         await self.page.go_back()
+        if prefix == "p":
+            # Property selection is its own deliberate navigation after search.
+            await self.selected("c-beta")
+            await expect(self.node("p-deep")).to_be_visible()
+            await self.page.go_back()
         await expect(self.page.locator("#explore-search-input")).to_have_value("alpha")
-        await self.selected("c-context-child")
-        await expect(self.node("c-context-child")).to_be_visible()
-        await self.screenshot("fa-1-tree-history-back.png")
+        await self.selected(prefix + "-context-child")
+        await expect(self.node(prefix + "-context-child")).to_be_visible()
+        await expect(self.node(prefix + "-context")).to_have_class(
+            re.compile("expanded")
+        )
+        await expect(self.node(prefix + "-root")).to_have_class(re.compile("expanded"))
+        await expect(button).to_have_attribute("aria-expanded", "true")
+        await expect(self.node(prefix + "-deep")).to_have_count(0)
+        await expect(self.page.locator("#search-match-count")).to_have_text(
+            "2 matches (1 class, 1 property)"
+        )
+        if screenshots:
+            await self.screenshot("fa-5-tree-history-back.png")
         await self.page.go_forward()
+        if prefix == "p":
+            await self.selected("c-beta")
+            await self.page.go_forward()
         await expect(self.page.locator("#explore-search-input")).to_have_value("beta")
-        await self.selected("c-beta")
-        await self.screenshot("fa-1-tree-history-forward.png")
+        await self.selected(prefix + "-beta")
+        await expect(self.node(prefix + "-other")).to_have_class(re.compile("expanded"))
+        await expect(self.node(prefix + "-shared")).to_have_class(
+            re.compile("expanded")
+        )
+        await expect(self.node(prefix + "-deep")).to_be_visible()
+        await expect(self.node(prefix + "-context-child")).to_have_count(0)
+        await expect(self.page.locator("#search-match-count")).to_have_text(
+            "2 matches (1 class, 1 property)"
+        )
+        self.assertEqual(await self.page.evaluate("history.length"), length)
+        if screenshots:
+            await self.screenshot("fa-5-tree-history-forward.png")
 
     async def test_details_link_reveals_property_in_filtered_tree(self):
         await self.open()

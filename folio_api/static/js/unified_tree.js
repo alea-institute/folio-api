@@ -1161,6 +1161,8 @@ async function restoreHistory(state, initial = false) {
     const snapshot = savedView(state);
     const generation = beginNavigation(true);
     try {
+        const url = ontologyUrl(window.location.href);
+        if (url.href !== location.href) history.replaceState(state, '', url);
         clearSelection();
         if (snapshot?.query) {
             const data = await fetchSearch(snapshot.query);

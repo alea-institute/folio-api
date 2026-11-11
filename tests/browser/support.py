@@ -26,6 +26,12 @@ def iri(name):
     return IRI_PREFIX + name
 
 
+def canon_iri(name):
+    prefix, local = name.split("-", 1)
+    namespace = "concepts" if prefix == "c" else "relations"
+    return f"https://{namespace}.canon.test/ns#{local}"
+
+
 @dataclass
 class RequestBarrier:
     """Hold one matching response until the test explicitly releases it."""
@@ -42,7 +48,11 @@ class RequestBarrier:
 
 
 class ExplorerFixtures:
-    def __init__(self):
+    def __init__(self, ontology_key="folio"):
+        self.ontology_key = ontology_key
+        self.iri = canon_iri if ontology_key == "canon" else iri
+        self.canon_state = "ready"
+        self.document_ontologies = {}
         self.requests = Counter()
         self.unexpected = []
         self.barriers = []
@@ -66,14 +76,17 @@ class ExplorerFixtures:
                 "shared": (f"Shared {noun}", ["deep"]),
                 "deep": (f"Deep {noun}", []),
             }
-            self.roots[section] = [iri(f"{prefix}-root"), iri(f"{prefix}-other")]
+            self.roots[section] = [
+                self.iri(f"{prefix}-root"),
+                self.iri(f"{prefix}-other"),
+            ]
             for suffix, (label, children) in definitions.items():
-                identity = iri(f"{prefix}-{suffix}")
+                identity = self.iri(f"{prefix}-{suffix}")
                 self.nodes[identity] = {
                     "id": identity,
                     "label": label,
                     "type": section,
-                    "children": [iri(f"{prefix}-{child}") for child in children],
+                    "children": [self.iri(f"{prefix}-{child}") for child in children],
                 }
         for identity, node in self.nodes.items():
             node["parents"] = [
@@ -85,10 +98,21 @@ class ExplorerFixtures:
             loader=FileSystemLoader(ROOT / "folio_api/templates/jinja2"),
             autoescape=select_autoescape(),
         )
-        self.html = env.get_template("explore/tree.html").render(
+        self.template = env.get_template("explore/tree.html")
+        self.canon = ExplorerFixtures("canon") if ontology_key == "folio" else None
+
+    def html(self, ontology_key):
+        return self.template.render(
             asset_version="browser-fixture",
             typeahead_js_source="",
             config={"folio": {"branch": "synthetic browser fixture"}},
+            ontology_key=ontology_key,
+            canon_state=self.canon_state,
+            tree_status=(
+                "Canon unavailable"
+                if ontology_key == "canon" and self.canon_state != "ready"
+                else None
+            ),
         )
 
     def hold(self, contains):
@@ -100,6 +124,8 @@ class ExplorerFixtures:
         self.failures.append((contains, status))
 
     def resolve(self, value):
+        if self.ontology_key == "canon":
+            return value
         return value if value in self.nodes else iri(value)
 
     def children(self, identity, section):
@@ -125,7 +151,7 @@ class ExplorerFixtures:
                 "matches": [],
                 "tree": {"root_nodes": [], "nodes": {}, "hidden_root_count": 2},
             }
-        hit = iri(f"{prefix}-{query}")
+        hit = self.iri(f"{prefix}-{query}")
         parents = self.nodes[hit]["parents"]
         nodes = {}
         for identity in [*parents, hit]:
@@ -192,6 +218,16 @@ class ExplorerFixtures:
         query = parse_qs(parsed.query)
         key = path + ("?" + parsed.query if parsed.query else "")
         self.requests[key] += 1
+        document_ontology = self.document_ontologies.get(request.frame, "folio")
+        fixture = self.canon if document_ontology == "canon" else self
+        if path.startswith(("/taxonomy/", "/properties/", "/explore/api/")):
+            requested_ontology = query.get("ontology", ["folio"])[0]
+            if requested_ontology != document_ontology or (
+                document_ontology == "canon" and path.startswith("/explore/api/")
+            ):
+                self.unexpected.append(request.url)
+                await route.abort()
+                return
         status, content_type, body = 200, "application/json", None
         if parsed.netloc == "cdn.tailwindcss.com":
             # Serve the existing CDN dependency from the explicit local cache.
@@ -203,7 +239,9 @@ class ExplorerFixtures:
             await route.abort()
             return
         elif path == "/explore/tree":
-            content_type, body = "text/html", self.html
+            ontology_key = query.get("ontology", ["folio"])[0].lower()
+            self.document_ontologies[request.frame] = ontology_key
+            content_type, body = "text/html", self.html(ontology_key)
         elif path.startswith("/static/"):
             asset = ROOT / "folio_api" / path.lstrip("/")
             if asset.is_file() and asset.resolve().is_relative_to(
@@ -220,20 +258,23 @@ class ExplorerFixtures:
         elif path.startswith(("/taxonomy/", "/properties/")):
             section = "class" if path.startswith("/taxonomy/") else "property"
             if path.endswith("/tree/data"):
-                body = self.children(query.get("node_id", ["#"])[0], section)
+                body = fixture.children(query.get("node_id", ["#"])[0], section)
             elif path.endswith("/tree/search"):
-                body = self.search(query.get("query", [""])[0], section)
+                body = fixture.search(query.get("query", [""])[0], section)
             elif "/tree/path/" in path:
-                identity = self.resolve(path.split("/tree/path/", 1)[1])
+                identity = fixture.resolve(path.split("/tree/path/", 1)[1])
                 chain = [identity]
-                while self.nodes.get(chain[0], {}).get("parents"):
-                    chain.insert(0, self.nodes[chain[0]]["parents"][0])
-                if identity in self.nodes and self.nodes[identity]["type"] == section:
+                while fixture.nodes.get(chain[0], {}).get("parents"):
+                    chain.insert(0, fixture.nodes[chain[0]]["parents"][0])
+                if (
+                    identity in fixture.nodes
+                    and fixture.nodes[identity]["type"] == section
+                ):
                     body = {
                         "path": [
                             {
                                 "iri": key,
-                                "label": self.nodes[key]["label"],
+                                "label": fixture.nodes[key]["label"],
                                 "id": key.rsplit("/", 1)[-1],
                             }
                             for key in chain
@@ -242,17 +283,26 @@ class ExplorerFixtures:
                 else:
                     status, body = 404, {"detail": "Not found"}
             elif "/tree/node/" in path:
-                identity = self.resolve(path.split("/tree/node/", 1)[1])
-                if identity in self.nodes and self.nodes[identity]["type"] == section:
-                    body = self.node_data(identity)
+                identity = fixture.resolve(path.split("/tree/node/", 1)[1])
+                if (
+                    identity in fixture.nodes
+                    and fixture.nodes[identity]["type"] == section
+                ):
+                    body = fixture.node_data(identity)
                 else:
                     status, body = 404, {"detail": "Not found"}
             elif "/class-details/" in path or "/property-details/" in path:
-                identity = self.resolve(path.rsplit("/", 1)[1])
-                if identity in self.nodes:
-                    node = self.nodes[identity]
+                endpoint = (
+                    "/class-details/" if section == "class" else "/property-details/"
+                )
+                identity = fixture.resolve(path.split(endpoint, 1)[1])
+                if (
+                    identity in fixture.nodes
+                    and fixture.nodes[identity]["type"] == section
+                ):
+                    node = fixture.nodes[identity]
                     content_type = "text/html"
-                    body = f'<article data-details-iri="{escape(identity)}"><h3>{escape(node["label"])}</h3><p>Synthetic browser fixture.</p><a href="#" onclick="event.preventDefault(); selectNodeByIri(\'{iri("p-beta")}\')">Related Beta Relation</a></article>'
+                    body = f'<article data-details-iri="{escape(identity)}"><h3>{escape(node["label"])}</h3><p>Synthetic browser fixture.</p><a href="#" onclick="event.preventDefault(); selectNodeByIri(\'{fixture.iri("p-beta")}\')">Related Beta Relation</a></article>'
                 else:
                     status, body = 404, {"detail": "Not found"}
         if body is None:
