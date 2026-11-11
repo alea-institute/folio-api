@@ -4,9 +4,12 @@ Historical evidence imported from PR #33 (`e377968c`). These results describe
 that source branch; current landing verification is recorded separately in
 `docs/plans/evidence/fa-5-history-verification.md`.
 
-Plan: `docs/plans/2026-10-26-1206-feat-fa-1-browser-history-plan.md`  
-Branch: `drawdown/fa-1`  
-Implementation reviewed for this receipt: `cf0361f`  
+Plan: `docs/plans/2026-10-26-1206-feat-fa-1-browser-history-plan.md`
+
+Branch: `drawdown/fa-1`
+
+Implementation reviewed for this receipt: `cf0361f`
+
 Date: 2026-10-26
 
 ## Starting state and authority
