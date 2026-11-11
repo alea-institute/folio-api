@@ -1,0 +1,87 @@
+name: Graph browser tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  merge_group:
+    types: [checks_requested]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  graph-browser-tests:
+    name: Graph browser tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: "0.9.22"
+          python-version: "3.13"
+          enable-cache: false
+
+      - name: Install locked dependencies and Chromium
+        id: install
+        run: |
+          uv sync --locked --dev --group browser
+          uv run --no-sync playwright install --with-deps chromium
+
+      - name: Run inherited and new browser tests against isolated app
+        timeout-minutes: 8
+        run: |
+          mkdir -p test-results
+          .venv/bin/python -u -m browser_tests.app > test-results/graph-server.log 2>&1 &
+          server_pid=$!
+          trap 'kill -TERM "$server_pid" 2>/dev/null || true; wait "$server_pid" || true' EXIT
+          ready=false
+          for attempt in $(seq 1 90); do
+            if ! kill -0 "$server_pid" 2>/dev/null; then
+              cat test-results/graph-server.log
+              exit 1
+            fi
+            if curl --fail --silent --max-time 2 http://127.0.0.1:9616/info/health > /dev/null; then
+              ready=true
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" != true ]; then
+            cat test-results/graph-server.log
+            exit 1
+          fi
+          uv run --no-sync pytest -o addopts='' \
+            browser_tests/entity_graph_controls.py \
+            browser_tests/test_entity_graph_accessibility.py \
+            --browser chromium --base-url http://127.0.0.1:9616 \
+            --output=test-results/playwright \
+            --junitxml=test-results/graph-browser.xml \
+            --fa6-evidence-dir test-results/evidence
+          test -s test-results/graph-server.log
+          kill -TERM "$server_pid"
+          wait "$server_pid"
+          trap - EXIT
+
+      - name: Reject incomplete or skipped verification
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: uv run --no-sync python scripts/check_pytest_results.py test-results/graph-browser.xml
+
+      - name: Upload browser results and server log
+        if: ${{ !cancelled() && hashFiles('test-results/graph-server.log') != '' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: graph-browser-test-reports
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: error

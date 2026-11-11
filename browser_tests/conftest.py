@@ -1,6 +1,7 @@
 """Opt-in browser fixtures, deliberately outside the API conftest ancestry."""
 
 import copy
+import itertools
 import json
 from pathlib import Path
 
@@ -12,15 +13,31 @@ def pytest_addoption(parser):
     parser.addoption(
         "--graph-evidence-dir", help="Save the three fa-2 screenshots here"
     )
+    parser.addoption("--fa6-evidence-dir", help="Save current fa-6 screenshots here")
 
 
 @pytest.fixture(scope="session")
-def browser_context_args(browser_context_args, base_url):
+def browser_client_numbers():
+    return itertools.count(1)
+
+
+@pytest.fixture
+def browser_context_args(browser_context_args, base_url, browser_client_numbers):
     if not base_url:
         raise pytest.UsageError(
             "Start the local app and supply --base-url http://127.0.0.1:9616"
         )
-    return {**browser_context_args, "viewport": {"width": 1440, "height": 1000}}
+    # Separate browser contexts represent separate users. The local proxy peer
+    # supplies a reserved benchmark address so tests do not share a rate bucket.
+    number = next(browser_client_numbers)
+    return {
+        **browser_context_args,
+        "viewport": {"width": 1440, "height": 1000},
+        "extra_http_headers": {
+            **browser_context_args.get("extra_http_headers", {}),
+            "X-Forwarded-For": f"198.18.{number // 256}.{number % 256}",
+        },
+    }
 
 
 @pytest.fixture
