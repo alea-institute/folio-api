@@ -222,6 +222,25 @@ def test_isolated_server_serves_both_ontologies(page):
         assert response.json()
 
 
+def test_canon_retains_full_width_details_tab(page, pytestconfig):
+    page.goto("/explore/tree?ontology=canon")
+    expect(page.locator("#class-tree-root .node-label").first).to_be_visible()
+    details = page.get_by_role("tab", name="Details", exact=True)
+    expect(details).to_be_visible()
+    expect(page.locator("#tab-graph")).to_have_count(0)
+    expect(page.locator("#tab-fullscreen")).to_have_count(0)
+    page.wait_for_function(
+        "() => getComputedStyle(document.querySelector('#tab-details')).fontWeight === '600'"
+    )
+    tabs_box = page.locator("#detail-tabs").bounding_box()
+    details_box = details.bounding_box()
+    assert details_box["width"] == pytest.approx(tabs_box["width"], abs=1)
+    output = pytestconfig.getoption("--fa6-evidence-dir")
+    if output:
+        Path(output).mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(Path(output) / "fa-6-canon-details.png"))
+
+
 def test_replacement_visual_evidence(graph_page, pytestconfig):
     page, _ = graph_page
     output = pytestconfig.getoption("--fa6-evidence-dir")

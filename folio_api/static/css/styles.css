@@ -318,7 +318,7 @@ html, body {
     flex: 1;
 }
 
-#detail-tabs {
+#detail-tabs.grid-cols-2 {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
 }
 
