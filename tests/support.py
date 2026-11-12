@@ -2,6 +2,7 @@
 
 import gzip
 import hashlib
+import tempfile
 import zlib
 from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass, field
@@ -40,6 +41,9 @@ def load_canon_snapshot(path: Path = CANON_FIXTURE_PATH) -> str:
     return load_snapshot(path, digest=CANON_FIXTURE_SHA256, name="Canon")
 
 
+TEST_TELEMETRY_DIR = str(Path(tempfile.gettempdir()) / "folio-api-test-telemetry")
+
+
 def make_test_config() -> dict:
     """Return a fresh nonsecret config without touching runtime configuration."""
     return {
@@ -49,6 +53,8 @@ def make_test_config() -> dict:
             "version": "test",
             "terms_of_service": "https://example.invalid/terms",
             "contact": {},
+            # Keep test runs' MCP telemetry out of the repo's logs/ directory.
+            "mcp_telemetry_dir": TEST_TELEMETRY_DIR,
             "logging": {
                 "version": 1,
                 "disable_existing_loggers": False,

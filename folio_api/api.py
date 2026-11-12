@@ -38,6 +38,7 @@ import folio_api.routes.connections
 from folio_api.api_config import load_config
 from folio_api.folio_compat import bound_folio_search_cache, warm_search_indices
 from folio_api.label_index import get_label_index
+from folio_api.mcp_telemetry import DEFAULT_DIR as DEFAULT_TELEMETRY_DIR, MCPTelemetry
 from folio_api.ontologies import OntologyRegistry, build_property_children, make_folio_entry
 from folio_api.rate_limit import RateLimitConfig, RateLimitMiddleware
 from folio_api.response_cache import DEFAULT_MAX_BYTES, ResponseCacheMiddleware
@@ -479,6 +480,22 @@ def get_app() -> FastAPI:
     folio_mcp_server.session_manager.session_idle_timeout = api_config.get(
         "mcp_session_idle_timeout", 1800
     )
+    # Anonymized usage telemetry for MCP tool calls (see folio_api.mcp_telemetry:
+    # tool, client type, hour, outcome buckets and the FOLIO concept/branch the
+    # call resolved to; never query text, pasted text or IPs).
+    app_instance.state.mcp_telemetry = None
+    if api_config.get("mcp_telemetry", True):
+        try:
+            from folio_mcp.observer import set_tool_observer
+        except ImportError:  # folio-mcp < 0.4.6 has no observer hook
+            logging.getLogger("folio_api").warning("MCP telemetry unavailable: folio-mcp has no observer hook")
+        else:
+            telemetry = MCPTelemetry(
+                api_config.get("mcp_telemetry_dir") or DEFAULT_TELEMETRY_DIR,
+                lambda: getattr(app_instance.state, "folio", None),
+            )
+            app_instance.state.mcp_telemetry = telemetry
+            set_tool_observer(telemetry.observe)
     app_instance.router.routes.append(
         Route(
             folio_mcp_server.settings.streamable_http_path,
