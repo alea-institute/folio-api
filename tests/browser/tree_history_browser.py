@@ -8,6 +8,29 @@ from support import ExplorerBrowserCase, iri
 
 
 class TreeHistoryBrowserTests(ExplorerBrowserCase):
+    async def assert_restored_graph_controls(self, name, history_length):
+        await self.page.locator("#tab-graph").click()
+        await expect(self.page.locator(".graph-node-selected")).to_have_attribute(
+            "data-iri", iri(name)
+        )
+        right = self.page.get_by_role("button", name="Pan right", exact=True)
+        await expect(right).to_have_attribute("aria-disabled", "false")
+        await self.page.evaluate(
+            "() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))"
+        )
+        before = await self.page.evaluate("({...EntityGraph.state.transform})")
+        canvas = self.page.locator("#graph-minimap")
+        drawing = await canvas.evaluate("c => c.toDataURL()")
+        await right.press("Enter")
+        after = await self.page.evaluate("({...EntityGraph.state.transform})")
+        self.assertEqual(after["x"], before["x"] - 80)
+        self.assertNotEqual(await canvas.evaluate("c => c.toDataURL()"), drawing)
+        await expect(self.page.locator("#graph-view-summary")).to_contain_text(
+            "nodes visible"
+        )
+        self.assertEqual(await self.page.evaluate("history.length"), history_length)
+        await self.page.locator("#tab-details").click()
+
     async def test_search_and_sibling_controls_for_both_sections(self):
         await self.open()
         await self.search("alpha")
@@ -89,6 +112,7 @@ class TreeHistoryBrowserTests(ExplorerBrowserCase):
         )
         if screenshots:
             await self.screenshot("fa-5-tree-history-back.png")
+        await self.assert_restored_graph_controls(prefix + "-context-child", length)
         await self.page.go_forward()
         if prefix == "p":
             await self.selected("c-beta")
@@ -107,6 +131,7 @@ class TreeHistoryBrowserTests(ExplorerBrowserCase):
         self.assertEqual(await self.page.evaluate("history.length"), length)
         if screenshots:
             await self.screenshot("fa-5-tree-history-forward.png")
+        await self.assert_restored_graph_controls(prefix + "-beta", length)
 
     async def test_details_link_reveals_property_in_filtered_tree(self):
         await self.open()

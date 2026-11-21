@@ -46,6 +46,17 @@ class OntologyHistoryBrowserTests(ExplorerBrowserCase):
         await expect(self.page.locator("#explore-search-input")).to_have_value("beta")
         self.assertEqual(await self.page.evaluate("history.length"), length)
         await expect(self.page.locator("#tab-graph")).to_have_count(0)
+        await expect(
+            self.page.locator("#graph-controls, #graph-minimap")
+        ).to_have_count(0)
+        self.assertFalse(
+            any("/explore/api/entity-graph/" in key for key in self.fixtures.requests)
+        )
+        if self.fixtures.tailwind:
+            tabs = await self.page.locator("#detail-tabs").bounding_box()
+            details = await self.page.locator("#tab-details").bounding_box()
+            self.assertAlmostEqual(tabs["width"], details["width"], delta=1)
+        await self.screenshot("fa-5-canon-details.png")
         for kind, endpoint, name in (
             ("taxonomy", "class-details", "c-beta"),
             ("properties", "property-details", "p-beta"),

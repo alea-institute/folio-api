@@ -54,6 +54,12 @@ asserting that the restored graph fits. Screenshot capture requires
 `FOLIO_BROWSER_TAILWIND`; a behavioral-only run may omit it, but then utility CSS
 is absent and that run does not constitute visual verification.
 
+For the graph/history integration, set `FOLIO_BROWSER_EVIDENCE_PREFIX=fa-7` along
+with `FOLIO_BROWSER_SCREENSHOTS=1`. The default prefix remains `fa-5`; capture
+does not overwrite earlier evidence when the new prefix is set. Canon history
+also captures `<prefix>-canon-details.png` after asserting full-width Details,
+the restored identifier, and the absence of graph UI and requests.
+
 The ontology suite renders separate FOLIO and Canon documents with explicit
 template context. Canon fixtures use full IRIs with matching local names in
 different namespaces. Requests must match the rendered document's ontology;
@@ -70,6 +76,13 @@ stale-response cases live in `tree_history_recovery_browser.py`, using the same
 shared helpers and discovery command. Graph tests also verify that a canceled
 initial fit resumes when its cached render is reopened, while completed user
 zoom remains intact.
+
+Integration coverage also checks keyboard controls and the rendered overview
+after class/property Back/Forward; pending navigation blocks controls, wheel,
+Fit, and queued observer work. Failed navigation resumes the retained mount
+without resetting user zoom. Queued expansion cannot repaint or reclaim focus
+after another selection is accepted. The graph CI workflow runs this harness
+explicitly in addition to the isolated real-app browser suite.
 
 The fixtures contain equivalent class/property trees (`c-` / `p-` identifiers),
 `alpha`, `beta`, and `shared` searches, context siblings with retained children,
