@@ -271,3 +271,48 @@ def test_replacement_visual_evidence(graph_page, pytestconfig):
     page.mouse.up()
     settled(page)
     capture("narrow")
+
+
+def test_history_integrated_visual_evidence(graph_page, pytestconfig):
+    page, _ = graph_page
+    output = pytestconfig.getoption("--fa7-evidence-dir")
+    selected = page.locator(".graph-node-selected").get_attribute("data-iri")
+    length = page.evaluate("history.length")
+    expand_by_keyboard(page)
+    page.go_back()
+    expect(page.locator("#explore-tree")).to_have_attribute("aria-busy", "false")
+    expect(page.get_by_text("No entity selected", exact=True)).to_be_visible()
+    expect(page.locator("#graph-controls, #graph-minimap")).to_have_count(0)
+    page.go_forward()
+    expect(page.locator(".graph-node-selected")).to_have_attribute("data-iri", selected)
+    expect(page.locator("#explore-tree")).to_have_attribute("aria-busy", "false")
+    expand_by_keyboard(page, "Space")
+
+    def capture(name):
+        assert_controls_usable(page)
+        tab_to_control(page, "Fit graph").press("Enter")
+        settled(page)
+        assert_map_contains_graph_and_view(page)
+        expect(page.locator("#graph-view-summary")).to_contain_text(
+            "6 of 6 nodes visible"
+        )
+        expect(page.get_by_role("button", name="Fit graph", exact=True)).to_be_focused()
+        assert page.evaluate("history.length") == length
+        if output:
+            Path(output).mkdir(parents=True, exist_ok=True)
+            page.screenshot(path=str(Path(output) / f"fa-7-graph-controls-{name}.png"))
+
+    capture("embedded")
+    keyboard_fullscreen(page)
+    capture("fullscreen")
+    page.keyboard.press("Escape")
+    page.set_viewport_size({"width": 900, "height": 1000})
+    before_width = page.locator("#entity-graph-pane").bounding_box()["width"]
+    handle = page.locator(".split-handle").bounding_box()
+    page.mouse.move(handle["x"] + 2, handle["y"] + 50)
+    page.mouse.down()
+    page.mouse.move(550, handle["y"] + 50)
+    page.mouse.up()
+    settled(page)
+    assert page.locator("#entity-graph-pane").bounding_box()["width"] < before_width
+    capture("narrow")

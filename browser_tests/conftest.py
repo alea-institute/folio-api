@@ -14,6 +14,9 @@ def pytest_addoption(parser):
         "--graph-evidence-dir", help="Save the three fa-2 screenshots here"
     )
     parser.addoption("--fa6-evidence-dir", help="Save current fa-6 screenshots here")
+    parser.addoption(
+        "--fa7-evidence-dir", help="Save graph screenshots after Back/Forward here"
+    )
 
 
 @pytest.fixture(scope="session")

@@ -22,6 +22,217 @@ class GraphHistoryBrowserTests(ExplorerBrowserCase):
             "aria-label",
             re.compile("Entity graph for " + self.fixtures.nodes[iri(name)]["label"]),
         )
+        await expect(self.page.locator("#graph-controls")).to_have_count(1)
+        await expect(self.page.locator("#graph-minimap")).to_have_count(1)
+        await self.page.evaluate(
+            "() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))"
+        )
+
+    async def camera_and_overview(self):
+        return await self.page.evaluate(
+            """() => ({
+                camera: {...EntityGraph.state.transform},
+                pixels: document.querySelector('#graph-minimap').toDataURL(),
+                summary: document.querySelector('#graph-view-summary').textContent,
+                positions: structuredClone(EntityGraph.state.nodePositions)
+            })"""
+        )
+
+    async def test_pending_navigation_suspends_controls_and_resumes_cached_mount(self):
+        await self.open()
+        await self.search("alpha")
+        await self.page.locator("#tab-graph").click()
+        await self.graph_selected("c-alpha")
+        zoom = self.page.get_by_role("button", name="Zoom in", exact=True)
+        await zoom.press("Enter")
+        await self.page.evaluate(
+            "window.retainedViewport = document.querySelector('#graph-viewport')"
+        )
+        before = await self.camera_and_overview()
+        barrier = self.fixtures.hold("/taxonomy/tree/search?query=beta")
+        self.fixtures.fail_next("/taxonomy/tree/search?query=beta")
+        await self.page.locator("#explore-search-input").fill("beta")
+        await self.page.locator("#explore-search-input").press("Enter")
+        await barrier.wait()
+        try:
+            for button in await self.page.locator("#graph-controls button").all():
+                await expect(button).to_have_attribute("aria-disabled", "true")
+                await button.focus()
+                await self.page.keyboard.press("Enter")
+                await self.page.keyboard.press("Space")
+            await self.page.locator("#graph-viewport").hover()
+            await self.page.mouse.wheel(0, -120)
+            await self.page.evaluate("EntityGraph.fitGraph()")
+            await self.page.set_viewport_size({"width": 1200, "height": 900})
+            await self.page.evaluate(
+                "() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))"
+            )
+            self.assertEqual(await self.camera_and_overview(), before)
+            await self.page.locator("#explore-search-input").focus()
+            await self.release_response(barrier)
+            await expect(self.page.locator("#tree-history-notice")).to_contain_text(
+                "Search could not be loaded"
+            )
+            await self.graph_selected("c-alpha")
+            self.assertTrue(
+                await self.page.evaluate(
+                    "retainedViewport === document.querySelector('#graph-viewport')"
+                )
+            )
+            self.assertEqual(
+                (await self.camera_and_overview())["camera"], before["camera"]
+            )
+            await expect(self.page.locator("#explore-search-input")).to_be_focused()
+            await expect(zoom).to_have_attribute("aria-disabled", "false")
+            await zoom.press("Space")
+            self.assertGreater(
+                (await self.camera_and_overview())["camera"]["scale"],
+                before["camera"]["scale"],
+            )
+            self.assertNotEqual(
+                (await self.camera_and_overview())["pixels"], before["pixels"]
+            )
+        finally:
+            barrier.release()
+
+    async def test_queued_observer_cannot_mutate_pending_or_reaccepted_mount(self):
+        await self.open()
+        await self.page.evaluate(
+            """() => {
+                window.graphObservers = [];
+                const RealObserver = window.ResizeObserver;
+                window.ResizeObserver = class extends RealObserver {
+                    constructor(callback) {
+                        super(callback);
+                        window.graphObservers.push(callback);
+                    }
+                };
+            }"""
+        )
+        await self.search("alpha")
+        await self.page.locator("#tab-graph").click()
+        await self.graph_selected("c-alpha")
+        await self.page.get_by_role("button", name="Zoom in", exact=True).press("Enter")
+        await self.page.evaluate(
+            "() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))"
+        )
+        await self.page.evaluate(
+            """() => {
+                const schedule = window.requestAnimationFrame;
+                window.requestAnimationFrame = callback => {
+                    window.releaseObserverFrame = () => callback(performance.now());
+                    return 0;
+                };
+                window.graphObservers.at(-1)();
+                window.requestAnimationFrame = schedule;
+                if (!window.releaseObserverFrame) throw new Error('Observer frame was not captured');
+            }"""
+        )
+        barrier = self.fixtures.hold("/taxonomy/tree/search?query=beta")
+        self.fixtures.fail_next("/taxonomy/tree/search?query=beta")
+        await self.page.locator("#explore-search-input").fill("beta")
+        await self.page.locator("#explore-search-input").press("Enter")
+        await barrier.wait()
+        try:
+            before = await self.camera_and_overview()
+            await self.page.set_viewport_size({"width": 1100, "height": 850})
+            await self.page.evaluate("window.releaseObserverFrame()")
+            self.assertEqual(await self.camera_and_overview(), before)
+            await self.release_response(barrier)
+            await self.graph_selected("c-alpha")
+            resumed = await self.camera_and_overview()
+            await self.page.evaluate("window.releaseObserverFrame()")
+            self.assertEqual(await self.camera_and_overview(), resumed)
+            self.assertEqual(resumed["camera"], before["camera"])
+            self.assertNotEqual(resumed["pixels"], before["pixels"])
+        finally:
+            barrier.release()
+
+    async def test_queued_expansion_cannot_restore_focus_after_navigation(self):
+        await self.open()
+        await self.search("alpha")
+        await self.page.locator("#tab-graph").click()
+        await self.graph_selected("c-alpha")
+        await self.page.evaluate(
+            """() => {
+                const schedule = window.requestAnimationFrame;
+                window.requestAnimationFrame = callback => {
+                    if (!document.querySelector('#graph-controls')) {
+                        window.requestAnimationFrame = schedule;
+                        window.releaseExpansionFrame = () => callback(performance.now());
+                        document.documentElement.dataset.expansionFrameHeld = 'true';
+                        return 0;
+                    }
+                    return schedule(callback);
+                };
+            }"""
+        )
+        await self.page.locator(".graph-node-selected .graph-node-children-btn").press(
+            "Enter"
+        )
+        await expect(self.page.locator("html")).to_have_attribute(
+            "data-expansion-frame-held", "true"
+        )
+        await self.search("beta")
+        await self.graph_selected("c-beta")
+        await self.page.locator("#explore-search-input").focus()
+        before = await self.camera_and_overview()
+        await self.page.evaluate("window.releaseExpansionFrame()")
+        await self.graph_selected("c-beta")
+        self.assertEqual(await self.camera_and_overview(), before)
+        await expect(self.page.locator("#explore-search-input")).to_be_focused()
+
+    async def test_back_forward_replaces_suspended_controls_and_overview(self):
+        await self.open()
+        await self.search("alpha")
+        await self.page.locator("#tab-graph").click()
+        await self.graph_selected("c-alpha")
+        await self.search("beta")
+        await self.graph_selected("c-beta")
+        await self.page.evaluate(
+            """() => {
+                window.oldGraphButton = document.querySelector('[data-graph-action=right]');
+                window.oldGraphCanvas = document.querySelector('#graph-minimap');
+            }"""
+        )
+        length = await self.page.evaluate("history.length")
+        barrier = self.fixtures.hold("/taxonomy/tree/search?query=alpha")
+        await self.page.go_back()
+        await barrier.wait()
+        try:
+            before = await self.camera_and_overview()
+            await self.page.get_by_role("button", name="Pan right", exact=True).focus()
+            await self.page.keyboard.press("Enter")
+            self.assertEqual(await self.camera_and_overview(), before)
+            await self.release_response(barrier)
+            await self.selected("c-alpha")
+            await self.graph_selected("c-alpha")
+            await expect(
+                self.page.get_by_role("button", name="Pan right", exact=True)
+            ).to_have_attribute("aria-disabled", "false")
+            current = await self.camera_and_overview()
+            await self.page.evaluate("window.oldGraphButton.click()")
+            self.assertEqual(await self.camera_and_overview(), current)
+            self.assertEqual(
+                await self.page.evaluate("oldGraphCanvas.toDataURL()"), before["pixels"]
+            )
+            for name, navigate in (
+                ("c-beta", self.page.go_forward),
+                ("c-alpha", self.page.go_back),
+            ):
+                await navigate()
+                await self.selected(name)
+                await self.graph_selected(name)
+                right = self.page.get_by_role("button", name="Pan right", exact=True)
+                await expect(right).to_have_attribute("aria-disabled", "false")
+                current = await self.camera_and_overview()
+                await right.press("Space")
+                moved = await self.camera_and_overview()
+                self.assertEqual(moved["camera"]["x"], current["camera"]["x"] - 80)
+                self.assertNotEqual(moved["pixels"], current["pixels"])
+                self.assertEqual(await self.page.evaluate("history.length"), length)
+        finally:
+            barrier.release()
 
     async def release_response(self, barrier):
         async with self.page.expect_response(
@@ -104,6 +315,9 @@ class GraphHistoryBrowserTests(ExplorerBrowserCase):
             "No entity selected"
         )
         await expect(self.page.locator(".graph-node")).to_have_count(0)
+        await expect(
+            self.page.locator("#graph-controls, #graph-minimap")
+        ).to_have_count(0)
         await self.page.locator("#tab-details").click()
         await self.page.locator("#tab-graph").click()
         await expect(self.page.locator("#entity-graph-pane")).to_contain_text(
@@ -118,6 +332,9 @@ class GraphHistoryBrowserTests(ExplorerBrowserCase):
             "No entity selected"
         )
         await expect(self.page.locator(".graph-node")).to_have_count(0)
+        await expect(
+            self.page.locator("#graph-controls, #graph-minimap")
+        ).to_have_count(0)
 
     async def test_late_graph_fetch_cannot_replace_current_or_empty_graph(self):
         await self.open()
@@ -139,6 +356,9 @@ class GraphHistoryBrowserTests(ExplorerBrowserCase):
             "No entity selected"
         )
         await expect(self.page.locator(".graph-node")).to_have_count(0)
+        await expect(
+            self.page.locator("#graph-controls, #graph-minimap")
+        ).to_have_count(0)
 
     async def test_late_children_response_cannot_change_current_graph(self):
         await self.open()

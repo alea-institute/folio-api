@@ -11,6 +11,7 @@ import json
 import mimetypes
 import os
 from pathlib import Path
+import re
 from urllib.parse import parse_qs, unquote, urlsplit
 import unittest
 
@@ -394,6 +395,9 @@ class ExplorerBrowserCase(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(
                 self.fixtures.tailwind, "Screenshots require FOLIO_BROWSER_TAILWIND"
             )
+            prefix = os.environ.get("FOLIO_BROWSER_EVIDENCE_PREFIX", "fa-5")
+            self.assertRegex(prefix, r"^[a-zA-Z0-9_-]+$")
+            name = re.sub(r"^fa-5-", prefix + "-", name)
             destination = ROOT / "docs/plans/evidence" / name
             destination.parent.mkdir(parents=True, exist_ok=True)
             await self.page.screenshot(

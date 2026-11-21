@@ -38,6 +38,17 @@ jobs:
           uv sync --locked --dev --group browser
           uv run --no-sync playwright install --with-deps chromium
 
+      - name: Run Explorer history regressions
+        timeout-minutes: 5
+        run: |
+          mkdir -p test-results
+          curl --fail --location --max-time 45 \
+            'https://cdn.tailwindcss.com/3.4.17?plugins=forms,typography,aspect-ratio' \
+            --output test-results/tailwind-3.4.17.js
+          printf '%s\n' 'afcd5f979c919a39cdfafefe983bde4f5bd41caab98cb2eb0efd2cf56b8d1355  test-results/tailwind-3.4.17.js' | sha256sum --check
+          FOLIO_BROWSER_TAILWIND=test-results/tailwind-3.4.17.js \
+            uv run --no-sync python -m unittest discover -s tests/browser -p '*_browser.py' -v
+
       - name: Run inherited and new browser tests against isolated app
         timeout-minutes: 8
         run: |
@@ -67,7 +78,8 @@ jobs:
             --browser chromium --base-url http://127.0.0.1:9616 \
             --output=test-results/playwright \
             --junitxml=test-results/graph-browser.xml \
-            --fa6-evidence-dir test-results/evidence
+            --fa6-evidence-dir test-results/evidence \
+            --fa7-evidence-dir test-results/evidence
           test -s test-results/graph-server.log
           kill -TERM "$server_pid"
           wait "$server_pid"

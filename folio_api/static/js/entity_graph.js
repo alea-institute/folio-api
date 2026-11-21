@@ -52,12 +52,9 @@
   let renderedData = null;
   let initialFitPending = false;
   let navigationPending = false;
-
-  function scheduleGraphFrame(callback, generation = graphGeneration) {
-    requestAnimationFrame(function () {
-      if (generation === graphGeneration) callback();
-    });
-  }
+  const MIN_ZOOM = 0.2;
+  const MAX_ZOOM = 4;
+  const ZOOM_STEP = 1.12;
 
   function onNavigationStart() {
     _panMouseUp();
@@ -65,6 +62,13 @@
     graphGeneration++;
     layoutGeneration++;
     navigationPending = true;
+    _cancelMountFrames();
+    if (_mount) {
+      _mount.controls.querySelectorAll('button').forEach(function (button) {
+        button.setAttribute('aria-disabled', 'true');
+      });
+      if (_mount.childButton) _mount.childButton.tabIndex = -1;
+    }
   }
 
   function _readUrlSelection() {
@@ -121,13 +125,20 @@
   var _focusVersion = 0;
   var _pendingFocus = null;
 
-  function _disposeMount() {
+  function _cancelMountFrames() {
     if (_renderFrame !== null) cancelAnimationFrame(_renderFrame);
     _renderFrame = null;
     _pendingFocus = null;
+    if (_mount && _mount.frame !== null) {
+      cancelAnimationFrame(_mount.frame);
+      _mount.frame = null;
+    }
+  }
+
+  function _disposeMount() {
+    _cancelMountFrames();
     if (_mount) {
       _mount.observer.disconnect();
-      if (_mount.frame !== null) cancelAnimationFrame(_mount.frame);
       window.removeEventListener('resize', _mount.schedule);
       _mount = null;
     }
@@ -478,8 +489,14 @@
     return map;
   }
 
+  function _isCurrentMount(mount = _mount) {
+    return !navigationPending && mount && mount === _mount && mount.viewport.isConnected &&
+      mount.generation === graphGeneration && mount.layout === layoutGeneration &&
+      mount.graphData === state.graphData;
+  }
+
   function _viewportSize() {
-    if (!_mount || !_mount.viewport.isConnected) return null;
+    if (!_isCurrentMount()) return null;
     var vp = _mount.viewport;
     if (!vp.clientWidth || !vp.clientHeight) return null;
     var rect = vp.getBoundingClientRect();
@@ -502,8 +519,7 @@
     });
   }
 
-  function _graphBounds() {
-    var positions = Object.values(state.nodePositions);
+  function _graphBounds(positions = Object.values(state.nodePositions)) {
     if (!positions.length) return null;
     return {
       left: Math.min.apply(null, positions.map(function (p) { return p.x; })),
@@ -515,7 +531,7 @@
 
   function _zoomAt(factor, x, y) {
     var t = state.transform;
-    var scale = Math.max(0.2, Math.min(4, t.scale * factor));
+    var scale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, t.scale * factor));
     t.x = x - (x - t.x) * scale / t.scale;
     t.y = y - (y - t.y) * scale / t.scale;
     t.scale = scale;
@@ -554,8 +570,8 @@
           case 'right': t.x -= 80; applyTransform(); break;
           case 'up': t.y += 80; applyTransform(); break;
           case 'down': t.y -= 80; applyTransform(); break;
-          case 'in': _zoomAt(1.12, size.w / 2, size.h / 2); break;
-          case 'out': _zoomAt(1 / 1.12, size.w / 2, size.h / 2); break;
+          case 'in': _zoomAt(ZOOM_STEP, size.w / 2, size.h / 2); break;
+          case 'out': _zoomAt(1 / ZOOM_STEP, size.w / 2, size.h / 2); break;
           case 'fit': fitGraph(); break;
         }
         _mount.announcement.textContent = action[1] + '. ' + _mount.summary.textContent;
@@ -569,7 +585,7 @@
     var size = _viewportSize();
     if (!size) return;
     var positions = Object.values(state.nodePositions);
-    var bounds = _graphBounds();
+    var bounds = _graphBounds(positions);
     var t = state.transform;
     var view = { left: -t.x / t.scale, top: -t.y / t.scale,
       right: (size.w - t.x) / t.scale, bottom: (size.h - t.y) / t.scale };
@@ -582,7 +598,6 @@
       (positions.length && !visible ? ' Use Fit graph to return.' : '');
     if (_mount.summary.textContent !== summary) _mount.summary.textContent = summary;
     // Hidden overflow can scroll on focus, independently of the graph camera.
-    // Keep clipped child actions out of Tab order as the camera moves.
     if (_mount.childButton) {
       var buttonRect = _mount.childButton.getBoundingClientRect();
       var viewRect = _mount.viewport.getBoundingClientRect();
@@ -596,7 +611,7 @@
     _mount.controls.querySelectorAll('button').forEach(function (button) {
       var action = button.dataset.graphAction;
       var disabled = String(!bounds ||
-        (action === 'in' && t.scale >= 4) || (action === 'out' && t.scale <= 0.2));
+        (action === 'in' && t.scale >= MAX_ZOOM) || (action === 'out' && t.scale <= MIN_ZOOM));
       if (button.getAttribute('aria-disabled') !== disabled) button.setAttribute('aria-disabled', disabled);
     });
 
@@ -611,7 +626,6 @@
     }
     var ctx = canvas.getContext('2d');
     if (!ctx) return;
-    // Reset, never accumulate, the backing-store scale.
     ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
     ctx.clearRect(0, 0, cw, ch);
     if (!bounds) return;
@@ -633,18 +647,21 @@
 
   function _observeMount(mount) {
     mount.schedule = function () {
-      if (_mount !== mount || mount.frame !== null) return;
-      mount.frame = requestAnimationFrame(function () {
+      if (!_isCurrentMount(mount) || mount.frame !== null) return;
+      var generation = mount.generation;
+      var layout = mount.layout;
+      var frame = requestAnimationFrame(function () {
+        if (mount.frame !== frame || generation !== mount.generation || layout !== mount.layout) return;
         mount.frame = null;
-        if (_mount !== mount || !_viewportSize()) return;
+        if (!_isCurrentMount(mount) || !_viewportSize()) return;
         if (mount.needsFit) {
-          mount.needsFit = false;
-          fitGraph();
+          fitGraph(generation);
         } else {
           _measureNodes();
           renderMinimap();
         }
       });
+      mount.frame = frame;
     };
     mount.observer = new ResizeObserver(mount.schedule);
     mount.observer.observe(mount.viewport);
@@ -655,9 +672,7 @@
   }
 
   // _mountGraph — actual DOM construction.
-  function _mountGraph(graphData, opts, generation) {
-    opts = opts || {};
-    var preserveZoom = !!opts.preserveZoom;
+  function _mountGraph(graphData, generation, layoutVersion) {
     var pane = _pane();
     if (!pane) return;
     var layout = graphData && graphData.layout;
@@ -918,6 +933,7 @@
           childrenBtn.addEventListener('click', (function (capturedIri) {
             return function (e) {
               e.stopPropagation();
+              if (!_isCurrentMount() || _mount.graphData !== graphData || !nodesDiv.isConnected) return;
               expand(capturedIri);
             };
           })(node.id));
@@ -935,6 +951,7 @@
           hoverBadge.addEventListener('click', (function (capturedIri) {
             return function (e) {
               e.stopPropagation();
+              if (!_isCurrentMount() || _mount.graphData !== graphData || !nodesDiv.isConnected) return;
               expand(capturedIri);
             };
           })(node.id));
@@ -944,6 +961,7 @@
       // Wire drag on this node (per-node mousedown captured via IIFE).
       nodeDiv.addEventListener('mousedown', (function (capturedNodeEl, capturedIri) {
         return function (e) {
+          if (!_isCurrentMount() || !capturedNodeEl.isConnected) return;
           if (e.button !== 0) return;
           // Don't start drag on the +N children button or hover badge.
           if (e.target.closest && (
@@ -960,6 +978,7 @@
     // Delegated click listener for graph node navigation.
     // Suppresses click if a drag just finished (mouse moved > 3px).
     nodesDiv.addEventListener('click', function (ev) {
+      if (!_isCurrentMount() || !nodesDiv.isConnected) return;
       if (_dragState.wasDragged) return;   // suppress post-drag click
       var nodeEl = ev.target.closest && ev.target.closest('.graph-node');
       if (!nodeEl) return;
@@ -1034,8 +1053,9 @@
 
     _mount = { viewport: viewport, canvas: minimapCanvas, controls: controls,
       summary: summary, announcement: announcement, edges: edgesGroup,
+      graphData: graphData, generation: generation, layout: layoutVersion,
       childButton: nodesDiv.querySelector('.graph-node-children-btn'),
-      nodes: Array.from(nodesDiv.children), frame: null, needsFit: !preserveZoom };
+      nodes: Array.from(nodesDiv.children), frame: null, needsFit: initialFitPending };
     _observeMount(_mount);
     wirePanZoom();
     applyTransform();
@@ -1048,6 +1068,7 @@
   // ---------------- Pan / Zoom (Plan 10) ----------------
 
   function applyTransform() {
+    if (!_isCurrentMount()) return;
     var el = document.getElementById('graph-transform');
     if (!el) return;
     var t = state.transform;
@@ -1065,7 +1086,7 @@
     if (!bounds) return;
     var w = bounds.right - bounds.left || 1;
     var h = bounds.bottom - bounds.top || 1;
-    var scale = Math.max(0.2, Math.min((size.w - 32) / w, (size.h - 32) / h, 1));
+    var scale = Math.max(MIN_ZOOM, Math.min((size.w - 32) / w, (size.h - 32) / h, 1));
     state.transform = {
       x: (size.w - w * scale) / 2 - bounds.left * scale,
       y: (size.h - h * scale) / 2 - bounds.top * scale,
@@ -1073,6 +1094,7 @@
     };
     applyTransform();
     initialFitPending = false;
+    _mount.needsFit = false;
   }
 
   function _onWheel(e) {
@@ -1080,7 +1102,7 @@
     if (!size) return;
     e.preventDefault();
     var rect = _mount.viewport.getBoundingClientRect();
-    _zoomAt(e.deltaY < 0 ? 1.12 : 1 / 1.12, e.clientX - rect.left, e.clientY - rect.top);
+    _zoomAt(e.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP, e.clientX - rect.left, e.clientY - rect.top);
   }
 
   var _panning = false;
@@ -1088,7 +1110,7 @@
   var _panStartXform = { x: 0, y: 0 };
 
   function _panMouseDown(e) {
-    if (navigationPending || e.button !== 0) return;
+    if (!_isCurrentMount() || e.button !== 0) return;
     if (e.target && e.target.closest && e.target.closest('.graph-node')) return;
     _panning = true;
     _panStart = { x: e.clientX, y: e.clientY };
@@ -1139,7 +1161,7 @@
   };
 
   function _nodeDragStart(e, nodeEl, iri, edgesGroup) {
-    if (navigationPending) return;
+    if (!_isCurrentMount()) return;
     e.stopPropagation();   // prevent pan handler from also activating
     _dragState.active = true;
     _dragState.nodeEl = nodeEl;
@@ -1257,7 +1279,9 @@
   }
 
   function renderGraph(graphData, opts, generation = graphGeneration, layout = layoutGeneration) {
-    if (!graphData || !graphData.layout || generation !== graphGeneration) return;
+    const current = () => !navigationPending && generation === graphGeneration &&
+      layout === layoutGeneration && graphData === state.graphData;
+    if (!graphData || !graphData.layout || !current()) return;
     var pane = _pane();
     var focused = document.activeElement;
     var focusRequest = null;
@@ -1267,16 +1291,16 @@
         focusRequest = { action: focused.dataset.graphAction,
           iri: node && node.getAttribute('data-iri'), version: _focusVersion };
       } else if (focused === document.body && _pendingFocus && _pendingFocus.version === _focusVersion) {
-        // A superseded render has already removed the focused DOM.
         focusRequest = _pendingFocus;
       }
     }
     clearStates();
     _pendingFocus = focusRequest;
-    _renderFrame = requestAnimationFrame(function () {
+    var frame = requestAnimationFrame(function () {
+      if (_renderFrame !== frame) return;
       _renderFrame = null;
-      if (generation !== graphGeneration || layout !== layoutGeneration || graphData !== state.graphData) return;
-      _mountGraph(graphData, opts, generation);
+      if (!current()) return;
+      _mountGraph(graphData, generation, layout);
       renderedData = graphData;
       if (!focusRequest || !_mount || !_viewportSize() || state.activeTab !== 'graph' ||
           _focusVersion !== focusRequest.version || document.activeElement !== document.body) return;
@@ -1288,6 +1312,7 @@
       if (target && target.tabIndex < 0) target = null;
       (target || _mount.controls.querySelector('button')).focus({ preventScroll: true });
     });
+    _renderFrame = frame;
   }
 
   // ---------------- Public API ----------------
@@ -1349,8 +1374,13 @@
   async function refreshFor(iri, type, force) {
     if (navigationPending) return null;
     if (!force && iri === state.currentIri && type === state.currentType &&
-        state.graphData && renderedData === state.graphData) {
-      if (initialFitPending) scheduleGraphFrame(fitGraph);
+        state.graphData && renderedData === state.graphData && _mount) {
+      _cancelMountFrames();
+      _mount.generation = graphGeneration;
+      _mount.layout = layoutGeneration;
+      _mount.needsFit = initialFitPending;
+      renderMinimap();
+      _mount.schedule();
       return state.graphData;
     }
     const generation = ++graphGeneration;
