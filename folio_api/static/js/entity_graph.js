@@ -52,6 +52,7 @@
   let renderedData = null;
   let initialFitPending = false;
   let navigationPending = false;
+  let pendingExpansion = null;
   const MIN_ZOOM = 0.2;
   const MAX_ZOOM = 4;
   const ZOOM_STEP = 1.12;
@@ -62,6 +63,7 @@
     graphGeneration++;
     layoutGeneration++;
     navigationPending = true;
+    pendingExpansion = null;
     _cancelMountFrames();
     if (_mount) {
       _mount.controls.querySelectorAll('button').forEach(function (button) {
@@ -144,6 +146,15 @@
     }
     _panMouseUp();
     _nodeDragUp();
+  }
+
+  function _resumeMount() {
+    _cancelMountFrames();
+    _mount.generation = graphGeneration;
+    _mount.layout = layoutGeneration;
+    _mount.needsFit = initialFitPending;
+    renderMinimap();
+    _mount.schedule();
   }
 
   function clearStates() {
@@ -1099,7 +1110,7 @@
 
   function _onWheel(e) {
     var size = _viewportSize();
-    if (!size) return;
+    if (!size || e.currentTarget !== _mount.viewport) return;
     e.preventDefault();
     var rect = _mount.viewport.getBoundingClientRect();
     _zoomAt(e.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP, e.clientX - rect.left, e.clientY - rect.top);
@@ -1110,7 +1121,7 @@
   var _panStartXform = { x: 0, y: 0 };
 
   function _panMouseDown(e) {
-    if (!_isCurrentMount() || e.button !== 0) return;
+    if (!_isCurrentMount() || e.currentTarget !== _mount.viewport || e.button !== 0) return;
     if (e.target && e.target.closest && e.target.closest('.graph-node')) return;
     _panning = true;
     _panStart = { x: e.clientX, y: e.clientY };
@@ -1334,6 +1345,7 @@
     graphGeneration++;
     layoutGeneration++;
     navigationPending = false;
+    pendingExpansion = null;
     state.lastSelectedIri = detail.iri || null;
     state.lastSelectedType = detail.iri ? (detail.type || 'class') : null;
     if (!detail.iri) {
@@ -1375,12 +1387,7 @@
     if (navigationPending) return null;
     if (!force && iri === state.currentIri && type === state.currentType &&
         state.graphData && renderedData === state.graphData && _mount) {
-      _cancelMountFrames();
-      _mount.generation = graphGeneration;
-      _mount.layout = layoutGeneration;
-      _mount.needsFit = initialFitPending;
-      renderMinimap();
-      _mount.schedule();
+      _resumeMount();
       return state.graphData;
     }
     const generation = ++graphGeneration;
@@ -1391,6 +1398,7 @@
     state.transform = { x: 0, y: 0, scale: 1 };
     state.expandedIris = new Set();
     state.graphData = null;
+    pendingExpansion = null;
     renderedData = null;
     initialFitPending = true;
     var url = '/explore/api/entity-graph/' + encodeURIComponent(iri);
@@ -1430,6 +1438,7 @@
     if (state.expandedIris.has(iri)) return graphData;
     const generation = graphGeneration;
     const current = () => generation === graphGeneration && graphData === state.graphData;
+    let layout;
     var url = '/explore/api/entity-graph/' + encodeURIComponent(iri) + '?mode=children';
     try {
       const response = await fetch(url, { headers: { 'Accept': 'application/json' } });
@@ -1438,22 +1447,36 @@
       const data = await response.json();
       if (!current()) return null;
       var fetchedChildren = (data && data.children) || [];
-      renderedData = null;
-      state.expandedIris.add(iri);
+      var previous = pendingExpansion;
+      var candidate = {
+        data: Object.assign({}, previous ? previous.data : graphData),
+        expandedIris: new Set(previous ? previous.expandedIris : state.expandedIris)
+      };
+      candidate.expandedIris.add(iri);
       if (graphData.selected && iri === graphData.selected.iri) {
-        graphData.children = fetchedChildren;
+        candidate.data.children = fetchedChildren;
       } else {
-        graphData.expandedChildren = graphData.expandedChildren || {};
-        graphData.expandedChildren[iri] = fetchedChildren;
+        candidate.data.expandedChildren = Object.assign({}, candidate.data.expandedChildren);
+        candidate.data.expandedChildren[iri] = fetchedChildren;
       }
-      const layout = ++layoutGeneration;
-      const laid = await runLayout(buildELKGraph(graphData));
+      pendingExpansion = candidate;
+      layout = ++layoutGeneration;
+      const laid = await runLayout(buildELKGraph(candidate.data));
       if (!current() || layout !== layoutGeneration) return null;
-      graphData.layout = laid;
+      candidate.data.layout = laid;
+      Object.assign(graphData, candidate.data);
+      state.expandedIris = candidate.expandedIris;
+      pendingExpansion = null;
+      renderedData = null;
       renderGraph(graphData, { preserveZoom: true }, generation, layout);
       return graphData;
     } catch (error) {
-      if (!current()) return null;
+      if (!current() || (layout !== undefined && layout !== layoutGeneration)) return null;
+      if (layout !== undefined) {
+        pendingExpansion = null;
+        if (_mount) _resumeMount();
+        else renderGraph(graphData, { preserveZoom: true }, generation, layout);
+      }
       if (window.console && window.console.error) {
         window.console.error('[EntityGraph] expand failed for', iri, error);
       }

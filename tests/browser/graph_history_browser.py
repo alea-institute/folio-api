@@ -193,6 +193,7 @@ class GraphHistoryBrowserTests(ExplorerBrowserCase):
             """() => {
                 window.oldGraphButton = document.querySelector('[data-graph-action=right]');
                 window.oldGraphCanvas = document.querySelector('#graph-minimap');
+                window.oldGraphViewport = document.querySelector('#graph-viewport');
             }"""
         )
         length = await self.page.evaluate("history.length")
@@ -212,6 +213,14 @@ class GraphHistoryBrowserTests(ExplorerBrowserCase):
             ).to_have_attribute("aria-disabled", "false")
             current = await self.camera_and_overview()
             await self.page.evaluate("window.oldGraphButton.click()")
+            await self.page.evaluate(
+                """() => {
+                    oldGraphViewport.dispatchEvent(new WheelEvent('wheel', {deltaY: -120}));
+                    oldGraphViewport.dispatchEvent(new MouseEvent('mousedown', {button: 0, clientX: 50, clientY: 50}));
+                    document.dispatchEvent(new MouseEvent('mousemove', {clientX: 90, clientY: 90}));
+                    document.dispatchEvent(new MouseEvent('mouseup'));
+                }"""
+            )
             self.assertEqual(await self.camera_and_overview(), current)
             self.assertEqual(
                 await self.page.evaluate("oldGraphCanvas.toDataURL()"), before["pixels"]

@@ -273,6 +273,42 @@ def test_replacement_visual_evidence(graph_page, pytestconfig):
     capture("narrow")
 
 
+def test_rejected_expansion_preserves_camera_and_allows_keyboard_retry(graph_page):
+    page, requests = graph_page
+    selected = page.locator(".graph-node-selected").get_attribute("data-iri")
+    before = camera(page)
+    length = page.evaluate("history.length")
+    error = page.evaluate(
+        """async iri => {
+            const RealELK = window.ELK;
+            window.ELK = function(...args) {
+                const elk = new RealELK(...args);
+                elk.layout = () => Promise.reject(new Error('Fixture layout failure'));
+                return elk;
+            };
+            try {
+                await EntityGraph.expand(iri);
+                return null;
+            } catch (error) {
+                return error.message;
+            } finally {
+                window.ELK = RealELK;
+            }
+        }""",
+        selected,
+    )
+    assert error == "Fixture layout failure"
+    expect(page.locator(".graph-node")).to_have_count(3)
+    assert camera(page) == before
+    assert not page.evaluate("iri => EntityGraph.state.expandedIris.has(iri)", selected)
+    tab_to_control(page, "Pan right").press("Enter")
+    assert camera(page)["x"] == before["x"] - 80
+    assert_map_contains_graph_and_view(page)
+    expand_by_keyboard(page, "Space")
+    assert page.evaluate("history.length") == length
+    assert len(requests) == 3
+
+
 def test_history_integrated_visual_evidence(graph_page, pytestconfig):
     page, _ = graph_page
     output = pytestconfig.getoption("--fa7-evidence-dir")
